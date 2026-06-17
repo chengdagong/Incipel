@@ -1,0 +1,31 @@
+{
+  "name": "@incipel/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "smoke": "tsx src/dev/smoke-turn.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ag-ui/core": "0.0.57",
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@hono/node-server": "^1.13.0",
+    "@incipel/shared": "workspace:*",
+    "@openrouter/ai-sdk-provider": "0.7.3",
+    "@supabase/supabase-js": "^2.45.0",
+    "ai": "^4.0.0",
+    "dotenv": "^17.4.2",
+    "hono": "^4.6.0",
+    "jose": "^5.9.0",
+    "nanoid": "^5.0.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

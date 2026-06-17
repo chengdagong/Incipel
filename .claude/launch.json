@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "agent",
+      "runtimeExecutable": "/Users/chengdagong/.hermes/node/bin/pnpm",
+      "runtimeArgs": ["--filter", "@incipel/agent", "dev"],
+      "port": 8787
+    },
+    {
+      "name": "mobile",
+      "runtimeExecutable": "/Users/chengdagong/.hermes/node/bin/pnpm",
+      "runtimeArgs": ["--filter", "@incipel/mobile", "start"],
+      "port": 8081
+    },
+    {
+      "name": "supabase",
+      "runtimeExecutable": "supabase",
+      "runtimeArgs": ["start"],
+      "port": 54321
+    }
+  ]
+}

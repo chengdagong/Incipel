@@ -1,0 +1,84 @@
+# 「芯」(Incipel)本地开发用 Supabase 配置。
+# 仅本地开发生效;远端项目的等价设置在 Dashboard 配置(见 README)。
+# project_id 用作本地容器命名前缀,不与任何远端项目挂钩。
+project_id = "incipel"
+
+[api]
+enabled = true
+# REST/GraphQL/Realtime 的本地端口(Kong 网关)。
+port = 54321
+# 通过 PostgREST 暴露的 schema。
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+# 单次集合请求的最大返回行数。
+max_rows = 1000
+
+[db]
+# 本地 Postgres 端口。
+port = 54322
+# `db diff` 用的影子库端口。
+shadow_port = 54320
+# 与生产对齐的大版本号。
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+default_pool_size = 20
+max_client_conn = 100
+
+[realtime]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1:54321"
+
+# 本地抓取发出的邮件(确认/找回等),不真正投递。
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+# 单文件上传上限(图片上传用)。
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+# 本地签发链接里的站点根地址。
+site_url = "http://127.0.0.1:3000"
+# 登录后允许重定向到的地址白名单。
+additional_redirect_urls = ["http://127.0.0.1:3000"]
+# JWT 有效期(秒)。
+jwt_expiry = 3600
+# 允许用 refresh token 续期。
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# 允许新用户注册。
+enable_signup = true
+# 关键:开启匿名登录 —— 零摩擦入门,事后可选升级账号(见系统设计 §15/§16)。
+enable_anonymous_sign_ins = true
+
+[auth.email]
+enable_signup = true
+# 本地开发免去邮箱确认,加快联调。
+enable_confirmations = false
+
+# 关闭外部 OAuth provider:v1 仅用匿名 + 邮箱。
+[auth.external.apple]
+enabled = false
+
+[auth.external.google]
+enabled = false
+
+[edge_runtime]
+enabled = true
+# 本地 Edge Function 的运行策略:oneshot 便于热重载调试。
+policy = "oneshot"
+inspector_port = 8083
+
+[analytics]
+enabled = false

@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "芯 · 编剧助手",
+    "slug": "incipel",
+    "scheme": "incipel",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.incipel.app"
+    },
+    "android": {
+      "package": "com.incipel.app"
+    },
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

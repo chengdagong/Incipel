@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "noEmit": true,
+    "paths": {
+      "@incipel/shared": ["../../packages/shared/src/index.ts"]
+    }
+  },
+  "include": [
+    "app",
+    "src",
+    "*.ts",
+    "*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}

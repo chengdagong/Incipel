@@ -1,0 +1,99 @@
+import { z } from 'zod';
+import type { Screenplay } from './screenplay';
+
+// 模型↔剧本的修改契约(docs/adr/0001):
+// - 新建与修改是两个显式动作:add_*(不带 id)/ update_*(必须带 id)。不用 upsert。
+// - id 一律由服务端生成;update_* / remove_* 的 id 在 schema 里被约束为
+//   「当前剧本中真实存在的那组 id」的枚举,每轮按当前状态重新生成 —— 这就是模型端门控。
+
+export const TOOL_NAMES = [
+  'set_meta',
+  'add_world_section',
+  'update_world_section',
+  'remove_world_section',
+  'add_character',
+  'update_character',
+  'remove_character',
+  'add_act',
+  'update_act',
+  'remove_act',
+  'add_scene',
+  'update_scene',
+  'remove_scene',
+  'propose_options',
+] as const;
+export type ToolName = (typeof TOOL_NAMES)[number];
+
+// 各实体当前存在的 id 集合,用来按轮生成 update/remove 的枚举门控。
+export type IdSets = {
+  world: string[];
+  characters: string[];
+  acts: string[];
+  scenes: string[];
+};
+
+export function idSetsOf(s: Screenplay): IdSets {
+  return {
+    world: s.world.map((x) => x.id),
+    characters: s.characters.map((x) => x.id),
+    acts: s.outline.map((x) => x.id),
+    scenes: s.scenes.map((x) => x.id),
+  };
+}
+
+// z.enum 需要非空元组。某类实体当前没有 id 时,直接不暴露它的 update/remove 工具
+// (见 buildToolSchemas),从根上让模型无从引用不存在的 id。
+function idEnum(ids: string[]) {
+  return z.enum(ids as [string, ...string[]]);
+}
+
+/**
+ * 按当前剧本状态构造本轮可用的工具 schema 集合。
+ * add_* 与 set_meta / propose_options 恒定存在;update_* / remove_* 仅在该类实体
+ * 已有 id 时出现,且其 id 被枚举锁死。
+ */
+export function buildToolSchemas(ids: IdSets): Record<string, z.ZodTypeAny> {
+  const tools: Record<string, z.ZodTypeAny> = {
+    set_meta: z.object({ title: z.string().optional(), logline: z.string().optional() }),
+    add_world_section: z.object({ title: z.string(), text: z.string() }),
+    add_character: z.object({ name: z.string(), note: z.string() }),
+    add_act: z.object({ act: z.string(), beat: z.string() }),
+    add_scene: z.object({ slug: z.string(), content: z.string() }),
+    propose_options: z.object({ options: z.array(z.string()).max(3) }),
+  };
+
+  if (ids.world.length) {
+    tools.update_world_section = z.object({
+      id: idEnum(ids.world),
+      title: z.string().optional(),
+      text: z.string().optional(),
+    });
+    tools.remove_world_section = z.object({ id: idEnum(ids.world) });
+  }
+  if (ids.characters.length) {
+    tools.update_character = z.object({
+      id: idEnum(ids.characters),
+      name: z.string().optional(),
+      note: z.string().optional(),
+    });
+    tools.remove_character = z.object({ id: idEnum(ids.characters) });
+  }
+  if (ids.acts.length) {
+    tools.update_act = z.object({
+      id: idEnum(ids.acts),
+      act: z.string().optional(),
+      beat: z.string().optional(),
+    });
+    tools.remove_act = z.object({ id: idEnum(ids.acts) });
+  }
+  if (ids.scenes.length) {
+    tools.update_scene = z.object({
+      id: idEnum(ids.scenes),
+      slug: z.string().optional(),
+      content: z.string().optional(),
+    });
+    tools.remove_scene = z.object({ id: idEnum(ids.scenes) });
+  }
+
+  return tools;
+}
