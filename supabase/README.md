@@ -21,12 +21,18 @@ supabase start
 supabase db reset
 ```
 
+本项目刻意用 **5452x** 端口段(而非 Supabase 默认 5432x),以便与本机其他本地
+Supabase 栈共存、互不抢端口(端口定义见 [`config.toml`](./config.toml))。
 `supabase start` 会打印本地 URL 与密钥:
 
-- API URL:`http://127.0.0.1:54321`
-- Studio:`http://127.0.0.1:54323`
-- Inbucket(本地收发邮件):`http://127.0.0.1:54324`
+- API URL:`http://127.0.0.1:54521`
+- Postgres:`127.0.0.1:54522`
+- Studio:`http://127.0.0.1:54523`
+- Inbucket(本地收发邮件):`http://127.0.0.1:54524`
 - `anon key` / `service_role key`:从输出读取
+
+> 改了 `config.toml` 的端口,记得同步 `packages/agent/.env` 的 `SUPABASE_URL`
+> 与 `apps/mobile/.env` 的 `EXPO_PUBLIC_SUPABASE_URL`。
 
 ## 应用到远端项目
 
@@ -82,7 +88,7 @@ agent 运行时(非本目录,放在 `packages/agent`)需要以下变量读写数
 
 | 变量 | 说明 |
 |---|---|
-| `SUPABASE_URL` | 项目 API URL(本地为 `http://127.0.0.1:54321`) |
+| `SUPABASE_URL` | 项目 API URL(本地为 `http://127.0.0.1:54521`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role 密钥;agent 用它绕过 RLS 落库,**绝不下发到客户端** |
 | `SUPABASE_JWT_SECRET` | 校验客户端 JWT 用(本地由 `supabase start` 打印) |
 

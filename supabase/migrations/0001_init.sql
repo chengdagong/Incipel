@@ -221,3 +221,28 @@ begin
   end if;
 end;
 $$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 表级授权(GRANT)。
+--
+-- RLS 决定「能看哪些行」,但表级 DML 授权决定「能不能碰这张表」——两者缺一不可。
+-- Supabase 里由 postgres 角色(migration 的执行身份)建的表,默认只给 anon/authenticated/
+-- service_role 授予 TRUNCATE/REFERENCES/TRIGGER,不含 select/insert/update/delete;
+-- 故必须在此显式授予,否则连 service_role 也会撞 "permission denied for table"。
+--
+--   · authenticated:客户端(含匿名登录,其 JWT 的 role 即 authenticated)直接读写自己的
+--     数据(history 查/删 sessions、works 内嵌读 documents 等),行级仍由上面的 RLS 限定。
+--   · service_role:agent 运行时身份,带 BYPASSRLS,授予 DML 后即可越过 RLS 落库。
+-- ─────────────────────────────────────────────────────────────────────────────
+
+grant select, insert, update, delete on table
+  public.sessions,
+  public.documents,
+  public.document_versions,
+  public.messages
+  to authenticated, service_role;
+
+-- agent 经 RPC 调 save_turn(security definer,内部写以属主 postgres 身份执行)。
+-- 仅 agent(service_role)调用;客户端不直接调,故不授予 authenticated。
+grant execute on function public.save_turn(uuid, text, text, jsonb, jsonb, jsonb, boolean)
+  to service_role;
