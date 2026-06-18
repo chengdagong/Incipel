@@ -22,23 +22,29 @@ export default function WelcomeScreen() {
   const { palette } = defaultTheme;
   const [idea, setIdea] = useState('');
   const [rolling, setRolling] = useState(false);
+  const [rollError, setRollError] = useState<string | null>(null);
 
   // 🎲 调 /logline:便宜模型一次性 completion,把生成的 logline 填入输入框(system-design §10)。
   async function rollLogline() {
     if (rolling) return;
     setRolling(true);
+    setRollError(null);
     try {
       const res = await fetch(loglineEndpoint(), {
         method: 'POST',
         headers: await authHeaders(),
         body: JSON.stringify({ idea: idea.trim() }),
       });
-      // TODO:按 /logline 端点的最终响应形状解析(契约假设:{ logline: string })。
+      // 非 2xx(后端 401/404/502 等)也会带 JSON,这里先判状态,避免把错误体当正常结果静默吞掉。
+      if (!res.ok) throw new Error(`服务返回 ${res.status}`);
+      // 契约假设:{ logline: string }。
       const data = (await res.json()) as { logline?: string };
-      if (data.logline) setIdea(data.logline);
+      if (!data.logline) throw new Error('未返回 logline');
+      setIdea(data.logline);
     } catch (e) {
       console.warn('[logline] 生成失败:', e);
-      // TODO:给用户明确的「重试」提示(system-design §11:不编造内容)。
+      // 给用户明确反馈,而非毫无反应(system-design §11:不编造内容)。
+      setRollError('没能生成,请稍后再试。');
     } finally {
       setRolling(false);
     }
@@ -72,6 +78,8 @@ export default function WelcomeScreen() {
         </Pressable>
       </View>
 
+      {!!rollError && <Text style={[styles.rollError, { color: defaultTheme.accent }]}>{rollError}</Text>}
+
       <View style={styles.chips}>
         {DIRECTION_CHIPS.map((c) => (
           <Pressable
@@ -101,12 +109,13 @@ export default function WelcomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 24, gap: 16, justifyContent: 'center' },
-  headline: { fontSize: 28, fontWeight: '700' },
+  headline: { fontSize: 28, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   sub: { fontSize: 15, lineHeight: 22 },
   inputBox: { borderWidth: 1, borderRadius: 16, padding: 12, flexDirection: 'row', alignItems: 'flex-start' },
   input: { flex: 1, minHeight: 80, fontSize: 16, lineHeight: 24 },
   dice: { paddingHorizontal: 8, paddingTop: 4 },
   diceLabel: { fontSize: 22 },
+  rollError: { fontSize: 13, marginTop: -8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   chipLabel: { fontSize: 13 },

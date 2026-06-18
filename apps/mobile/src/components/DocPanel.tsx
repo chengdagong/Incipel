@@ -128,7 +128,7 @@ function Entry({
 const styles = StyleSheet.create({
   panel: { flex: 1 },
   content: { padding: 16, gap: 16 },
-  title: { fontSize: 20, fontWeight: '700' },
+  title: { fontSize: 20, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   logline: { fontSize: 14, lineHeight: 20 },
   stage: { fontSize: 12, fontWeight: '600' },
   block: { gap: 8 },
