@@ -16,7 +16,7 @@
 
 ```
 EXPO_PUBLIC_AGENT_URL=http://localhost:8787    # iOS 模拟器用 localhost;Android 模拟器用 10.0.2.2;真机用本机局域网 IP
-EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321
+EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54521
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<本地 Supabase anon key>
 ```
 
