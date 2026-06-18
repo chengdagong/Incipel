@@ -11,6 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { ensureSession } from '../src/supabase';
 import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme, fonts } from '../src/theme';
+import { DrawerProvider } from '../src/drawer/DrawerProvider';
 
 export default function RootLayout() {
   const [sessionReady, setSessionReady] = useState(false);
@@ -47,8 +48,9 @@ export default function RootLayout() {
 
   // 方案 B 不需要 Provider:每个对话屏用 useScreenplayAgent(threadId) 自持一个 HttpAgent,
   // 直接消费共享状态(Screenplay)与文本流。见 src/agui/client.ts。
+  // DrawerProvider 把侧边抽屉浮层挂在整个 Stack 之上,任意屏可 useDrawer().open()(system-design §2.1)。
   return (
-    <>
+    <DrawerProvider>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -60,13 +62,14 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
-        <Stack.Screen name="index" options={{ title: '芯' }} />
+        {/* 欢迎屏自带页内顶栏(左上汉堡唤抽屉),对齐原型,隐藏原生 Stack 顶栏。 */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="history" options={{ title: '历史会话' }} />
         <Stack.Screen name="works" options={{ title: '作品' }} />
       </Stack>
-    </>
+    </DrawerProvider>
   );
 }
 

@@ -3,9 +3,11 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { type Screenplay, deriveStage, STAGE_LABELS } from '@incipel/shared';
 import { supabase } from '../src/supabase';
+import { MenuButton } from '../src/components/Drawer';
+import { useDrawer } from '../src/drawer/DrawerProvider';
 import { defaultTheme } from '../src/theme';
 
 // sessions join documents 的查询结果:一会话 ⟷ 一作品(其剧本),严格 1:1(§16)。
@@ -20,9 +22,18 @@ type WorkRow = {
 
 export default function WorksScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const drawer = useDrawer();
   const { palette } = defaultTheme;
   const [rows, setRows] = useState<WorkRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 表头右上汉堡:唤出侧边抽屉(对齐原型作品页顶栏)。
+  useEffect(() => {
+    navigation.setOptions({
+      headerRight: () => <MenuButton variant="plain" onPress={drawer.open} />,
+    });
+  }, [navigation, drawer.open]);
 
   const load = useCallback(async () => {
     setLoading(true);

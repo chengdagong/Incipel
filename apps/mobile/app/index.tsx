@@ -11,7 +11,10 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authHeaders, loglineEndpoint, newThreadId } from '../src/agui/client';
+import { MenuButton } from '../src/components/Drawer';
+import { useDrawer } from '../src/drawer/DrawerProvider';
 import { defaultTheme } from '../src/theme';
 
 // 方向建议 chip(静态示例;真实可由 agent 给,v1 先内置几个常见类型)。
@@ -19,6 +22,8 @@ const DIRECTION_CHIPS = ['悬疑', '科幻', '爱情', '家庭', '黑色幽默',
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const drawer = useDrawer();
   const { palette } = defaultTheme;
   const [idea, setIdea] = useState('');
   const [rolling, setRolling] = useState(false);
@@ -58,8 +63,14 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: palette.pageBg }]}>
-      <Text style={[styles.headline, { color: palette.textPrimary }]}>给我一个灵感</Text>
+    <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
+      {/* 页内顶栏:左上汉堡唤出侧边抽屉(对齐原型欢迎页)。 */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+        <MenuButton variant="circle" onPress={drawer.open} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.container}>
+        <Text style={[styles.headline, { color: palette.textPrimary }]}>给我一个灵感</Text>
       <Text style={[styles.sub, { color: palette.textSecondary }]}>
         一句话、一个画面,或者一种说不清的感觉。
       </Text>
@@ -103,11 +114,14 @@ export default function WelcomeScreen() {
       >
         <Text style={styles.startLabel}>开始创作</Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  topBar: { paddingHorizontal: 20, paddingBottom: 4, flexDirection: 'row', alignItems: 'center' },
   container: { flexGrow: 1, padding: 24, gap: 16, justifyContent: 'center' },
   headline: { fontSize: 28, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   sub: { fontSize: 15, lineHeight: 22 },
