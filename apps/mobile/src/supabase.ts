@@ -16,12 +16,12 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
-// 缺环境变量时退回本地默认地址(supabase start 的默认端口),保证 createClient 不在模块加载期抛
+// 缺环境变量时退回本地栈地址(端口段见 supabase/config.toml),保证 createClient 不在模块加载期抛
 // 「supabaseUrl is required」而把整个 app 拦在启动前 —— 后续请求会失败,但不会卡在启动:启动只读
 // 会话(getExistingSession 返回 null),失败的匿名登录由登录页给出明确重试提示。
 //(本地试用走 agent 的 DEV_NO_AUTH,不依赖 Supabase)。环境变量存在时一律以其为准,不受影响。
 export const supabase: SupabaseClient = createClient(
-  SUPABASE_URL || 'http://localhost:54321',
+  SUPABASE_URL || 'http://127.0.0.1:54521',
   SUPABASE_ANON_KEY || 'public-anon-key',
   {
     auth: {
@@ -34,7 +34,7 @@ export const supabase: SupabaseClient = createClient(
   },
 );
 
-// 启动只查、不自动建会话(ADR-0004:登录页提前进 v1,匿名退为一次点击)。
+// 启动只查、不自动建会话(ADR-0005:登录页提前进 v1,匿名退为一次点击)。
 // 有会话(匿名或正式)→ 直接放行,不显示登录页;无会话 → null,交由登录页决定如何创建。
 export async function getExistingSession(): Promise<Session | null> {
   const { data } = await supabase.auth.getSession();
@@ -43,7 +43,7 @@ export async function getExistingSession(): Promise<Session | null> {
 
 // 匿名登录:仅在登录页点「先随便逛逛」时调用,不再于启动时自动触发。
 // 失败即抛出,交调用方在页内给明确重试提示(system-design §11:不静默、不编造)。
-// TODO(§16 / ADR-0004):日后在「设置」里提供绑定 Apple / 邮箱,经 supabase.auth.linkIdentity
+// TODO(§16 / ADR-0005):日后在「设置」里提供绑定 Apple / 邮箱,经 supabase.auth.linkIdentity
 // 把匿名账号升级为正式账号;升级前数据随设备,卸载重装会丢。该升级流程不在登录页上。
 export async function signInAnonymously(): Promise<Session> {
   const { data, error } = await supabase.auth.signInAnonymously();
@@ -54,7 +54,7 @@ export async function signInAnonymously(): Promise<Session> {
 }
 
 // Apple Sign-In(仅 iOS;登录页的 Apple 按钮只在 iOS 渲染)。
-// 取 Apple 的 identity token,经 supabase.auth.signInWithIdToken 换 Supabase 会话(ADR-0004)。
+// 取 Apple 的 identity token,经 supabase.auth.signInWithIdToken 换 Supabase 会话(ADR-0005)。
 // - 防重放(Codex P2):生成随机 raw nonce,向 Apple 传它的 SHA-256 哈希;Supabase 用 raw nonce
 //   校验该 identity token 确为本次登录所签,截获的旧 token 无法重放。
 // - 用户取消会抛出 code 'ERR_REQUEST_CANCELED',由调用方静默处理(system-design §11)。

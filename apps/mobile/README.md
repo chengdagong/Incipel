@@ -1,6 +1,6 @@
 # @incipel/mobile — 本地运行说明
 
-编剧助手「芯」的 React Native / Expo 客户端。整体设计见仓库根 [`docs/system-design.md`](../../docs/system-design.md)、术语见 [`CONTEXT.md`](../../CONTEXT.md)。
+编剧助手「织幕」的 React Native / Expo 客户端。整体设计见仓库根 [`docs/system-design.md`](../../docs/system-design.md)、术语见 [`CONTEXT.md`](../../CONTEXT.md)。
 
 ## 前置
 
@@ -16,7 +16,7 @@
 
 ```
 EXPO_PUBLIC_AGENT_URL=http://localhost:8787    # iOS 模拟器用 localhost;Android 模拟器用 10.0.2.2;真机用本机局域网 IP
-EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321
+EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54521
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<本地 Supabase anon key>
 ```
 

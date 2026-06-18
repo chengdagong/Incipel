@@ -1,7 +1,7 @@
-// 登录页(ADR-0004:v1 入口)。设计图还原。
+// 登录页(ADR-0005:v1 入口)。设计图还原。
 // - 真接:Apple(仅 iOS)、先随便逛逛(匿名)。
 // - 暂不接:Google、用邮箱继续 —— 灰显,点了提示「即将开放」,不放点了报错的死按钮。
-// - Apple 仅在 iOS 渲染;Android / web 以匿名为真入口(ADR-0004「平台」)。
+// - Apple 仅在 iOS 渲染;Android / web 以匿名为真入口(ADR-0005「平台」)。
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -20,7 +20,7 @@ import { useAuth } from '../src/auth';
 import { signInAnonymously, signInWithApple } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
 
-// 占位法务地址。TODO(ADR-0004):上架前替换为真实「服务条款 / 隐私政策」URL——
+// 占位法务地址。TODO(ADR-0005):上架前替换为真实「服务条款 / 隐私政策」URL——
 // App Store 强制要求一个可用的隐私政策 URL。
 const TERMS_URL = 'https://incipel.app/terms';
 const PRIVACY_URL = 'https://incipel.app/privacy';
@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   outlineBtn: { borderWidth: 1 },
-  // 暂不接的入口灰显(ADR-0004):呈现但点了提示「即将开放」。
+  // 暂不接的入口灰显(ADR-0005):呈现但点了提示「即将开放」。
   deferred: { opacity: 0.5 },
   btnIcon: { fontSize: 18, fontWeight: '600' },
   btnLabel: { fontSize: 16, fontWeight: '600' },

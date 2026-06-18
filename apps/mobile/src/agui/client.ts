@@ -81,6 +81,9 @@ export type ScreenplayAgentApi = {
   isRunning: boolean;
   error: string | null;
   sendMessage: (text: string) => Promise<void>;
+  // 重试当前这一轮:沿用同一 runId,服务端据此幂等、不重复落库(见 KI-2)。
+  // 失败后应调用它,而不是重新 sendMessage(后者会生成新 runId、绕开幂等键)。
+  retry: () => Promise<void>;
 };
 
 /**
@@ -104,6 +107,9 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
   const [options, setOptions] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 一「逻辑轮」的 runId:重试沿用同一个,作 save_turn 的幂等键(见 KI-2)。完成后清空。
+  const pendingRunIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const agent = agentRef.current!;
@@ -145,6 +151,7 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
       },
       onRunFinishedEvent: () => {
         setIsRunning(false);
+        pendingRunIdRef.current = null; // 本轮已落库,runId 使命结束
         syncFromAgent();
       },
       onRunErrorEvent: ({ event }) => {
@@ -162,26 +169,43 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
     return () => sub.unsubscribe();
   }, [threadId]);
 
-  // 发消息 / 点选项:都以用户身份追加一条消息,触发一次 run(system-design §6.2 / §10)。
-  const sendMessage = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  // 用指定 runId 跑一轮;捕获未走事件通道的异常(SDK 通常会转成 RUN_ERROR),避免 UI 卡在 running。
+  const runWith = useCallback(async (runId: string) => {
     const agent = agentRef.current!;
     if (agent.isRunning) return; // 一轮未结束不并发下一轮
-
-    // 追加用户消息;乐观更新一次列表,随后由 run 的事件继续维护。
-    agent.addMessage({ id: randomUUID(), role: 'user', content: trimmed } as Message);
-    setMessages([...agent.messages]);
-
     try {
-      await agent.runAgent({}, undefined);
+      await agent.runAgent({ runId }, undefined);
     } catch (e) {
-      // 网络层 / 中止等异常:SDK 通常会转成 RUN_ERROR(已由 onRunErrorEvent 处理);
-      // 这里兜住未走事件通道的异常,保证 UI 不卡在 running。
       setIsRunning(false);
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
-  return { messages, screenplay, streamingText, options, isRunning, error, sendMessage };
+  // 发消息 / 点选项:追加一条用户消息,为这一逻辑轮生成稳定 runId,触发一次 run(system-design §6.2 / §10)。
+  const sendMessage = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const agent = agentRef.current!;
+      if (agent.isRunning) return;
+
+      // 追加用户消息;乐观更新一次列表,随后由 run 的事件继续维护。
+      agent.addMessage({ id: randomUUID(), role: 'user', content: trimmed } as Message);
+      setMessages([...agent.messages]);
+
+      const runId = randomUUID();
+      pendingRunIdRef.current = runId;
+      await runWith(runId);
+    },
+    [runWith],
+  );
+
+  // 重试当前这一轮:沿用同一 runId、不再追加用户消息。服务端据此幂等,重发不重复落库(见 KI-2)。
+  const retry = useCallback(async () => {
+    const runId = pendingRunIdRef.current;
+    if (!runId) return;
+    await runWith(runId);
+  }, [runWith]);
+
+  return { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry };
 }

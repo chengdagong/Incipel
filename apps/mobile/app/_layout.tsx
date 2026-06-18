@@ -12,7 +12,7 @@ import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme } from '../src/theme';
 
 export default function RootLayout() {
-  // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0004)。
+  // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0005)。
   return (
     <AuthProvider>
       <RootNavigator />

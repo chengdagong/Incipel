@@ -18,6 +18,7 @@ import { useScreenplayAgent, newThreadId } from '../../src/agui/client';
 import { Composer } from '../../src/components/Composer';
 import { DocPanel } from '../../src/components/DocPanel';
 import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
+import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
 import { defaultTheme } from '../../src/theme';
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
@@ -54,7 +55,7 @@ export default function ChatScreen() {
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
 
-  const { messages, screenplay, streamingText, options, isRunning, error, sendMessage } =
+  const { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry } =
     useScreenplayAgent(threadId);
 
   // 「作品」入口可带 view=doc 直接进文档视图。
@@ -148,7 +149,20 @@ export default function ChatScreen() {
         )}
 
         {!!error && (
-          <Text style={[styles.error, { color: defaultTheme.accent }]}>出错了:{error}</Text>
+          <View style={styles.errorRow}>
+            <Text style={[styles.error, { color: defaultTheme.accent }]}>出错了:{error}</Text>
+            {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复落库(见 KI-2)。
+                务必走 retry 而非重新 sendMessage——后者会生成新 runId、绕开幂等。 */}
+            <Pressable
+              onPress={() => void retry()}
+              disabled={isRunning}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="重试本轮"
+            >
+              <Text style={[styles.retry, { color: defaultTheme.accent }]}>重试</Text>
+            </Pressable>
+          </View>
         )}
       </ScrollView>
 
@@ -235,14 +249,16 @@ function MessageBubble({
     );
   }
 
-  // 「芯」的回复:头像 + 「助手」标签,正文为页面上的纯文本(无气泡);其下挂内联卡片与选项列表。
+  // 助手的回复:头像(名字首字)+ 助手显示名,正文为页面上的纯文本(无气泡);其下挂内联卡片与选项列表。
+  // assistantName 默认「主管编剧」,日后可由用户自定义(见 src/config.ts)。
+  const assistantName = DEFAULT_ASSISTANT_NAME;
   return (
     <View style={styles.assistantBlock}>
       <View style={styles.assistantHeader}>
         <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
-          <Text style={styles.avatarText}>芯</Text>
+          <Text style={styles.avatarText}>{assistantName.slice(0, 1)}</Text>
         </View>
-        <Text style={[styles.assistantName, { color: palette.textSecondary }]}>助手</Text>
+        <Text style={[styles.assistantName, { color: palette.textSecondary }]}>{assistantName}</Text>
       </View>
 
       <Text style={[styles.assistantText, { color: palette.textPrimary }]}>
@@ -316,7 +332,7 @@ const styles = StyleSheet.create({
   userBubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
   userText: { fontSize: 16, lineHeight: 26 },
 
-  // 「芯」回复块
+  // 助手回复块
   assistantBlock: { width: '100%' },
   assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   avatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
@@ -336,5 +352,7 @@ const styles = StyleSheet.create({
   optionArrow: { fontSize: 11 },
   optionLabel: { fontSize: 16 },
 
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   error: { fontSize: 13, fontWeight: '600' },
+  retry: { fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
 });
