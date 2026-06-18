@@ -10,8 +10,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { authHeaders, loglineEndpoint, newThreadId } from '../src/agui/client';
+import { useAuth } from '../src/auth';
 import { defaultTheme } from '../src/theme';
 
 // 方向建议 chip(静态示例;真实可由 agent 给,v1 先内置几个常见类型)。
@@ -19,7 +20,13 @@ const DIRECTION_CHIPS = ['悬疑', '科幻', '爱情', '家庭', '黑色幽默',
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { session } = useAuth();
   const { palette } = defaultTheme;
+
+  // 无会话不进创作页:回登录页(ADR-0004 的会话门控)。返回用户已有会话则不受影响。
+  if (!session) {
+    return <Redirect href="/login" />;
+  }
   const [idea, setIdea] = useState('');
   const [rolling, setRolling] = useState(false);
   const [rollError, setRollError] = useState<string | null>(null);

@@ -9,7 +9,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.incipel.app"
+      "bundleIdentifier": "com.incipel.app",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.incipel.app"
@@ -18,7 +19,7 @@
       "bundler": "metro",
       "output": "single"
     },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "expo-apple-authentication"],
     "experiments": {
       "typedRoutes": true
     }

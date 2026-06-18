@@ -4,35 +4,27 @@
 // 平台差异封装在 ../src/polyfills 里(原生装 polyfill;web 走 polyfills.web.ts 空实现)。
 import '../src/polyfills';
 
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ensureSession } from '../src/supabase';
+import { AuthProvider, useAuth } from '../src/auth';
 import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme, fonts } from '../src/theme';
 
 export default function RootLayout() {
-  const [sessionReady, setSessionReady] = useState(false);
+  // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0004)。
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
+
+function RootNavigator() {
+  const { ready: authReady } = useAuth();
   // 标题衬线体(Noto Serif SC):原生打包一个字重,web 走 Google Fonts CDN(见 src/useAppFonts*)。
   const fontsLoaded = useAppFonts();
-  const ready = sessionReady && fontsLoaded;
-
-  // 初始化 Supabase 匿名登录(system-design §2/§16)。
-  useEffect(() => {
-    let mounted = true;
-    ensureSession()
-      .catch(() => {
-        // Supabase 未配置/不可达时,匿名登录失败不应阻塞 app
-        //(本地试用走 agent 的 DEV_NO_AUTH,不依赖 Supabase)。
-      })
-      .finally(() => {
-        if (mounted) setSessionReady(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const ready = authReady && fontsLoaded;
 
   if (!ready) {
     return (
@@ -45,6 +37,7 @@ export default function RootLayout() {
     );
   }
 
+  // 路由门控是声明式的:index / login 各自按 useAuth().session 决定是否 <Redirect>。
   // 方案 B 不需要 Provider:每个对话屏用 useScreenplayAgent(threadId) 自持一个 HttpAgent,
   // 直接消费共享状态(Screenplay)与文本流。见 src/agui/client.ts。
   return (
@@ -61,6 +54,8 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: '芯' }} />
+        {/* 登录页自带品牌区与全屏布局,隐藏原生 Stack 顶栏。 */}
+        <Stack.Screen name="login" options={{ headerShown: false }} />
         {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="history" options={{ title: '历史会话' }} />
