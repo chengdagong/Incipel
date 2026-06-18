@@ -58,13 +58,13 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr,
         <Section key={s.id} label={t('secScenes')} title={s.slug} body={s.content} theme={theme} />
       ))}
 
-      <Text
-        style={[styles.openDoc, { color: theme.accent }]}
-        onPress={onOpenDoc}
-        accessibilityRole="button"
-      >
-        {t('openDocWork')}
-      </Text>
+      <Pressable style={styles.footer} onPress={onOpenDoc} accessibilityRole="button">
+        <View style={styles.footerLeft}>
+          <View style={[styles.footerDot, { backgroundColor: theme.accent }]} />
+          <Text style={styles.footerSaved}>{t('savedToDraft')}</Text>
+        </View>
+        <Text style={[styles.footerOpen, { color: theme.accent }]}>{t('openFullDoc')}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -154,5 +154,17 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
   title: { fontSize: 15, fontWeight: '600' },
   body: { fontSize: 14, lineHeight: 20 },
-  openDoc: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F2EFE9',
+    paddingTop: 11,
+    marginTop: 2,
+  },
+  footerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  footerDot: { width: 5, height: 5, borderRadius: 3 },
+  footerSaved: { fontSize: 11.5, color: '#8B867C' },
+  footerOpen: { fontSize: 12, fontWeight: '600' },
 });

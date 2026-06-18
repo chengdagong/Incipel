@@ -67,6 +67,10 @@ export default function WorksScreen() {
   function open(id: string) {
     router.push({ pathname: '/chat', params: { sessionId: id, view: 'doc' } });
   }
+  // 空状态「开始新创作」→ 回欢迎页。
+  function startNew() {
+    router.replace('/');
+  }
 
   if (loading) {
     return (
@@ -81,12 +85,16 @@ export default function WorksScreen() {
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
         <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>{t('noWorksTitle')}</Text>
         <Text style={[styles.emptySub, { color: palette.textSecondary }]}>{t('noWorksDesc')}</Text>
+        <Pressable style={[styles.cta, { backgroundColor: defaultTheme.accent }]} onPress={startNew}>
+          <Text style={styles.ctaLabel}>{t('startNew')}</Text>
+        </Pressable>
       </View>
     );
   }
 
   return (
     <ScrollView style={{ backgroundColor: palette.pageBg }} contentContainerStyle={styles.list}>
+      <Text style={[styles.intro, { color: palette.textSecondaryAlt }]}>{t('worksIntro')}</Text>
       {rows.map((r) => {
         const screenplay = r.documents?.state;
         const stageLabel = screenplay ? STAGE_LABELS[deriveStage(screenplay)] : STAGE_LABELS.idea;
@@ -106,7 +114,10 @@ export default function WorksScreen() {
                 {logline}
               </Text>
             )}
-            <Text style={[styles.stage, { color: defaultTheme.accent }]}>{stageLabel}</Text>
+            <View style={styles.cardFooter}>
+              <Text style={[styles.stage, { color: palette.textSecondaryAlt }]}>{stageLabel}</Text>
+              <Text style={[styles.openWork, { color: defaultTheme.accent }]}>{t('openDocWork')}</Text>
+            </View>
           </Pressable>
         );
       })}
@@ -118,9 +129,14 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  cta: { borderRadius: 14, paddingHorizontal: 26, paddingVertical: 13, marginTop: 12 },
+  ctaLabel: { color: '#fff', fontWeight: '600', fontSize: 14 },
   list: { padding: 16, gap: 12 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 6 },
+  intro: { fontSize: 12.5, lineHeight: 20, marginHorizontal: 4, marginBottom: 4 },
+  card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 9 },
   title: { fontSize: 17, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
-  logline: { fontSize: 14, lineHeight: 20 },
-  stage: { fontSize: 12, fontWeight: '600' },
+  logline: { fontSize: 13, lineHeight: 21 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  stage: { fontSize: 11.5 },
+  openWork: { fontSize: 11.5, fontWeight: '600' },
 });

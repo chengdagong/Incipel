@@ -3,7 +3,7 @@
 // 右上「文档」开关 DocPanel。阶段用 @incipel/shared 的 deriveStage / STAGE_LABELS 显示(system-design §5)。
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -167,6 +167,9 @@ export default function ChatScreen() {
           );
         })}
 
+        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。 */}
+        {isRunning && !streamingText && <ThinkingDots />}
+
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
           <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={() => setDocOpen(true)} />
@@ -310,7 +313,7 @@ function MessageBubble({
 
       <Text style={[styles.assistantText, { color: palette.textPrimary }]}>
         {text}
-        {streaming ? '▋' : ''}
+        {streaming ? <BlinkCaret /> : null}
       </Text>
 
       {/* 内联卡片:本轮新增实体(由剧本 diff 得出);人物属性可点生成聚焦标签(#12)。 */}
@@ -341,6 +344,58 @@ function MessageBubble({
       )}
     </View>
   );
+}
+
+// 流式打字光标:主色细竖条,闪烁(对齐原型 caret)。
+function BlinkCaret() {
+  const op = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(op, { toValue: 0.1, duration: 500, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [op]);
+  return <Animated.Text style={[styles.caret, { color: defaultTheme.accent, opacity: op }]}>▏</Animated.Text>;
+}
+
+// 思考中:助手头像 + 三点闪烁(首 token 到达前;对齐原型 typing dots)。
+function ThinkingDots() {
+  const { palette } = defaultTheme;
+  return (
+    <View style={styles.assistantBlock}>
+      <View style={styles.assistantHeader}>
+        <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
+          <Text style={styles.avatarText}>{DEFAULT_ASSISTANT_NAME.slice(0, 1)}</Text>
+        </View>
+        <Text style={[styles.assistantName, { color: palette.textSecondary }]}>{DEFAULT_ASSISTANT_NAME}</Text>
+      </View>
+      <View style={styles.dots}>
+        <Dot delay={0} />
+        <Dot delay={200} />
+        <Dot delay={400} />
+      </View>
+    </View>
+  );
+}
+
+function Dot({ delay }: { delay: number }) {
+  const op = useRef(new Animated.Value(0.2)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(op, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 0.2, duration: 400, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [op, delay]);
+  return <Animated.View style={[styles.dot, { opacity: op }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -393,6 +448,9 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 14, fontFamily: defaultTheme.fonts.serifTitle },
   assistantName: { fontSize: 14 },
   assistantText: { fontSize: 16, lineHeight: 26 },
+  caret: { fontSize: 16, fontWeight: '700' },
+  dots: { flexDirection: 'row', gap: 5, paddingVertical: 6 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#BDB8AE' },
 
   // 选项列表
   options: { marginTop: 14 },
