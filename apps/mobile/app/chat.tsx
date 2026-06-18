@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   type Character,
+  type CharacterAttr,
   type Message,
   type Screenplay,
   STAGE_LABELS,
@@ -15,9 +16,10 @@ import {
   emptyScreenplay,
 } from '@incipel/shared';
 import { useScreenplayAgent, newThreadId } from '../src/agui/client';
-import { Composer } from '../src/components/Composer';
-import { DocPanel } from '../src/components/DocPanel';
+import { Composer, type ComposerHandle } from '../src/components/Composer';
+import { DocSheet } from '../src/components/DocPanel';
 import { InlineCard, type InlineCardData } from '../src/components/InlineCard';
+import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../src/focus';
 import { defaultTheme } from '../src/theme';
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
@@ -60,6 +62,10 @@ export default function ChatScreen() {
   // 「作品」入口可带 view=doc 直接进文档视图。
   const [docOpen, setDocOpen] = useState(params.view === 'doc');
 
+  // 聚焦标签(#12):瞬时;发送时拼进消息、随即清空。
+  const [chips, setChips] = useState<FocusChip[]>([]);
+  const composerRef = useRef<ComposerHandle>(null);
+
   const stage = useMemo(() => deriveStage(screenplay), [screenplay]);
   const title = screenplay.meta.title?.trim() || '无题';
 
@@ -91,25 +97,27 @@ export default function ChatScreen() {
     }
   }, [assistantCount, isRunning, screenplay]);
 
-  // 点人物卡「聊聊 TA」:发一条聚焦该角色的消息(带 character.id)。
-  function focusCharacter(c: Character) {
-    void sendMessage(`我想再聊聊角色「${c.name}」(id: ${c.id})。`);
+  // 聚焦标签:点属性 / 点人物 → 加一枚 chip,关文档面板并聚焦输入框(对齐原型 discussAttr/discussCharacter)。
+  function addChip(chip: FocusChip) {
+    setChips((prev) => (prev.some((c) => c.key === chip.key) ? prev : [...prev, chip]));
     setDocOpen(false);
+    setTimeout(() => composerRef.current?.focus(), 50);
   }
+  const removeChip = (key: string) => setChips((prev) => prev.filter((c) => c.key !== key));
+  const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a));
+  const focusCharacter = (c: Character) => addChip(chipFromCharacter(c));
 
-  if (docOpen) {
-    return (
-      <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
-        <Header
-          title={title}
-          stage={STAGE_LABELS[stage]}
-          docOpen
-          onBack={() => router.back()}
-          onToggleDoc={() => setDocOpen((v) => !v)}
-        />
-        <DocPanel screenplay={screenplay} onFocusCharacter={focusCharacter} />
-      </View>
-    );
+  // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用兜底话术),发出后清空 chip。
+  function sendComposed(text: string) {
+    const msg = composeFocusMessage(text, chips);
+    if (!msg) return;
+    setChips([]);
+    void sendMessage(msg);
+  }
+  // 快捷选项 / 直接发送:不带聚焦上下文,但发送即清空残留 chip(对齐原型 pushUserAndReply)。
+  function sendPlain(text: string) {
+    setChips([]);
+    void sendMessage(text);
   }
 
   // 最后一条 assistant 消息挂本轮卡片与选项(瞬时,随下一轮清空)。
@@ -120,7 +128,7 @@ export default function ChatScreen() {
       <Header
         title={title}
         stage={STAGE_LABELS[stage]}
-        docOpen={false}
+        docOpen={docOpen}
         onBack={() => router.back()}
         onToggleDoc={() => setDocOpen((v) => !v)}
       />
@@ -136,15 +144,17 @@ export default function ChatScreen() {
               text={messageText(m)}
               card={isLastAssistant ? card : undefined}
               options={isLastAssistant ? options : undefined}
-              onSend={sendMessage}
+              onSend={sendPlain}
               onOpenDoc={() => setDocOpen(true)}
+              onFocusAttr={focusAttr}
+              onFocusCharacter={focusCharacter}
             />
           );
         })}
 
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
-          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendMessage} onOpenDoc={() => setDocOpen(true)} />
+          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={() => setDocOpen(true)} />
         )}
 
         {!!error && (
@@ -152,7 +162,22 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
-      <Composer busy={isRunning} onSend={sendMessage} />
+      <Composer
+        ref={composerRef}
+        busy={isRunning}
+        onSend={sendComposed}
+        chips={chips}
+        onRemoveChip={removeChip}
+      />
+
+      {/* 文档面板:从底部滑出的浮层,覆盖在对话之上;收起按钮在面板内(system-design §2.1 / #11)。 */}
+      <DocSheet
+        open={docOpen}
+        onClose={() => setDocOpen(false)}
+        screenplay={screenplay}
+        onFocusCharacter={focusCharacter}
+        onFocusAttr={focusAttr}
+      />
     </View>
   );
 }
@@ -191,14 +216,10 @@ function Header({
           style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
           accessibilityRole="button"
         >
-          {docOpen ? (
-            <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>← 返回对话</Text>
-          ) : (
-            <>
-              <View style={[styles.docDot, { backgroundColor: palette.dot }]} />
-              <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>文档</Text>
-            </>
-          )}
+          <View
+            style={[styles.docDot, { backgroundColor: docOpen ? defaultTheme.accent : palette.dot }]}
+          />
+          <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>文档</Text>
         </Pressable>
       </View>
     </View>
@@ -213,6 +234,8 @@ function MessageBubble({
   options,
   onSend,
   onOpenDoc,
+  onFocusAttr,
+  onFocusCharacter,
 }: {
   role: 'user' | 'assistant';
   text: string;
@@ -221,6 +244,8 @@ function MessageBubble({
   options?: string[];
   onSend: (text: string) => void;
   onOpenDoc: () => void;
+  onFocusAttr?: (c: Character, a: CharacterAttr) => void;
+  onFocusCharacter?: (c: Character) => void;
 }) {
   const { palette } = defaultTheme;
 
@@ -235,12 +260,12 @@ function MessageBubble({
     );
   }
 
-  // 「芯」的回复:头像 + 「助手」标签,正文为页面上的纯文本(无气泡);其下挂内联卡片与选项列表。
+  // 「织幕」的回复:头像 + 「助手」标签,正文为页面上的纯文本(无气泡);其下挂内联卡片与选项列表。
   return (
     <View style={styles.assistantBlock}>
       <View style={styles.assistantHeader}>
         <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
-          <Text style={styles.avatarText}>芯</Text>
+          <Text style={styles.avatarText}>织</Text>
         </View>
         <Text style={[styles.assistantName, { color: palette.textSecondary }]}>助手</Text>
       </View>
@@ -250,8 +275,15 @@ function MessageBubble({
         {streaming ? '▋' : ''}
       </Text>
 
-      {/* 内联卡片:本轮新增实体(由剧本 diff 得出)。 */}
-      {card && <InlineCard data={card} onOpenDoc={onOpenDoc} />}
+      {/* 内联卡片:本轮新增实体(由剧本 diff 得出);人物属性可点生成聚焦标签(#12)。 */}
+      {card && (
+        <InlineCard
+          data={card}
+          onOpenDoc={onOpenDoc}
+          onFocusAttr={onFocusAttr}
+          onFocusCharacter={onFocusCharacter}
+        />
+      )}
 
       {/* 可点选项(quick reply):带分隔线的列表,点击即以用户身份发该文本。 */}
       {!!options?.length && (
@@ -316,7 +348,7 @@ const styles = StyleSheet.create({
   userBubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
   userText: { fontSize: 16, lineHeight: 26 },
 
-  // 「芯」回复块
+  // 「织幕」回复块
   assistantBlock: { width: '100%' },
   assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   avatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },

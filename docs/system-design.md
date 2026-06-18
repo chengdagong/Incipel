@@ -1,4 +1,4 @@
-# 编剧助手「芯」· 系统设计
+# 编剧助手「织幕」· 系统设计
 
 > 状态:v1 设计基线 · 日期:2026-06-17(经 grill-with-docs 复核细化)
 > 来源:基于 Claude Design 导出的高保真原型整理(`编剧助手 原型.dc.html` 及两份对话记录),原型是 HTML/CSS/JS 交互稿,本文是把它生产化的系统设计。
@@ -8,7 +8,7 @@
 
 ## 1. 背景与目标
 
-「芯」是一个 AI 原生的编剧助手移动应用。核心交互是**一条流式对话**:用户给一个灵感,助手一步步引导推进——灵感 → 世界观 → 人物 → 大纲 → 分场 → 对白。
+「织幕」是一个 AI 原生的编剧助手移动应用。核心交互是**一条流式对话**:用户给一个灵感,助手一步步引导推进——灵感 → 世界观 → 人物 → 大纲 → 分场 → 对白。
 
 产品的关键不在聊天本身,而在:**对话过程持续沉淀出一份结构化的剧本。** 剧本(世界观、人物、三幕大纲、分场对白)才是真正的产物,对话是生产和打磨它的手段。这层关系是双向的:
 
@@ -34,7 +34,7 @@
 | 欢迎页 | 输入任意灵感;🎲 一键由 AI 生成一句 logline 填入;方向建议 chip;「开始创作」进入对话 |
 | 流式对话 | 真实模型驱动,打字机式流式回复;可点选项(quick reply)+ 自由输入;回车发送 |
 | 内联卡片 | 助手每轮产出新内容时,消息下方内联一张卡片(世界观/人物/大纲/分场对白),只显示本轮新增;底部按钮一键打开文档全文 |
-| 引导 / 接管 | 「芯」每轮自行判断:给可点选项让用户选(引导),还是直接成体系地写出内容(接管);拿不准就问。不是粘住的模式,逐轮判断 |
+| 引导 / 接管 | 「织幕」每轮自行判断:给可点选项让用户选(引导),还是直接成体系地写出内容(接管);拿不准就问。不是粘住的模式,逐轮判断 |
 | 文档面板 | 累积的剧本,随对话实时更新;人物卡可点击回到对话修订(导出移出 v1) |
 | 侧栏抽屉 | 新建创作、会话列表、作品列表;收藏(starred)+ 最近(recent)两段 |
 | 历史会话 | 全屏会话列表;续写、删除;空状态引导 |
@@ -135,14 +135,16 @@ type Screenplay = {
   scenes:     Scene[];         // 扁平,不挂在某一幕下
 };
 
-type WorldSection = { id: string; title: string; text: string };
-type Character    = { id: string; name: string; note: string };
-type Act          = { id: string; act: string;  beat: string };
-type Scene        = { id: string; slug: string; content: string };
+type WorldSection  = { id: string; title: string; text: string };
+type CharacterAttr = { id: string; label: string; value: string };  // 外貌/性格/身份…
+type Character     = { id: string; name: string; role: string; attrs: CharacterAttr[] };
+type Act           = { id: string; act: string;  beat: string };
+type Scene         = { id: string; slug: string; content: string };
 ```
 
 - **每个实体都有稳定 id,由服务端生成**(模型无权自造)。id 让 STATE_DELTA 精确 patch 单个实体而不重发整组,也让「针对某角色 / 某节深入」稳稳命中同一对象。原型里靠名字定位,改名即失联。
 - **世界观拆成带 id 的小节**(标题任意):可精确改某一节而不动其余,与人物/幕/场一致。原型里世界观是整段文本、整段覆盖,partial 编辑会丢内容(见 ADR-0001)。
+- **人物是结构化的**:名字 + 一句话定位(role)+ 若干带 id 的属性(`attrs`,如 外貌/性格/身份)。`attrId` 全局唯一。这取代早期的单段 `note`,以支持「点某条属性回对话深聊」(聚焦标签)与「由 外貌+性格 拼肖像提示词」;每条属性单独 patch、单独引用(见 ADR-0001 的人物属性扩展段)。
 - **scenes 扁平**,不与幕建父子关系:slug(内景/外景 地点 — 时间)即标准场景标题,顺序由对话给出。要「按幕折叠浏览」再 later 加 `actId`。
 - **阶段(stage)不进状态**:`灵感/世界观/人物/大纲/分场` 由客户端按哪些区块有内容派生(`scenes>outline>characters>world>idea`),避免存储态与内容不一致。
 - **options(可点选项)不进剧本**:它是一轮内的瞬时 UI 状态(见 §7),随下一轮用户输入清空。
@@ -195,9 +197,14 @@ add_world_section({ title, text })            新建一节(标题任意),id 由�
 update_world_section({ id, title?, text? })   改某一节;id 受枚举约束
 remove_world_section({ id })
 
-add_character({ name, note })                 新建人物
-update_character({ id, name?, note? })        改某人物
+add_character({ name, role? })                新建人物(名字 + 一句话定位)
+update_character({ id, name?, role? })        改人物的名字 / 定位
 remove_character({ id })
+
+# 人物属性:结构化 label/value(外貌/性格/身份…),支持点属性深聊与肖像提示词
+add_character_attr({ characterId, label, value })  给某人物加一条属性(characterId 受枚举约束)
+update_character_attr({ attrId, label?, value? })  改某条属性(attrId 全局唯一,受枚举约束)
+remove_character_attr({ attrId })
 
 add_act({ act, beat })                        新建一幕
 update_act({ id, act?, beat? })
@@ -262,7 +269,7 @@ messages
 
 **每轮不发完整 transcript。** 因为剧本本身就是故事状态的压缩长期记忆,每轮只发:
 
-1. 系统提示(「芯」的人格 + 输出/工具约束)—— 走 **prompt caching**,稳定不变;
+1. 系统提示(「织幕」的人格 + 输出/工具约束)—— 走 **prompt caching**,稳定不变;
 2. 当前剧本状态(序列化为可读文本,含各实体 id)—— 作为 cached prefix,变动小;
 3. 最近 6–10 轮对话 + 本轮新消息。
 

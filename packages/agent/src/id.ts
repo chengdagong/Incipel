@@ -5,10 +5,11 @@
 
 import { nanoid } from 'nanoid';
 
-export type EntityKind = 'char' | 'world' | 'act' | 'scene';
+export type EntityKind = 'char' | 'charAttr' | 'world' | 'act' | 'scene';
 
 const PREFIX: Record<EntityKind, string> = {
   char: 'char_',
+  charAttr: 'cattr_',
   world: 'world_',
   act: 'act_',
   scene: 'scene_',
@@ -23,5 +24,6 @@ export function newId(kind: EntityKind): string {
 
 export const newWorldSectionId = (): string => newId('world');
 export const newCharacterId = (): string => newId('char');
+export const newCharacterAttrId = (): string => newId('charAttr');
 export const newActId = (): string => newId('act');
 export const newSceneId = (): string => newId('scene');

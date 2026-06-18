@@ -1,141 +1,303 @@
-// 文档面板:累积的剧本全文,随对话实时更新。
-// 人物卡可点击回到对话修订(带 character.id,触发一次聚焦该角色的 run,见 system-design §10)。
-// 阶段(stage)用 @incipel/shared 的 deriveStage / STAGE_LABELS 显示。
+// 剧本文档面板:从底部滑出的浮层(对齐原型「编剧助手 原型.dc.html」DOCUMENT PANEL,见 issue #11)。
+// 累积的剧本全文随对话实时更新;世界观/人物/大纲/分场分区,人物区可左右滑动,空分区显示虚线占位。
+// 阶段(stage)由 @incipel/shared 的 deriveStage 派生(system-design §5)。
+//
+// 与原型差异:导出(Fountain/PDF)按 system-design §15 移出 v1,略去;人物卡的肖像(#14)与
+// 属性级聚焦(#12)留作后续,本轮先做面板骨架 + 人物名/小传 + 左右滑动。
 
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
 import {
-  type Character,
-  type Screenplay,
-  STAGE_LABELS,
-  deriveStage,
-} from '@incipel/shared';
+  Animated,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { type Character, type CharacterAttr, type Screenplay } from '@incipel/shared';
 import { defaultTheme, type Theme } from '../theme';
 
+const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+
+// 原型 doc 面板专用配色(literal,逐像素对齐)。
+const DOC = {
+  sheetBg: '#FBFAF7',
+  eyebrow: '#B3AEA4',
+  collapse: '#9A958C',
+  title: '#2A2825',
+  logline: '#7C776E',
+  pending: '#C2BDB3',
+  body: '#54504A',
+  charName: '#2A2825',
+  charRole: '#A39E94',
+  charNote: '#3A352F',
+  swipeHint: '#B6B0A6',
+  outline: '#6E6960',
+  sceneSlug: '#A39E94',
+  sceneBorder: '#EDEAE3',
+  dashed: '#DBD5CB',
+  divider: '#F0EDE7',
+  noteBg: '#F5F2EC',
+  noteText: '#9A958C',
+} as const;
+
 type Props = {
+  open: boolean;
+  onClose: () => void;
   screenplay: Screenplay;
   theme?: Theme;
-  // 点人物卡「聊聊 TA」:回到对话修订该角色。
+  // 点人物卡「聊聊 TA」:聚焦整个人物。
   onFocusCharacter?: (character: Character) => void;
+  // 点某条属性:聚焦该属性(#12 聚焦标签)。
+  onFocusAttr?: (character: Character, attr: CharacterAttr) => void;
 };
 
-export function DocPanel({ screenplay, theme = defaultTheme, onFocusCharacter }: Props) {
-  const { palette } = theme;
-  const stage = deriveStage(screenplay);
+export function DocSheet({
+  open,
+  onClose,
+  screenplay,
+  theme = defaultTheme,
+  onFocusCharacter,
+  onFocusAttr,
+}: Props) {
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const { accent } = theme;
+
+  // translateY:开 0 / 关 height(滑出屏下)。初值取当前 open,避免 view=doc 进入时多一次滑动。
+  const anim = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: open ? 1 : 0,
+      duration: open ? 340 : 280,
+      useNativeDriver: true,
+    }).start();
+  }, [open, anim]);
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [height, 0] });
+
+  const { meta, world, characters, outline, scenes } = screenplay;
+  const title = meta.title?.trim() || '无题';
 
   return (
-    <ScrollView
-      style={[styles.panel, { backgroundColor: palette.cardBg }]}
-      contentContainerStyle={styles.content}
+    <Animated.View
+      style={[styles.sheet, { transform: [{ translateY }] }]}
+      pointerEvents={open ? 'auto' : 'none'}
     >
-      <Text style={[styles.title, { color: palette.textPrimary }]}>
-        {screenplay.meta.title || '未命名作品'}
-      </Text>
-      {!!screenplay.meta.logline && (
-        <Text style={[styles.logline, { color: palette.textSecondary }]}>
-          {screenplay.meta.logline}
-        </Text>
-      )}
-      <Text style={[styles.stage, { color: theme.accent }]}>当前阶段:{STAGE_LABELS[stage]}</Text>
+      {/* 顶栏:eyebrow + 收起 */}
+      <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
+        <Text style={styles.eyebrow}>剧本草稿 · 自动生成</Text>
+        <Pressable onPress={onClose} accessibilityRole="button" hitSlop={8}>
+          <Text style={styles.collapse}>收起 ✕</Text>
+        </Pressable>
+      </View>
 
-      <Block label="世界观" theme={theme}>
-        {screenplay.world.map((w) => (
-          <Entry key={w.id} title={w.title} body={w.text} theme={theme} />
-        ))}
-      </Block>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 36 }]}>
+        <Text style={styles.docTitle}>《{title}》</Text>
+        {meta.logline?.trim() ? (
+          <Text style={[styles.logline, { borderLeftColor: accent }]}>{meta.logline}</Text>
+        ) : (
+          <Text style={styles.pending}>一句话故事 · 待沉淀</Text>
+        )}
 
-      <Block label="人物" theme={theme}>
-        {screenplay.characters.map((c) => (
-          <Entry
-            key={c.id}
-            title={c.name}
-            body={c.note}
-            theme={theme}
-            // 人物卡可点回对话修订。
-            onPress={onFocusCharacter ? () => onFocusCharacter(c) : undefined}
-            actionLabel="聊聊 TA"
-          />
-        ))}
-      </Block>
+        {/* 世界观 · 设定 */}
+        <SectionLabel accent={accent} text="世界观 · 设定" />
+        {world.length > 0 ? (
+          <View style={styles.worldBlock}>
+            {world.map((w) => (
+              <View key={w.id} style={styles.worldSection}>
+                {!!w.title && <Text style={styles.worldTitle}>{w.title}</Text>}
+                {!!w.text && <Text style={styles.bodyText}>{w.text}</Text>}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <EmptyHint text="▢ 还没建立世界观" />
+        )}
 
-      <Block label="大纲" theme={theme}>
-        {screenplay.outline.map((a) => (
-          <Entry key={a.id} title={a.act} body={a.beat} theme={theme} />
-        ))}
-      </Block>
+        {/* 人物 · 左右滑动 */}
+        <View style={styles.charsHeader}>
+          <Text style={[styles.sectionLabel, { color: accent }]}>
+            人物 <Text style={styles.charCount}>· {characters.length}</Text>
+          </Text>
+          {characters.length > 1 && <Text style={styles.swipeHint}>← 左右滑动 →</Text>}
+        </View>
+        {characters.length > 0 ? (
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={[styles.charScroller, { width, marginLeft: -26 }]}
+            contentContainerStyle={{ alignItems: 'flex-start' }}
+          >
+            {characters.map((c) => (
+              <View key={c.id} style={[styles.charCard, { width }]}>
+                <Text style={styles.charName}>{c.name || '未命名角色'}</Text>
+                {!!c.role && <Text style={styles.charRole}>{c.role}</Text>}
+                {c.attrs.length > 0 && (
+                  <View style={styles.attrList}>
+                    {c.attrs.map((a) => (
+                      <Pressable
+                        key={a.id}
+                        onPress={onFocusAttr ? () => onFocusAttr(c, a) : undefined}
+                        style={({ pressed }) => [styles.attrRow, pressed && styles.attrRowPressed]}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.attrLabel}>{a.label}</Text>
+                        <Text style={styles.attrValue}>{a.value}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+                {!!onFocusCharacter && (
+                  <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6}>
+                    <Text style={[styles.charAction, { color: accent }]}>聊聊 TA →</Text>
+                  </Pressable>
+                )}
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          <EmptyHint text="▢ 还没聊到人物" />
+        )}
 
-      <Block label="分场 · 对白" theme={theme}>
-        {screenplay.scenes.map((s) => (
-          <Entry key={s.id} title={s.slug} body={s.content} theme={theme} />
-        ))}
-      </Block>
-    </ScrollView>
+        {/* 大纲 */}
+        <SectionLabel accent={accent} text="大纲" />
+        {outline.length > 0 ? (
+          <View style={styles.outlineBlock}>
+            {outline.map((a) => (
+              <Text key={a.id} style={styles.outlineItem}>
+                <Text style={styles.outlineAct}>{a.act}</Text>
+                {a.beat ? ` · ${a.beat}` : ''}
+              </Text>
+            ))}
+          </View>
+        ) : (
+          <EmptyHint text="▢ 还没搭大纲" />
+        )}
+
+        {/* 分场 · 对白 */}
+        <SectionLabel accent={accent} text="分场 · 对白" />
+        {scenes.length > 0 ? (
+          <View style={styles.sceneBlock}>
+            {scenes.map((s) => (
+              <View key={s.id} style={styles.scene}>
+                <Text style={styles.sceneSlug}>{s.slug}</Text>
+                {!!s.content && <Text style={styles.sceneContent}>{s.content}</Text>}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <EmptyHint text="▢ 还没写到具体场景" last />
+        )}
+
+        <View style={styles.liveNote}>
+          <Text style={styles.liveNoteText}>这份文档随对话实时更新。</Text>
+        </View>
+      </ScrollView>
+    </Animated.View>
   );
 }
 
-function Block({
-  label,
-  theme,
-  children,
-}: {
-  label: string;
-  theme: Theme;
-  children: React.ReactNode;
-}) {
-  const empty = !children || (Array.isArray(children) && children.flat().length === 0);
-  return (
-    <View style={styles.block}>
-      <Text style={[styles.blockLabel, { color: theme.palette.textSecondary }]}>{label}</Text>
-      {empty ? (
-        <Text style={[styles.emptyHint, { color: theme.palette.textSecondaryAlt }]}>(待补充)</Text>
-      ) : (
-        children
-      )}
-    </View>
-  );
+function SectionLabel({ accent, text }: { accent: string; text: string }) {
+  return <Text style={[styles.sectionLabel, { color: accent }]}>{text}</Text>;
 }
 
-function Entry({
-  title,
-  body,
-  theme,
-  onPress,
-  actionLabel,
-}: {
-  title: string;
-  body: string;
-  theme: Theme;
-  onPress?: () => void;
-  actionLabel?: string;
-}) {
-  const { palette } = theme;
+function EmptyHint({ text, last }: { text: string; last?: boolean }) {
   return (
-    <View style={[styles.entry, { borderColor: palette.borderAlt }]}>
-      {!!title && <Text style={[styles.entryTitle, { color: palette.textPrimary }]}>{title}</Text>}
-      {!!body && <Text style={[styles.entryBody, { color: palette.textPrimaryAlt }]}>{body}</Text>}
-      {!!onPress && (
-        <Text
-          style={[styles.action, { color: theme.accent }]}
-          onPress={onPress}
-          accessibilityRole="button"
-        >
-          {actionLabel ?? '修订'} →
-        </Text>
-      )}
-    </View>
+    <Text style={[styles.emptyHint, last ? styles.emptyHintLast : styles.emptyHintDashed]}>{text}</Text>
   );
 }
 
 const styles = StyleSheet.create({
-  panel: { flex: 1 },
-  content: { padding: 16, gap: 16 },
-  title: { fontSize: 20, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
-  logline: { fontSize: 14, lineHeight: 20 },
-  stage: { fontSize: 12, fontWeight: '600' },
-  block: { gap: 8 },
-  blockLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
-  emptyHint: { fontSize: 13, fontStyle: 'italic' },
-  entry: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4 },
-  entryTitle: { fontSize: 15, fontWeight: '600' },
-  entryBody: { fontSize: 14, lineHeight: 20 },
-  action: { fontSize: 13, fontWeight: '600', marginTop: 2 },
+  sheet: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 20,
+    backgroundColor: DOC.sheetBg,
+    shadowColor: '#322C26',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
+    elevation: 24,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: DOC.divider,
+  },
+  eyebrow: { fontSize: 11, letterSpacing: 2, color: DOC.eyebrow, textTransform: 'uppercase' },
+  collapse: { fontSize: 15, color: DOC.collapse },
+
+  content: { paddingHorizontal: 26, paddingTop: 24 },
+  docTitle: {
+    fontFamily: defaultTheme.fonts.serifTitle,
+    fontSize: 24,
+    fontWeight: '600',
+    color: DOC.title,
+    letterSpacing: -0.2,
+    marginBottom: 6,
+  },
+  logline: {
+    fontSize: 13.5,
+    color: DOC.logline,
+    lineHeight: 23,
+    marginBottom: 26,
+    paddingLeft: 12,
+    borderLeftWidth: 2,
+  },
+  pending: { fontSize: 13, color: DOC.pending, marginBottom: 26 },
+
+  sectionLabel: { fontSize: 11, letterSpacing: 1, fontWeight: '600', marginBottom: 12 },
+  charCount: { color: '#C2BDB3', fontWeight: '400' },
+
+  worldBlock: { marginBottom: 28, gap: 14 },
+  worldSection: { gap: 4 },
+  worldTitle: { fontSize: 14, fontWeight: '600', color: DOC.title },
+  bodyText: { fontSize: 13, color: DOC.body, lineHeight: 23 },
+
+  charsHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  swipeHint: { fontSize: 11, color: DOC.swipeHint },
+  charScroller: { marginBottom: 28 },
+  charCard: { paddingHorizontal: 26, gap: 4 },
+  charName: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 16, fontWeight: '600', color: DOC.charName },
+  charRole: { fontSize: 12, color: DOC.charRole, marginBottom: 3 },
+  attrList: { marginTop: 4 },
+  attrRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 8 },
+  attrRowPressed: { backgroundColor: '#F6F1E9' },
+  attrLabel: { width: 44, fontSize: 13, lineHeight: 22, color: DOC.charRole },
+  attrValue: { flex: 1, fontSize: 13, lineHeight: 22, color: DOC.charNote },
+  charAction: { fontSize: 12.5, fontWeight: '600', marginTop: 6 },
+
+  outlineBlock: { marginBottom: 28, gap: 11 },
+  outlineItem: { fontSize: 13, color: DOC.outline, lineHeight: 21 },
+  outlineAct: { color: '#2A2825', fontWeight: '700' },
+
+  sceneBlock: { marginBottom: 24, gap: 18 },
+  scene: { borderLeftWidth: 2, borderLeftColor: DOC.sceneBorder, paddingLeft: 14 },
+  sceneSlug: { fontSize: 11, letterSpacing: 1, color: DOC.sceneSlug, marginBottom: 8, fontFamily: MONO },
+  sceneContent: { fontSize: 12.5, color: DOC.body, lineHeight: 22, fontFamily: MONO },
+
+  emptyHint: { fontSize: 13, color: DOC.pending },
+  emptyHintDashed: {
+    borderBottomWidth: 1,
+    borderStyle: 'dashed',
+    borderBottomColor: DOC.dashed,
+    paddingBottom: 14,
+    marginBottom: 28,
+  },
+  emptyHintLast: { paddingBottom: 14, marginBottom: 24 },
+
+  liveNote: { marginTop: 14, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: DOC.noteBg, borderRadius: 12 },
+  liveNoteText: { fontSize: 12, color: DOC.noteText, lineHeight: 19 },
 });

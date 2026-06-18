@@ -11,12 +11,19 @@
 import {
   type Act,
   type Character,
+  type CharacterAttr,
   type JsonPatchOp,
   type Scene,
   type Screenplay,
   type WorldSection,
 } from '@incipel/shared';
-import { newActId, newCharacterId, newSceneId, newWorldSectionId } from './id';
+import {
+  newActId,
+  newCharacterAttrId,
+  newCharacterId,
+  newSceneId,
+  newWorldSectionId,
+} from './id';
 
 export class ApplyError extends Error {
   constructor(message: string) {
@@ -43,6 +50,15 @@ function requireIndex<T extends { id: string }>(arr: T[], id: string, label: str
     throw new ApplyError(`${label} id 不存在: ${id}(拒绝静默新建)`);
   }
   return i;
+}
+
+// 按全局唯一的 attrId 跨所有人物定位一条属性,返回 { ci, ai };找不到即抛(防御性二次门控)。
+function requireAttr(state: Screenplay, attrId: string): { ci: number; ai: number } {
+  for (let ci = 0; ci < state.characters.length; ci++) {
+    const ai = indexById(state.characters[ci]!.attrs, attrId);
+    if (ai >= 0) return { ci, ai };
+  }
+  throw new ApplyError(`character_attr id 不存在: ${attrId}(拒绝静默新建)`);
 }
 
 // 在已有对象上应用「可选字段」更新:仅覆盖显式传入(非 undefined)的字段,并生成对应 patch。
@@ -126,7 +142,8 @@ export function applyToolCall(toolName: string, args: unknown, state: Screenplay
       const character: Character = {
         id: newCharacterId(),
         name: String(a.name ?? ''),
-        note: String(a.note ?? ''),
+        role: String(a.role ?? ''),
+        attrs: [],
       };
       const i = state.characters.push(character) - 1;
       return {
@@ -138,7 +155,7 @@ export function applyToolCall(toolName: string, args: unknown, state: Screenplay
       const i = requireIndex(state.characters, String(a.id), 'character');
       const ops = patchFields(state.characters[i]!, `/characters/${i}`, {
         name: a.name as string | undefined,
-        note: a.note as string | undefined,
+        role: a.role as string | undefined,
       });
       if (ops.length) ops.push(touchUpdatedAt(state));
       return { state, patch: ops };
@@ -147,6 +164,41 @@ export function applyToolCall(toolName: string, args: unknown, state: Screenplay
       const i = requireIndex(state.characters, String(a.id), 'character');
       state.characters.splice(i, 1);
       return { state, patch: [{ op: 'remove', path: `/characters/${i}` }, touchUpdatedAt(state)] };
+    }
+
+    // ── 人物属性 ───────────────────────────────────────────────────────────
+    case 'add_character_attr': {
+      const ci = requireIndex(state.characters, String(a.characterId), 'character');
+      const attr: CharacterAttr = {
+        id: newCharacterAttrId(),
+        label: String(a.label ?? ''),
+        value: String(a.value ?? ''),
+      };
+      const ai = state.characters[ci]!.attrs.push(attr) - 1;
+      return {
+        state,
+        patch: [
+          { op: 'add', path: `/characters/${ci}/attrs/${ai}`, value: attr },
+          touchUpdatedAt(state),
+        ],
+      };
+    }
+    case 'update_character_attr': {
+      const { ci, ai } = requireAttr(state, String(a.attrId));
+      const ops = patchFields(state.characters[ci]!.attrs[ai]!, `/characters/${ci}/attrs/${ai}`, {
+        label: a.label as string | undefined,
+        value: a.value as string | undefined,
+      });
+      if (ops.length) ops.push(touchUpdatedAt(state));
+      return { state, patch: ops };
+    }
+    case 'remove_character_attr': {
+      const { ci, ai } = requireAttr(state, String(a.attrId));
+      state.characters[ci]!.attrs.splice(ai, 1);
+      return {
+        state,
+        patch: [{ op: 'remove', path: `/characters/${ci}/attrs/${ai}` }, touchUpdatedAt(state)],
+      };
     }
 
     // ── 幕(大纲)──────────────────────────────────────────────────────────

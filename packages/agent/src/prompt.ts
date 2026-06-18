@@ -1,4 +1,4 @@
-// 「芯」的 system 人格与每轮 prompt 拼装。
+// 「织幕」的 system 人格与每轮 prompt 拼装。
 //
 // 上下文与成本策略(见 system-design §9):每轮不发完整 transcript,只发
 //   1. SYSTEM(稳定不变,走 prompt caching);
@@ -16,8 +16,8 @@ export type PromptMessage = {
 // 每轮带进 prompt 的最近对话轮数上限(系统设计给的是 6–10 轮)。
 export const RECENT_MESSAGE_LIMIT = 10;
 
-// 「芯」的人格与硬约束。稳定不变,作为 prompt caching 的命中前缀。
-export const SYSTEM = `你是「芯」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
+// 「织幕」的人格与硬约束。稳定不变,作为 prompt caching 的命中前缀。
+export const SYSTEM = `你是「织幕」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
 
 # 你的姿态:每轮自行判断「引导」还是「接管」
 - 引导:给用户至多 3 个可点选项(调 propose_options),或问一个聚焦的问题,把决定权交回用户。
@@ -41,7 +41,8 @@ export const SYSTEM = `你是「芯」,一个 AI 原生的编剧助手。你与�
 # 工具语义
 - set_meta(title?, logline?):设定/更新标题与 logline(一句话故事,经典结构:反差身份的主角 + 触发事件 + 具体目标 + 明确阻力)。
 - add_world_section / update_world_section / remove_world_section:世界观按小节管理,每节有标题与正文。
-- add_character / update_character / remove_character:人物,含名字与人物小传。
+- add_character / update_character / remove_character:人物,含名字(name)与一句话定位(role)。
+- add_character_attr / update_character_attr / remove_character_attr:人物的结构化属性(如 外貌 / 性格 / 身份 / 目标 等),每条 label + value。新增属性给 characterId;改/删用全局唯一的 attrId(只能引用现有属性)。人物的具体设定写成属性,不要堆进一段长文本。
 - add_act / update_act / remove_act:三幕大纲的一幕,含幕名与该幕节拍。
 - add_scene / update_scene / remove_scene:分场;slug 为标准场景标题(内景/外景 地点 — 时间),content 为对白,写成「角色（提示）：台词」逐行。
 - propose_options(options):本轮可点选项,最多 3 个。
@@ -73,7 +74,10 @@ export function serializeScreenplay(state: Screenplay): string {
   lines.push('');
   lines.push(`## 人物(${state.characters.length})`);
   for (const c of state.characters) {
-    lines.push(`- [${c.id}] ${c.name}: ${c.note}`);
+    lines.push(`- [${c.id}] ${c.name}${c.role ? ` — ${c.role}` : ''}`);
+    for (const at of c.attrs) {
+      lines.push(`    - [${at.id}] ${at.label}: ${at.value}`);
+    }
   }
 
   lines.push('');
@@ -95,7 +99,7 @@ export function serializeScreenplay(state: Screenplay): string {
 // 把最近若干轮对话拼成文本。
 function serializeRecent(messages: PromptMessage[]): string {
   if (!messages.length) return '';
-  const lines = messages.map((m) => `${m.role === 'user' ? '用户' : '芯'}: ${m.text}`);
+  const lines = messages.map((m) => `${m.role === 'user' ? '用户' : '织幕'}: ${m.text}`);
   return ['# 最近对话', ...lines].join('\n');
 }
 
