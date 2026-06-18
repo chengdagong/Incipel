@@ -18,6 +18,6 @@
 - `add_character({ name, role? })` / `update_character({ id, name?, role? })` / `remove_character({ id })` 只管名字与定位。
 - 属性单列三个显式工具:`add_character_attr({ characterId, label, value })`、`update_character_attr({ attrId, label?, value? })`、`remove_character_attr({ attrId })`。
 - `attrId` **全局唯一**(跨人物),`update/remove_character_attr` 的 `attrId` 与 `add_character_attr` 的 `characterId` 都在 schema 里按当前状态枚举锁死;服务端 `apply` 再校验一次,不存在即拒绝、绝不静默新建。
-- 剧本存在 `documents.state` 的 jsonb 里,**此扩展不需要 SQL migration**。
+- 剧本存在 `documents.state` 的 jsonb 里,**不需要 SQL(DDL)migration**;但 jsonb 是 opaque、不做归一,**改动前落库的旧行**里人物只有 `note`、缺 `attrs`/`role`,直接喂给 `idSetsOf` / `serializeScreenplay` 会对 `undefined` 取属性而崩。因此在**载入边界**用 `normalizeScreenplay`(`@incipel/shared`)补齐(`attrs` 兜空、旧 `note` 搬进 `role`),`store.loadSession` 已接入——这是数据归一,不是 schema migration。
 
 **不要**把属性塞回一段长 `note`,或用「整组覆盖 attrs」的 upsert——那会重新引入「partial 编辑丢内容」与「错误/重复 id」。

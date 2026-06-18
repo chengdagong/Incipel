@@ -290,7 +290,7 @@ messages
 | 点人物卡「聊聊 TA」 | 前端发一条聚焦该角色的消息(带 `character.id`),触发一次 run |
 | 打开文档 / 收起 | 纯客户端;数据来自已同步的共享状态 |
 | 侧栏/历史/作品列表 | supabase-js 直接查 `sessions` join `documents` |
-| 收藏 / 删除 | 直接 update / delete `sessions` 行(RLS 保护) |
+| 收藏 / 删除 | 收藏 = 客户端列级 update `sessions.starred`(列级授权 + RLS;见 migration 0003);删除 = client delete `sessions` 行(RLS) |
 | 续写旧会话 | 查 `messages`(含 deltas/options)+ `documents.state`;打开 AG-UI 连接并以该状态作 STATE_SNAPSHOT |
 
 > 导出(Fountain / PDF)移出 v1,见 §15。

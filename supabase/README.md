@@ -62,7 +62,7 @@ v1 默认匿名账号(零摩擦入门,事后可选升级,见系统设计 §15/§
 
 权限按最小授予,且遵循「agent 是权威数据唯一写入方」的边界(见系统设计 §4):
 
-- **客户端**(`authenticated`,含匿名登录):只**读**自己的 `sessions` / `documents`(history 列表、works 内嵌读 `documents.state`),并可**删除**自己的会话(删除经外键 `on delete cascade` 连带清子表)。对 `documents` / `messages` / `document_versions` **没有任何写权限** —— 这三张表的写入一律经 agent 走 `save_turn`,否则用户持公开 anon key 即可绕过服务端校验直接篡改自己的剧本与历史。
+- **客户端**(`authenticated`,含匿名登录):只**读**自己的 `sessions` / `documents`(history 列表、works 内嵌读 `documents.state`);可**删除**自己的会话(删除经外键 `on delete cascade` 连带清子表);并可**收藏**——即对自己 `sessions` 行的 `starred` 一列做**列级** update(见 migration 0003,只放开 `starred`,改不了 `title` / `accent` / `updated_at` 等)。对 `documents` / `messages` / `document_versions` **没有任何写权限** —— 这三张表的写入一律经 agent 走 `save_turn`,否则用户持公开 anon key 即可绕过服务端校验直接篡改自己的剧本与历史。
 - **agent**(`service_role`):四张表全部 DML,带 `BYPASSRLS`,落库前已自行校验客户端 JWT 与会话归属。
 - **`save_turn`**:`security definer`(以属主身份执行、绕过 RLS),`EXECUTE` 已从 `PUBLIC` 收回、只授予 `service_role` —— 否则任何登录用户都能经 PostgREST 的 `rpc/save_turn` 跨会话(含他人会话)写入。
 

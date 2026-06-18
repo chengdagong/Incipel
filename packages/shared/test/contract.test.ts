@@ -7,11 +7,13 @@ import {
   idSetsOf,
   deriveStage,
   emptyScreenplay,
+  normalizeScreenplay,
   optionsEvent,
   sse,
   ACCENT_OPTIONS,
   EventType,
   OPTIONS_EVENT_NAME,
+  type Screenplay,
 } from '../src/index';
 
 describe('buildToolSchemas — id 枚举门控', () => {
@@ -91,6 +93,33 @@ describe('idSetsOf', () => {
       acts: ['act_a'],
       scenes: ['scene_a'],
     });
+  });
+});
+
+describe('normalizeScreenplay — 归一旧结构剧本(载入边界)', () => {
+  it('旧人物 {id,name,note}(无 role/attrs)→ 补 role(搬 note)+ attrs=[];归一后 idSetsOf 不再崩', () => {
+    // 模拟改动前落库的旧结构(opaque jsonb,人物无 role/attrs)。
+    const legacy = {
+      ...emptyScreenplay(),
+      characters: [{ id: 'char_a', name: '林深', note: '前外科医生' }],
+    } as unknown as Screenplay;
+    const norm = normalizeScreenplay(legacy);
+    expect(norm.characters[0]).toEqual({ id: 'char_a', name: '林深', role: '前外科医生', attrs: [] });
+    expect(() => idSetsOf(norm)).not.toThrow();
+    expect(idSetsOf(norm).characterAttrs).toEqual([]);
+  });
+
+  it('各实体数组缺失也兜成空数组', () => {
+    const norm = normalizeScreenplay({ meta: emptyScreenplay().meta } as unknown as Screenplay);
+    expect([norm.world, norm.characters, norm.outline, norm.scenes].every((a) => Array.isArray(a))).toBe(true);
+  });
+
+  it('已是新结构则原样保留 role 与 attrs', () => {
+    const s = {
+      ...emptyScreenplay(),
+      characters: [{ id: 'char_a', name: '阿七', role: '少年', attrs: [{ id: 'cattr_a', label: '外貌', value: '高瘦' }] }],
+    };
+    expect(normalizeScreenplay(s).characters[0]).toEqual(s.characters[0]);
   });
 });
 

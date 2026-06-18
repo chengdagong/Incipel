@@ -18,6 +18,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   emptyScreenplay,
+  normalizeScreenplay,
   type JsonPatchOp,
   type Screenplay,
 } from '@incipel/shared';
@@ -122,7 +123,9 @@ export class SupabaseStore implements Store {
       .maybeSingle();
     if (dErr) throw new StoreError(`加载剧本失败: ${dErr.message}`);
 
-    const state = (doc?.state as Screenplay | null) ?? emptyScreenplay();
+    // 归一:documents.state 是 opaque jsonb,改过人物形态(note → role+attrs)后,旧行的人物可能缺
+    // attrs/role;载入即补齐,避免本轮 idSetsOf/serializeScreenplay 对 undefined 取属性而崩(见评审 #1)。
+    const state = normalizeScreenplay((doc?.state as Screenplay | null) ?? emptyScreenplay());
 
     // 最近 N 条消息:DB 取最新 N 条(倒序),再翻成正序给 prompt 用。
     const { data: rows, error: mErr } = await db
