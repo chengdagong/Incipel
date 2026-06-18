@@ -21,12 +21,18 @@ supabase start
 supabase db reset
 ```
 
+本项目刻意用 **5452x** 端口段(而非 Supabase 默认 5432x),以便与本机其他本地
+Supabase 栈共存、互不抢端口(端口定义见 [`config.toml`](./config.toml))。
 `supabase start` 会打印本地 URL 与密钥:
 
-- API URL:`http://127.0.0.1:54321`
-- Studio:`http://127.0.0.1:54323`
-- Inbucket(本地收发邮件):`http://127.0.0.1:54324`
+- API URL:`http://127.0.0.1:54521`
+- Postgres:`127.0.0.1:54522`
+- Studio:`http://127.0.0.1:54523`
+- Inbucket(本地收发邮件):`http://127.0.0.1:54524`
 - `anon key` / `service_role key`:从输出读取
+
+> 改了 `config.toml` 的端口,记得同步 `packages/agent/.env` 的 `SUPABASE_URL`
+> 与 `apps/mobile/.env` 的 `EXPO_PUBLIC_SUPABASE_URL`。
 
 ## 应用到远端项目
 
@@ -54,7 +60,11 @@ v1 默认匿名账号(零摩擦入门,事后可选升级,见系统设计 §15/§
 - `sessions`:直接 `user_id = auth.uid()`;
 - `documents` / `document_versions` / `messages`:经 `session_id` 关联到 `sessions.user_id`。
 
-客户端(带用户 JWT)只能读写自己的数据。agent 运行时用 `service_role key`,绕过 RLS —— 它在落库前已自行校验客户端 JWT 与会话归属(见系统设计 §4)。
+权限按最小授予,且遵循「agent 是权威数据唯一写入方」的边界(见系统设计 §4):
+
+- **客户端**(`authenticated`,含匿名登录):只**读**自己的 `sessions` / `documents`(history 列表、works 内嵌读 `documents.state`),并可**删除**自己的会话(删除经外键 `on delete cascade` 连带清子表)。对 `documents` / `messages` / `document_versions` **没有任何写权限** —— 这三张表的写入一律经 agent 走 `save_turn`,否则用户持公开 anon key 即可绕过服务端校验直接篡改自己的剧本与历史。
+- **agent**(`service_role`):四张表全部 DML,带 `BYPASSRLS`,落库前已自行校验客户端 JWT 与会话归属。
+- **`save_turn`**:`security definer`(以属主身份执行、绕过 RLS),`EXECUTE` 已从 `PUBLIC` 收回、只授予 `service_role` —— 否则任何登录用户都能经 PostgREST 的 `rpc/save_turn` 跨会话(含他人会话)写入。
 
 ## save_turn(跨包契约)
 
@@ -82,7 +92,7 @@ agent 运行时(非本目录,放在 `packages/agent`)需要以下变量读写数
 
 | 变量 | 说明 |
 |---|---|
-| `SUPABASE_URL` | 项目 API URL(本地为 `http://127.0.0.1:54321`) |
+| `SUPABASE_URL` | 项目 API URL(本地为 `http://127.0.0.1:54521`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role 密钥;agent 用它绕过 RLS 落库,**绝不下发到客户端** |
 | `SUPABASE_JWT_SECRET` | 校验客户端 JWT 用(本地由 `supabase start` 打印) |
 

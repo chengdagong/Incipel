@@ -23,3 +23,6 @@ supabase/.temp/
 # os / editor
 .DS_Store
 *.log
+
+# codex 评审关卡的本地记录(按分支生成)
+.codex-review/
