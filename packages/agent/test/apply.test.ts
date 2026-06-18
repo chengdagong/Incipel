@@ -133,6 +133,24 @@ describe('apply.ts — 人物属性(add/update/remove_character_attr)', () => {
     return { s, charId: s.characters[0]!.id };
   }
 
+  it('add_character 可带初始 attrs:服务端为每条 attr 生成 cattr_ id,随人物一并写入(同轮建人物+赋属性)', () => {
+    const s = fresh();
+    const { patch } = applyToolCall(
+      'add_character',
+      { name: '沈黎', role: '盲眼调音师', attrs: [{ label: '外貌', value: '总戴墨镜' }, { label: '性格', value: '克制' }] },
+      s,
+    );
+    const c = s.characters[0]!;
+    expect(c.attrs.map((a) => ({ label: a.label, value: a.value }))).toEqual([
+      { label: '外貌', value: '总戴墨镜' },
+      { label: '性格', value: '克制' },
+    ]);
+    expect(c.attrs.every((a) => /^cattr_/.test(a.id))).toBe(true);
+    // 整张人物(含 attrs)作为一条 add patch 写入,客户端可整体重放。
+    const addOp = patch.find((p) => p.op === 'add' && p.path === '/characters/0')!;
+    expect((addOp.value as typeof c).attrs).toHaveLength(2);
+  });
+
   it('add_character_attr:服务端生成 cattr_ 前缀 id,挂到对应人物,产 add patch', () => {
     const { s, charId } = withChar();
     const { patch } = applyToolCall('add_character_attr', { characterId: charId, label: '外貌', value: '高瘦' }, s);

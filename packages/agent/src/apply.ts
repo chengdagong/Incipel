@@ -139,11 +139,17 @@ export function applyToolCall(toolName: string, args: unknown, state: Screenplay
 
     // ── 人物 ───────────────────────────────────────────────────────────────
     case 'add_character': {
+      // 新建时可一并带初始属性(attr id 一律服务端生成,模型无权自造)。
+      const rawAttrs = Array.isArray(a.attrs) ? (a.attrs as Array<{ label?: unknown; value?: unknown }>) : [];
       const character: Character = {
         id: newCharacterId(),
         name: String(a.name ?? ''),
         role: String(a.role ?? ''),
-        attrs: [],
+        attrs: rawAttrs.map((at) => ({
+          id: newCharacterAttrId(),
+          label: String(at?.label ?? ''),
+          value: String(at?.value ?? ''),
+        })),
       };
       const i = state.characters.push(character) - 1;
       return {

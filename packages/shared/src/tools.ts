@@ -62,8 +62,15 @@ export function buildToolSchemas(ids: IdSets): Record<string, z.ZodTypeAny> {
   const tools: Record<string, z.ZodTypeAny> = {
     set_meta: z.object({ title: z.string().optional(), logline: z.string().optional() }),
     add_world_section: z.object({ title: z.string(), text: z.string() }),
-    // 人物:名字 + 一句话定位(role)。属性通过 *_character_attr 单独管理。
-    add_character: z.object({ name: z.string(), role: z.string().optional() }),
+    // 人物:名字 + 一句话定位(role)+ 可选的初始属性 attrs。
+    // 新建时一并带 attrs,是为了让「本轮新建人物 + 给它属性」能一次完成——新人物的 id 本轮还不在
+    // characters 枚举里,add_character_attr 当轮无法引用它(见 ADR-0001 扩展段)。attr id 仍由服务端生成。
+    // 后续对已存在人物增删改属性,走 *_character_attr。
+    add_character: z.object({
+      name: z.string(),
+      role: z.string().optional(),
+      attrs: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
+    }),
     add_act: z.object({ act: z.string(), beat: z.string() }),
     add_scene: z.object({ slug: z.string(), content: z.string() }),
     propose_options: z.object({ options: z.array(z.string()).max(3) }),
