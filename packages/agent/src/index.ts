@@ -17,7 +17,7 @@ import 'dotenv/config'; // 本地 dev:加载 packages/agent/.env(cwd=包根);线
 
 import type { Message, RunAgentInput } from '@ag-ui/core';
 import { sse } from '@incipel/shared';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { stream } from 'hono/streaming';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
@@ -52,8 +52,8 @@ const LoglineBody = z.object({
 // §9 的「token 量有上界」原本只覆盖剧本状态与最近 N 轮窗口,这里补上单条新消息的上界。
 const MAX_USER_MESSAGE_CHARS = 8000;
 const MAX_MESSAGES = 200;
-// /run 请求体字节上限:在 c.req.json() 解析前按 Content-Length 拦截,避免把超大 body
-// 整体读进内存再校验(见 KI-6)。给 messages 数组 + 单条消息上限留足余量。
+// 请求体字节硬上限:解析前按实际字节计数读取(见 readBodyCapped),不依赖 Content-Length,
+// 超限即拒,避免把超大 body 整体读进内存(见 KI-6)。给 messages 数组 + 单条消息上限留足余量。
 const MAX_BODY_BYTES = 256 * 1024;
 
 // 从 RunAgentInput.messages 取最后一条 user 消息的纯文本。
@@ -79,6 +79,40 @@ function lastUserText(messages: Message[] | undefined): string {
   return '';
 }
 
+// 按硬字节上限读取请求体,返回文本;超限返回 null。不依赖 Content-Length——直接对实际字节
+// 计数,故省略/伪造/分块传输都挡得住(见 KI-6 / Codex 评审 P2)。读到 max 即停,不会把超大 body
+// 整体读进内存。
+async function readBodyCapped(c: Context, max: number): Promise<string | null> {
+  const body = c.req.raw.body;
+  if (!body) return '';
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        total += value.byteLength;
+        if (total > max) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(value);
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const merged = new Uint8Array(total);
+  let off = 0;
+  for (const ch of chunks) {
+    merged.set(ch, off);
+    off += ch.byteLength;
+  }
+  return new TextDecoder().decode(merged);
+}
+
 // ── POST /run:AG-UI 一轮,收 RunAgentInput,SSE 流式回 AG-UI 事件 ───────────────
 app.post('/run', async (c) => {
   let user: { userId: string };
@@ -93,15 +127,15 @@ app.post('/run', async (c) => {
     }
   }
 
-  // 解析前先按 Content-Length 挡掉超大 body(见 KI-6)。
-  const declaredLen = Number(c.req.header('Content-Length'));
-  if (Number.isFinite(declaredLen) && declaredLen > MAX_BODY_BYTES) {
+  // 按硬字节上限读取 body(不依赖 Content-Length,见 KI-6 / Codex P2),超限即拒。
+  const rawBody = await readBodyCapped(c, MAX_BODY_BYTES);
+  if (rawBody === null) {
     return c.json({ error: `请求体过大(上限 ${MAX_BODY_BYTES} 字节)` }, 413);
   }
 
   let input: RunAgentInput;
   try {
-    input = (await c.req.json()) as RunAgentInput;
+    input = JSON.parse(rawBody) as RunAgentInput;
   } catch (err) {
     return c.json({ error: `请求体不合法: ${(err as Error).message}` }, 400);
   }
@@ -172,9 +206,13 @@ app.post('/logline', async (c) => {
     }
   }
 
+  const rawBody = await readBodyCapped(c, MAX_BODY_BYTES);
+  if (rawBody === null) {
+    return c.json({ error: `请求体过大(上限 ${MAX_BODY_BYTES} 字节)` }, 413);
+  }
   let body;
   try {
-    body = LoglineBody.parse(await c.req.json());
+    body = LoglineBody.parse(JSON.parse(rawBody));
   } catch (err) {
     return c.json({ error: `请求体不合法: ${(err as Error).message}` }, 400);
   }

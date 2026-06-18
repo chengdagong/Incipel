@@ -38,8 +38,16 @@
 
 - **KI-1(regression)**:原「每次尝试独立 messageId + 失败补发 END」会把失败尝试残文定稿成重复气泡——已改回整轮单一 messageId(见上「实际采用的修复」),并补了「失败尝试已吐文本」的回归测试。
 - **KI-2(incomplete)**:服务端幂等键在真实重发路径不生效,因客户端每次 `runAgent` 生成新 runId——已让 `client.ts` 在一逻辑轮内生成稳定 runId,并新增 `retry()` 在重试时复用它(而非重新 `sendMessage`)。
-- **KI-6(low)**:大 body 在解析前未拦——已加 `Content-Length` 预检。
+- **KI-6(low)**:大 body 在解析前未拦——先加了 `Content-Length` 预检(后于第二轮评审改为按实际字节读取,见下)。
 - 被驳回的 11 条:多为 dev 替身的细微差异、防御性建议(如非唯一索引、双斜杠 URL)、或已属设计本意/已接受的瑕疵。
+
+### 第二轮 Codex 评审(分支评审,2026-06-18)
+
+补测试与配置后对分支重跑 Codex 评审,得 1 P1 + 2 P2:
+
+- **P1 并发覆盖 `documents.state`(lost update)——不予修复(wont-fix),记为已知限制**:两个同会话 `/run` 并发时,各自在最开始就载入了同一份 `documents.state`;KI-3 的 advisory lock 只串行化 `turn_index`,后提交方仍会用自己基于旧状态算出的 `p_state` 覆盖 `documents.state`,丢掉先提交方的改动。这是真实的并发丢更新。但**并发同会话本就不在 v1 范围**:§13 明确「v1 仅 AI 写剧本(不开放手编)…无并发写冲突」,§16 假设「同一会话同一时刻只跑一轮」,客户端用 `isRunning` 守住单轮在飞;§14 已把多写并发(手编 / 多端)连同其并发控制(section 级锁或 CRDT/OT)列入 v1.1。补乐观并发控制(给 `documents` 加版本号、load 时带上、save 时比对)与这条 v1 简化决定相悖,故 v1 不做,留待手编 / 多端落地时随 §14 一并设计。已实现的 advisory lock 仍消除了 `turn_index` 撞唯一约束这一面。
+- **P2 重试未接进 UI——已修复**:`chat.tsx` 错误区加「重试」按钮,调 hook 的 `retry()`(沿用同一 runId),不再走重新 `sendMessage`(那会换新 runId、绕开 KI-2 幂等键)。
+- **P2 body 上限可被无 Content-Length 的请求绕过——已修复**:`index.ts` 改为 `readBodyCapped`,按实际字节计数读取、超 256KB 即拒(413),不再依赖 `Content-Length`;`/run` 与 `/logline` 同此。补回归测试:超字节 body(不设 Content-Length)→ 413。
 
 ---
 

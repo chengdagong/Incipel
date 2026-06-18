@@ -32,8 +32,10 @@ describe('KI-6 /run 输入上限', () => {
   it('messages 过多 → 413', async () => {
     expect((await run({ threadId: 't', messages: Array.from({ length: 201 }, () => ({ role: 'user', content: 'hi' })) })).status).toBe(413);
   });
-  it('Content-Length 超上限 → 413(解析前即拒)', async () => {
-    expect((await run({ threadId: 't', messages: [{ role: 'user', content: 'hi' }] }, { 'Content-Length': String(300 * 1024) })).status).toBe(413);
+  it('请求体超字节上限 → 413(按实际字节,不依赖 Content-Length)', async () => {
+    const big = 'x'.repeat(300 * 1024);
+    const res = await app.request('/run', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: big });
+    expect(res.status).toBe(413);
   });
 });
 
@@ -65,5 +67,8 @@ describe('/logline', () => {
   });
   it('合法 body 但无模型 key → 502', async () => {
     expect((await logline(JSON.stringify({ idea: '一个怕黑的灯塔看守人' }))).status).toBe(502);
+  });
+  it('请求体超字节上限 → 413', async () => {
+    expect((await logline('x'.repeat(300 * 1024))).status).toBe(413);
   });
 });
