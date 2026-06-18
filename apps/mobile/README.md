@@ -43,7 +43,7 @@ STORE=memory        # 进程级内存 store,免 Supabase schema(重启即丢)
 DEV_NO_AUTH=1       # 跳过 Supabase JWT 校验,用固定 dev 用户
 ```
 
-因此客户端的 Supabase 匿名登录失败(如本地栈未开匿名登录)不影响对话——会被 `_layout` 的 `.catch` 吞掉。**这些 DEV 开关仅本地用,prod 绝不开。**
+客户端侧再在 `apps/mobile/.env` 设 `EXPO_PUBLIC_DEV_NO_AUTH=1`:登录页是入口(见 [ADR-0005](../../docs/adr/0005-auth-entry-in-v1.md)),不设它则没有 Supabase 会话、过不了登录门、到不了创作页。**这些 DEV 开关仅本地用,prod 绝不开。**
 
 ## 这套依赖在 RN/Expo 下踩过的坑(都已修进本包,改动时勿回退)
 

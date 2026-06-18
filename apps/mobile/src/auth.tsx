@@ -23,6 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // DEV_NO_AUTH:不碰 Supabase——直接就绪、不读会话(门控在此模式下放行),避免 getSession()
+    // 在本地栈停掉时等待 auth 初始化 / 网络刷新而把人卡在加载屏(Codex P2)。
+    if (DEV_NO_AUTH) {
+      setReady(true);
+      return;
+    }
+
     let mounted = true;
 
     // 启动只读、不创建。Supabase 不可达时返回 null,落到登录页,不阻塞启动。

@@ -42,7 +42,7 @@ pnpm dev:android -- --dev-client
 - **Supabase 本地栈**(`supabase start` → Docker,按 `project_id` 命名、端口写死)
   CLI 按 `project_id` 认栈,所以多个 worktree **共用同一套**,而非各得一套。真正的风险不是端口,而是共享了同一个数据库 / auth / storage:在一个 worktree 跑 `supabase db reset` 或改 `supabase/migrations`,会冲掉另一个 worktree 的数据。建议:
   1. **共用一套(默认)**:`supabase start` 一次,各 worktree 的 `.env` 都指向同一 API 端口(`.env.example` 的默认值);别在别人测试时 reset,migration 保持一致,用不同测试账号隔离数据。
-  2. **不连 Supabase**:只做 UI / agent 迭代的 worktree,在 `packages/agent/.env` 设 `STORE=memory`、`DEV_NO_AUTH=1`,完全跳过——最轻的隔离。
+  2. **不连 Supabase**:只做 UI / agent 迭代的 worktree,在 `packages/agent/.env` 设 `STORE=memory`、`DEV_NO_AUTH=1`,**并在 `apps/mobile/.env` 设 `EXPO_PUBLIC_DEV_NO_AUTH=1`**(否则登录页这道入口过不去、到不了创作页,见 [ADR-0005](adr/0005-auth-entry-in-v1.md)),完全跳过——最轻的隔离。
   3. **每树一套独立栈(重)**:仅当真要隔离数据库时,给每个 worktree 不同的 `project_id` 与整段不同端口,代价是每套一组 Docker 容器、数 GB 内存;或改用云端 Supabase 的 branching。
 
 ## 不需要做的事(本拓扑下)
