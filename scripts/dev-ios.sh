@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+# 在「本 worktree 专属」的 iOS 模拟器上,用「本 worktree 专属」的 Metro 端口启动开发。
+#
+#   bash scripts/dev-ios.sh                # Expo Go(默认)
+#   bash scripts/dev-ios.sh --dev-client   # development build(需先用 expo run:ios 装好)
+#
+# 关键点:多个 worktree 各开一台模拟器后,Expo CLI 默认会指向「最近打开的那台」
+# (expo/expo#42611)。本脚本改为按 UDID 用 `simctl openurl` 显式定向,避免打错设备。
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/worktree-dev-env.sh
+. "$SCRIPT_DIR/lib/worktree-dev-env.sh"
+
+DEV_CLIENT=0
+for arg in "$@"; do
+  case "$arg" in
+    --dev-client|-d) DEV_CLIENT=1 ;;
+  esac
+done
+
+IOS_DEVICE_TYPE="${IOS_DEVICE_TYPE:-iPhone 16 Pro}"
+APP_SCHEME="${APP_SCHEME:-incipel}"
+EXPO_GO_BUNDLE_ID="host.exp.Exponent"
+
+# 确保 xcrun 能找到 simctl:若 xcode-select 当前指向 Command Line Tools(不含 simctl)、
+# 但系统装了完整 Xcode,则回退到 Xcode 的 DEVELOPER_DIR,免去 sudo xcode-select -s。
+if ! xcrun simctl help >/dev/null 2>&1; then
+  for d in /Applications/Xcode.app/Contents/Developer /Applications/Xcode-beta.app/Contents/Developer; do
+    if [ -d "$d" ] && DEVELOPER_DIR="$d" xcrun simctl help >/dev/null 2>&1; then
+      export DEVELOPER_DIR="$d"; break
+    fi
+  done
+fi
+if ! xcrun simctl help >/dev/null 2>&1; then
+  echo "✗ 找不到 iOS 模拟器工具 simctl。请安装 Xcode,并执行:sudo xcode-select -s /Applications/Xcode.app"
+  exit 1
+fi
+
+udid_for_name() {
+  xcrun simctl list devices 2>/dev/null \
+    | grep -F "$1 (" \
+    | grep -oE '[0-9A-Fa-f-]{36}' \
+    | head -1
+}
+
+echo "▸ worktree     : $REPO_ROOT"
+echo "▸ Metro 端口   : $EXPO_PORT"
+echo "▸ iOS 模拟器   : $IOS_SIMULATOR_NAME"
+
+UDID="$(udid_for_name "$IOS_SIMULATOR_NAME" || true)"
+if [ -z "$UDID" ]; then
+  echo "▸ 模拟器不存在,正在创建(机型: $IOS_DEVICE_TYPE)…"
+  UDID="$(xcrun simctl create "$IOS_SIMULATOR_NAME" "$IOS_DEVICE_TYPE" 2>/dev/null || true)"
+  if [ -z "$UDID" ]; then
+    # 默认机型不可用:自动挑一个本机可用的 iPhone 机型
+    alt="$(xcrun simctl list devicetypes 2>/dev/null | grep -oE 'com\.apple\.CoreSimulator\.SimDeviceType\.iPhone[^ )]*' | tail -1)"
+    if [ -n "$alt" ]; then
+      echo "  机型 \"$IOS_DEVICE_TYPE\" 不可用,改用 $alt"
+      UDID="$(xcrun simctl create "$IOS_SIMULATOR_NAME" "$alt" 2>/dev/null || true)"
+    fi
+  fi
+  if [ -z "$UDID" ]; then
+    echo "✗ 创建模拟器失败。可用 iPhone 机型:"
+    xcrun simctl list devicetypes | grep -i iphone || true
+    echo "  可设 IOS_DEVICE_TYPE 后重试,例如:IOS_DEVICE_TYPE='iPhone 15' bash scripts/dev-ios.sh"
+    exit 1
+  fi
+fi
+echo "▸ UDID         : $UDID"
+
+echo "▸ 启动模拟器…"
+xcrun simctl boot "$UDID" 2>/dev/null || true   # 已开机则忽略
+open -a Simulator >/dev/null 2>&1 || true
+
+cd "$REPO_ROOT/apps/mobile"
+
+# 后台等待 Metro 就绪,再把这台模拟器定向到本 worktree 的端口
+(
+  url="exp://127.0.0.1:$EXPO_PORT"
+  [ "$DEV_CLIENT" -eq 1 ] && url="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$EXPO_PORT"
+  for _ in $(seq 1 90); do
+    if curl -sf "http://127.0.0.1:$EXPO_PORT/status" >/dev/null 2>&1; then
+      if [ "$DEV_CLIENT" -eq 0 ] && ! xcrun simctl get_app_container "$UDID" "$EXPO_GO_BUNDLE_ID" >/dev/null 2>&1; then
+        echo ""
+        echo "ℹ 该模拟器尚未安装 Expo Go。首次请在下方 Metro 菜单按 shift+i 选 \"$IOS_SIMULATOR_NAME\" 安装,"
+        echo "  之后再次运行本脚本即可自动定向到这台模拟器。"
+        exit 0
+      fi
+      if xcrun simctl openurl "$UDID" "$url" >/dev/null 2>&1; then
+        echo "✓ 已在模拟器 \"$IOS_SIMULATOR_NAME\" 打开 $url"
+      else
+        echo "ℹ 自动打开失败,可在 Metro 菜单按 shift+i 选 \"$IOS_SIMULATOR_NAME\"。"
+      fi
+      exit 0
+    fi
+    sleep 1
+  done
+) &
+
+if [ "$DEV_CLIENT" -eq 1 ]; then
+  exec npx expo start --port "$EXPO_PORT" --dev-client
+else
+  exec npx expo start --port "$EXPO_PORT" --go
+fi
