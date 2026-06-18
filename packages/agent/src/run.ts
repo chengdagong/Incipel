@@ -21,6 +21,7 @@ import {
   optionsEvent,
   type BaseEvent,
   type JsonPatchOp,
+  type Screenplay,
 } from '@incipel/shared';
 import { nanoid } from 'nanoid';
 import { applyToolCall } from './apply';
@@ -37,6 +38,8 @@ export type RunInput = {
   userMessage: string;
   // 是否新连接:为真时在 RUN_STARTED 后补发 STATE_SNAPSHOT 基线。
   newConnection: boolean;
+  // 助手显示名;缺省「主管编剧」。为日后「用户自定义助手名」预留:由调用方按会话/用户传入。
+  assistantName?: string;
 };
 
 // 核心循环的依赖(seam)。缺省时各自走线上默认实现。
@@ -71,42 +74,78 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     yield ev({ type: EventType.STATE_SNAPSHOT, snapshot: state });
   }
 
+  // 幂等重放(见 docs/known-issues.md KI-2 / Codex 评审 P1):若该 runId 已落库(首次请求已提交、
+  // 但客户端没收到 RUN_FINISHED 就重发),不再调用模型——当前 documents.state 已含该轮改动(上面的
+  // STATE_SNAPSHOT 已发),只补发已落库的助手文本与本轮 options 后结束。否则会二次跑模型、向客户端
+  // 流式一份随后被 save_turn 去重丢弃的新回复,造成客户端与库分叉并多花一次模型调用。
+  let saved: Awaited<ReturnType<typeof store.findSavedTurn>> = null;
+  try {
+    saved = await store.findSavedTurn(threadId, input.runId);
+  } catch {
+    saved = null; // 查询失败不阻断,退回正常生成路径
+  }
+  if (saved) {
+    if (!input.newConnection) {
+      yield ev({ type: EventType.STATE_SNAPSHOT, snapshot: state });
+    }
+    if (saved.assistantText) {
+      const replayId = nanoid();
+      yield ev({ type: EventType.TEXT_MESSAGE_START, messageId: replayId, role: 'assistant' });
+      yield ev({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: replayId, delta: saved.assistantText });
+      yield ev({ type: EventType.TEXT_MESSAGE_END, messageId: replayId });
+    }
+    if (saved.options.length) {
+      yield optionsEvent(saved.options);
+    }
+    yield ev({ type: EventType.RUN_FINISHED, threadId, runId });
+    return;
+  }
+
   const { system, prompt } = buildPrompt({
     state,
     recent: loaded.recent,
     userMessage: input.userMessage,
+    assistantName: input.assistantName,
   });
   // 工具 schema 按当前状态生成:含 update_*/remove_* 的 id 枚举门控。
   const tools = buildToolSchemas(idSetsOf(state));
 
   const provider = deps.provider ?? (await createModelProvider());
 
-  // 累积一轮的产物,供轮末 save_turn 落库与 options 事件。
-  const deltas: JsonPatchOp[] = [];
+  // 一轮的最终产物(取自成功的那次尝试),供轮末 save_turn 落库与 options 事件。
+  let committedState: Screenplay = state;
+  let deltas: JsonPatchOp[] = [];
   let options: string[] = [];
   let assistantText = '';
   let changed = false;
 
+  // 文本段在整轮内用同一 messageId,轮末只发唯一一条 TEXT_MESSAGE_END。失败尝试若已吐过文本,
+  // 不单独补 END、也不换新 messageId——否则客户端会把残文定稿成另一条消息,多出一条重复气泡
+  // 且与落库分叉(见 docs/known-issues.md KI-1)。同一 messageId 下续写,客户端以最终落库文本为准。
   const messageId = nanoid();
   let textStarted = false;
 
-  // streamTurn 包一层重试:整段流要么成功跑完,要么抛错由外层重试。
-  // 注意:重试会重跑模型,但本轮尚未落库,且每次重试都从干净状态重新累积。
+  // 每次尝试相互隔离(见 KI-1):
+  //  · 从干净的 loaded.state 克隆起跑,仅当本次整段跑完才把克隆提交为正式剧本——失败尝试
+  //    已 apply 的工具调用不会残留到下一尝试(否则会重复新建实体并写进权威 documents.state)。
+  //  · 失败需重试时,先补发一条干净基线的 STATE_SNAPSHOT,让客户端退回失败尝试已应用的
+  //    STATE_DELTA,再由下一尝试重发。
+  //  · 事件仍即时外发以保留打字机式流式;纠偏只发生在(少见的)失败重试路径上。
   const maxAttempts = 2;
   let lastErr: unknown = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    // 每次尝试前清空累积(上次失败可能已部分填充)。
-    deltas.length = 0;
-    options = [];
-    assistantText = '';
-    changed = false;
+    const attemptState: Screenplay = structuredClone(state);
+    const attemptDeltas: JsonPatchOp[] = [];
+    let attemptOptions: string[] = [];
+    let attemptText = '';
+    let attemptChanged = false;
 
     try {
-      yield* streamOnce(provider, { system, prompt, tools }, state, {
+      yield* streamOnce(provider, { system, prompt, tools }, attemptState, {
         messageId,
         onText: (delta) => {
-          assistantText += delta;
+          attemptText += delta;
         },
         markTextStarted: () => {
           const first = !textStarted;
@@ -114,22 +153,32 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
           return first;
         },
         onDelta: (patch) => {
-          deltas.push(...patch);
-          changed = true;
+          attemptDeltas.push(...patch);
+          attemptChanged = true;
         },
         onOptions: (opts) => {
-          options = opts;
+          attemptOptions = opts;
         },
       });
+      // 本次尝试整段成功:把克隆提交为正式产物。
+      committedState = attemptState;
+      deltas = attemptDeltas;
+      options = attemptOptions;
+      assistantText = attemptText;
+      changed = attemptChanged;
       lastErr = null;
       break;
     } catch (err) {
       lastErr = err;
-      // 失败后下一尝试沿用同一 messageId 继续累积(客户端以最终落库文本为准)。
-      if (attempt < maxAttempts) continue;
+      if (attempt < maxAttempts) {
+        // 用干净基线纠偏:客户端据此退回失败尝试已应用的 STATE_DELTA,下一尝试从头重来。
+        yield ev({ type: EventType.STATE_SNAPSHOT, snapshot: state });
+        continue;
+      }
     }
   }
 
+  // 文本段收尾:整轮唯一一条 END(失败尝试不单独定稿,避免重复气泡)。
   if (textStarted) {
     yield ev({ type: EventType.TEXT_MESSAGE_END, messageId });
   }
@@ -149,15 +198,16 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
   }
 
   // 轮末原子落库:user/assistant messages + documents.state + sessions.updated_at,
-  // 有改动再写 document_versions。
+  // 有改动再写 document_versions。runId 作幂等键:重发同一轮不重复落库(见 KI-2)。
   try {
     await store.saveTurn({
       threadId,
+      runId: input.runId,
       userText: input.userMessage,
       assistantText,
       deltas,
       options,
-      state,
+      state: committedState,
       changed,
     });
   } catch (err) {

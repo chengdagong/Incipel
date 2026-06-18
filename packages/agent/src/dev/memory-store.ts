@@ -3,7 +3,7 @@
 
 import { emptyScreenplay, type Screenplay } from '@incipel/shared';
 import type { PromptMessage } from '../prompt';
-import type { CreateSessionInput, LoadedSession, SaveTurnInput, Store } from '../store';
+import type { CreateSessionInput, LoadedSession, SaveTurnInput, SavedTurn, Store } from '../store';
 
 type MemSession = {
   userId: string;
@@ -13,8 +13,12 @@ type MemSession = {
 
 export class MemoryStore implements Store {
   private readonly sessions = new Map<string, MemSession>();
+  // 已落库的 run:runId -> 该轮结果,用作幂等键与重放源(对齐线上 save_turn / findSavedTurn,见 KI-2)。
+  private readonly savedRuns = new Map<string, SavedTurn>();
   // 最近一次 saveTurn 的载荷,供脚本检查落库内容。
   public lastSaved: SaveTurnInput | null = null;
+  // 累计 saveTurn 实际生效的次数(被幂等跳过的不计),供测试断言重发不重复落库。
+  public savedTurnCount = 0;
 
   async loadSession(threadId: string, userId: string, recentLimit = 10): Promise<LoadedSession> {
     const s = this.sessions.get(threadId);
@@ -41,9 +45,21 @@ export class MemoryStore implements Store {
   async saveTurn(input: SaveTurnInput): Promise<void> {
     const s = this.sessions.get(input.threadId);
     if (!s) throw new Error(`会话不存在: ${input.threadId}`);
+    // 幂等:同一 runId 重发不重复落库(见 KI-2)。
+    if (this.savedRuns.has(input.runId)) {
+      this.lastSaved = input;
+      return;
+    }
+    this.savedRuns.set(input.runId, { assistantText: input.assistantText, options: input.options });
     s.state = input.state;
-    s.messages.push({ role: 'user', text: input.userText });
+    if (input.userText) s.messages.push({ role: 'user', text: input.userText });
     s.messages.push({ role: 'assistant', text: input.assistantText });
     this.lastSaved = input;
+    this.savedTurnCount += 1;
+  }
+
+  async findSavedTurn(threadId: string, runId: string): Promise<SavedTurn | null> {
+    void threadId; // 内存版按 runId 直接索引;线上版按 (session_id, run_id) 查
+    return this.savedRuns.get(runId) ?? null;
   }
 }

@@ -9,7 +9,7 @@ create extension if not exists "pgcrypto" with schema extensions;
 -- 表
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 会话:用户与「织幕」推进一部剧本的那条对话线。匿名与正式用户一视同仁。
+-- 会话:用户与主管编剧推进一部剧本的那条对话线。匿名与正式用户一视同仁。
 create table public.sessions (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users (id) on delete cascade,
