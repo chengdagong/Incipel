@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/auth';
@@ -23,9 +24,6 @@ import { defaultTheme } from '../src/theme';
 // App Store 强制要求一个可用的隐私政策 URL。
 const TERMS_URL = 'https://incipel.app/terms';
 const PRIVACY_URL = 'https://incipel.app/privacy';
-
-// U+F8FF 在 Apple 平台渲染为 Apple 标志;Apple 按钮仅 iOS 出现,故用它安全。
-const APPLE_GLYPH = '';
 
 export default function LoginScreen() {
   const { session } = useAuth();
@@ -116,16 +114,15 @@ export default function LoginScreen() {
       {/* 入口区:贴近底部。 */}
       <View style={styles.actions}>
         {showApple && (
-          <Pressable
-            style={[styles.btn, styles.appleBtn]}
+          // App Store 合规要求用原生 Sign in with Apple 按钮发起登录(它自带 Apple 标志、
+          // 系统本地化文案、设备不可用处理);自绘按钮可能被审核拒(Codex P1)。
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            cornerRadius={16}
+            style={styles.appleBtn}
             onPress={loginWithApple}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel="通过 Apple 登录"
-          >
-            <Text style={[styles.btnIcon, styles.appleLabel]}>{APPLE_GLYPH}</Text>
-            <Text style={[styles.btnLabel, styles.appleLabel]}>通过 Apple 登录</Text>
-          </Pressable>
+          />
         )}
 
         <Pressable
@@ -221,6 +218,8 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 14, fontSize: 15, lineHeight: 23, textAlign: 'center', maxWidth: 300 },
 
   actions: { gap: 12 },
+  // 原生 Apple 按钮按 style 定尺寸(颜色由 buttonStyle=BLACK 决定,圆角由 cornerRadius 属性给)。
+  appleBtn: { height: 56, width: '100%' },
   btn: {
     minHeight: 56,
     borderRadius: 16,
@@ -230,13 +229,11 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 20,
   },
-  appleBtn: { backgroundColor: '#000000' },
   outlineBtn: { borderWidth: 1 },
   // 暂不接的入口灰显(ADR-0004):呈现但点了提示「即将开放」。
   deferred: { opacity: 0.5 },
   btnIcon: { fontSize: 18, fontWeight: '600' },
   btnLabel: { fontSize: 16, fontWeight: '600' },
-  appleLabel: { color: '#FFFFFF' },
   googleG: { color: '#4285F4', fontSize: 18, fontWeight: '800' },
 
   hint: { textAlign: 'center', fontSize: 13, minHeight: 18 },
