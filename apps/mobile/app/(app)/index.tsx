@@ -11,8 +11,8 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { authHeaders, loglineEndpoint, newThreadId } from '../src/agui/client';
-import { defaultTheme } from '../src/theme';
+import { authHeaders, loglineEndpoint, newThreadId } from '../../src/agui/client';
+import { defaultTheme } from '../../src/theme';
 
 // 方向建议 chip(静态示例;真实可由 agent 给,v1 先内置几个常见类型)。
 const DIRECTION_CHIPS = ['悬疑', '科幻', '爱情', '家庭', '黑色幽默', '历史'];
