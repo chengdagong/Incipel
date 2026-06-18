@@ -1,35 +1,22 @@
 // 根布局。
 // 顶部必须先装 polyfill:Hermes 缺一批 Web API,supabase-js 与 @ag-ui/client(SSE 流式)都依赖它们
 // (见 system-design §13「RN 包较新,有坑(Hermes polyfill…)」)。务必排在所有业务 import 之前。
-//
-// 直连 AG-UI(方案 B)后,这些 polyfill 原先由 @copilotkit/react-native 内置代装,现在自带:
-//   1) URL —— supabase-js 用。
-//   2) ReadableStream / WritableStream / TransformStream —— SSE fetch streaming 用。
-//      web-streams-polyfill 的 `/polyfill` 子路径是自安装包(直接挂到 globalThis)。
-//   3) TextEncoder / TextDecoder —— 解析 SSE 字节流用;text-encoding 无自安装入口,手动挂全局。
-import 'react-native-get-random-values'; // crypto.getRandomValues polyfill — 必须最先(uuid/randomUUID 依赖)
-import 'react-native-url-polyfill/auto';
-// 自安装、自包含的 ES5 构建:把 ReadableStream/WritableStream/TransformStream 挂到 globalThis。
-// (v4 的 `/polyfill` 子路径与 main 入口在 Metro 下都解析不稳,直接指向 dist 文件最稳。)
-import 'web-streams-polyfill/dist/polyfill.es5.js';
-import { TextEncoder, TextDecoder } from 'text-encoding';
-
-{
-  // text-encoding 无自安装入口,手动挂全局。
-  const g = globalThis as Record<string, unknown>;
-  if (typeof g.TextEncoder === 'undefined') g.TextEncoder = TextEncoder;
-  if (typeof g.TextDecoder === 'undefined') g.TextDecoder = TextDecoder;
-}
+// 平台差异封装在 ../src/polyfills 里(原生装 polyfill;web 走 polyfills.web.ts 空实现)。
+import '../src/polyfills';
 
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ensureSession } from '../src/supabase';
-import { defaultTheme } from '../src/theme';
+import { useAppFonts } from '../src/useAppFonts';
+import { defaultTheme, fonts } from '../src/theme';
 
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
+  // 标题衬线体(Noto Serif SC):原生打包一个字重,web 走 Google Fonts CDN(见 src/useAppFonts*)。
+  const fontsLoaded = useAppFonts();
+  const ready = sessionReady && fontsLoaded;
 
   // 初始化 Supabase 匿名登录(system-design §2/§16)。
   useEffect(() => {
@@ -40,7 +27,7 @@ export default function RootLayout() {
         //(本地试用走 agent 的 DEV_NO_AUTH,不依赖 Supabase)。
       })
       .finally(() => {
-        if (mounted) setReady(true);
+        if (mounted) setSessionReady(true);
       });
     return () => {
       mounted = false;
@@ -67,11 +54,15 @@ export default function RootLayout() {
         screenOptions={{
           headerStyle: { backgroundColor: defaultTheme.palette.pageBg },
           headerTintColor: defaultTheme.palette.textPrimary,
+          headerTitleAlign: 'center',
+          headerShadowVisible: false,
+          headerTitleStyle: { fontFamily: fonts.serifTitle, fontWeight: '600' },
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
         <Stack.Screen name="index" options={{ title: '芯' }} />
-        <Stack.Screen name="chat" options={{ title: '创作' }} />
+        {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="history" options={{ title: '历史会话' }} />
         <Stack.Screen name="works" options={{ title: '作品' }} />
       </Stack>

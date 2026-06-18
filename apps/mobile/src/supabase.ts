@@ -14,9 +14,12 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   );
 }
 
+// 缺环境变量时退回本地默认地址(supabase start 的默认端口),保证 createClient 不在模块加载期抛
+// 「supabaseUrl is required」而把整个 app 拦在启动前 —— 后续请求会失败,但已由 ensureSession 兜住
+// (本地试用走 agent 的 DEV_NO_AUTH,不依赖 Supabase)。环境变量存在时一律以其为准,不受影响。
 export const supabase: SupabaseClient = createClient(
-  SUPABASE_URL ?? '',
-  SUPABASE_ANON_KEY ?? '',
+  SUPABASE_URL || 'http://localhost:54321',
+  SUPABASE_ANON_KEY || 'public-anon-key',
   {
     auth: {
       storage: AsyncStorage,

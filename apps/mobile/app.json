@@ -14,6 +14,10 @@
     "android": {
       "package": "com.incipel.app"
     },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
     "plugins": ["expo-router"],
     "experiments": {
       "typedRoutes": true

@@ -119,7 +119,7 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
   cta: { borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
   ctaLabel: { color: '#fff', fontWeight: '600' },
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   itemMain: { flex: 1, gap: 4 },
-  itemTitle: { fontSize: 16, fontWeight: '600' },
+  itemTitle: { fontSize: 16, fontWeight: '600', fontFamily: defaultTheme.fonts.serifTitle },
   itemMeta: { fontSize: 12 },
   delete: { fontSize: 13, fontWeight: '600' },
 });

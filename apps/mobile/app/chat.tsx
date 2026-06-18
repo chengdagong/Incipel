@@ -4,7 +4,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   type Character,
   type Message,
@@ -47,6 +48,7 @@ function diffCard(prev: Screenplay, next: Screenplay): InlineCardData {
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string }>();
+  const router = useRouter();
   const { palette } = defaultTheme;
 
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
@@ -59,6 +61,7 @@ export default function ChatScreen() {
   const [docOpen, setDocOpen] = useState(params.view === 'doc');
 
   const stage = useMemo(() => deriveStage(screenplay), [screenplay]);
+  const title = screenplay.meta.title?.trim() || '无题';
 
   // 首轮:挂载时把欢迎页带来的 idea 作为第一条用户消息发出(只发一次)。
   const sentIdea = useRef(false);
@@ -97,7 +100,13 @@ export default function ChatScreen() {
   if (docOpen) {
     return (
       <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
-        <Header stage={STAGE_LABELS[stage]} docOpen onToggleDoc={() => setDocOpen((v) => !v)} />
+        <Header
+          title={title}
+          stage={STAGE_LABELS[stage]}
+          docOpen
+          onBack={() => router.back()}
+          onToggleDoc={() => setDocOpen((v) => !v)}
+        />
         <DocPanel screenplay={screenplay} onFocusCharacter={focusCharacter} />
       </View>
     );
@@ -108,7 +117,13 @@ export default function ChatScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
-      <Header stage={STAGE_LABELS[stage]} docOpen={false} onToggleDoc={() => setDocOpen((v) => !v)} />
+      <Header
+        title={title}
+        stage={STAGE_LABELS[stage]}
+        docOpen={false}
+        onBack={() => router.back()}
+        onToggleDoc={() => setDocOpen((v) => !v)}
+      />
 
       <ScrollView style={styles.thread} contentContainerStyle={styles.threadContent}>
         {messages.map((m) => {
@@ -143,23 +158,49 @@ export default function ChatScreen() {
 }
 
 function Header({
+  title,
   stage,
   docOpen,
+  onBack,
   onToggleDoc,
 }: {
+  title: string;
   stage: string;
   docOpen: boolean;
+  onBack: () => void;
   onToggleDoc: () => void;
 }) {
   const { palette } = defaultTheme;
+  const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.header, { borderColor: palette.border }]}>
-      <Text style={[styles.stage, { color: defaultTheme.accent }]}>{stage}</Text>
-      <Pressable onPress={onToggleDoc} accessibilityRole="button">
-        <Text style={[styles.docToggle, { color: palette.textSecondary }]}>
-          {docOpen ? '← 返回对话' : '文档'}
-        </Text>
-      </Pressable>
+    <View style={[styles.header, { paddingTop: insets.top, borderColor: palette.border }]}>
+      <View style={styles.headerInner}>
+        <Pressable onPress={onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="返回">
+          <Text style={[styles.backChevron, { color: palette.textSecondary }]}>‹</Text>
+        </Pressable>
+
+        <View style={styles.headerCenter} pointerEvents="none">
+          <Text style={[styles.headerTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={[styles.headerSub, { color: palette.textSecondary }]}>阶段 · {stage}</Text>
+        </View>
+
+        <Pressable
+          onPress={onToggleDoc}
+          style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
+          accessibilityRole="button"
+        >
+          {docOpen ? (
+            <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>← 返回对话</Text>
+          ) : (
+            <>
+              <View style={[styles.docDot, { backgroundColor: palette.dot }]} />
+              <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>文档</Text>
+            </>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -182,37 +223,48 @@ function MessageBubble({
   onOpenDoc: () => void;
 }) {
   const { palette } = defaultTheme;
-  const isUser = role === 'user';
+
+  // 用户消息:右对齐暖灰气泡,深色文字。
+  if (role === 'user') {
+    return (
+      <View style={styles.rowUser}>
+        <View style={[styles.userBubble, { backgroundColor: palette.userBubbleBg }]}>
+          <Text style={[styles.userText, { color: palette.textPrimary }]}>{text}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // 「芯」的回复:头像 + 「助手」标签,正文为页面上的纯文本(无气泡);其下挂内联卡片与选项列表。
   return (
-    <View style={[styles.row, isUser ? styles.rowUser : styles.rowAssistant]}>
-      <View
-        style={[
-          styles.bubble,
-          {
-            backgroundColor: isUser ? defaultTheme.accent : palette.cardBg,
-            borderColor: palette.border,
-          },
-        ]}
-      >
-        <Text style={[styles.bubbleText, { color: isUser ? '#fff' : palette.textPrimaryAlt }]}>
-          {text}
-          {streaming ? '▋' : ''}
-        </Text>
+    <View style={styles.assistantBlock}>
+      <View style={styles.assistantHeader}>
+        <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
+          <Text style={styles.avatarText}>芯</Text>
+        </View>
+        <Text style={[styles.assistantName, { color: palette.textSecondary }]}>助手</Text>
       </View>
 
-      {/* 内联卡片:本轮新增实体(由剧本 diff 得出)。 */}
-      {!isUser && card && <InlineCard data={card} onOpenDoc={onOpenDoc} />}
+      <Text style={[styles.assistantText, { color: palette.textPrimary }]}>
+        {text}
+        {streaming ? '▋' : ''}
+      </Text>
 
-      {/* 可点选项(quick reply):点击即以用户身份发该文本。 */}
-      {!isUser && !!options?.length && (
+      {/* 内联卡片:本轮新增实体(由剧本 diff 得出)。 */}
+      {card && <InlineCard data={card} onOpenDoc={onOpenDoc} />}
+
+      {/* 可点选项(quick reply):带分隔线的列表,点击即以用户身份发该文本。 */}
+      {!!options?.length && (
         <View style={styles.options}>
           {options.map((opt) => (
             <Pressable
               key={opt}
-              style={[styles.option, { borderColor: defaultTheme.accent }]}
+              style={[styles.optionRow, { borderTopColor: palette.border }]}
               onPress={() => onSend(opt)}
+              accessibilityRole="button"
             >
-              <Text style={[styles.optionLabel, { color: defaultTheme.accent }]}>{opt}</Text>
+              <Text style={[styles.optionArrow, { color: defaultTheme.accent }]}>▸</Text>
+              <Text style={[styles.optionLabel, { color: palette.textPrimary }]}>{opt}</Text>
             </Pressable>
           ))}
         </View>
@@ -223,25 +275,66 @@ function MessageBubble({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: {
+  header: { borderBottomWidth: 1 },
+  headerInner: {
+    height: 52,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
   },
-  stage: { fontSize: 13, fontWeight: '600' },
-  docToggle: { fontSize: 14, fontWeight: '600' },
+  backChevron: { fontSize: 30, lineHeight: 30, fontWeight: '300' },
+  // 居中标题块:绝对覆盖在内栏上、屏幕水平居中;pointerEvents none,不挡两侧按钮。
+  headerCenter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { fontSize: 18, fontWeight: '600', fontFamily: defaultTheme.fonts.serifTitle },
+  headerSub: { fontSize: 12, marginTop: 2 },
+  docChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  docDot: { width: 7, height: 7, borderRadius: 4 },
+  docChipLabel: { fontSize: 13, fontWeight: '500' },
+
   thread: { flex: 1 },
-  threadContent: { padding: 16, gap: 12 },
-  row: { gap: 6 },
+  threadContent: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12, gap: 22 },
+
+  // 用户气泡
   rowUser: { alignItems: 'flex-end' },
-  rowAssistant: { alignItems: 'flex-start' },
-  bubble: { maxWidth: '85%', borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
-  bubbleText: { fontSize: 15, lineHeight: 22 },
-  options: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  option: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
-  optionLabel: { fontSize: 13, fontWeight: '600' },
+  userBubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
+  userText: { fontSize: 16, lineHeight: 26 },
+
+  // 「芯」回复块
+  assistantBlock: { width: '100%' },
+  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  avatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 14, fontFamily: defaultTheme.fonts.serifTitle },
+  assistantName: { fontSize: 14 },
+  assistantText: { fontSize: 16, lineHeight: 26 },
+
+  // 选项列表
+  options: { marginTop: 14 },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 17,
+    borderTopWidth: 1,
+  },
+  optionArrow: { fontSize: 11 },
+  optionLabel: { fontSize: 16 },
+
   error: { fontSize: 13, fontWeight: '600' },
 });
