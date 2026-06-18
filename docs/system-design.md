@@ -333,6 +333,7 @@ messages
 - **LangGraph**:若 agent 长出多步规划(自动取材、多角色推演等)。
 - **多人协作 / 多端实时同步**:更大的工程,v1 不做。
 - **超长会话**:对话历史的摘要/压缩策略。
+- **`/run` 的输入大小 / 滥用限制**:目前 `/run` 不限制请求体大小。日后若要加(防滥用或防超大请求),按**请求体字节数**与**本轮用户消息长度**设限,**不要**按 `messages` 条数设限。原因:移动端 `@ag-ui/client` 每轮把累积的整个 `messages` 数组发来(约每轮加 2 条,仅在 `threadId` 变化时清空),而 agent 只取其中最后一条 `role==='user'` 的文本(`lastUserText`,见 `packages/agent/src/index.ts`),真正的 prompt 窗口另从 DB 载入(`loadSession`,最近约 10 条,见 §9)。所以请求里的消息条数与 prompt 窗口、成本无关:按条数封顶会随正常会话变长而误伤——几百轮的长会话即便每条都很短也会被拒——同时对单个超大 payload 又拦不住。
 - **更多 provider**:接 tool-use 较弱的模型时,由其适配器把结构化提示包装成统一 tool-use 接口,而不是引入第二套契约。
 - **CopilotKit Runtime(方案 A 的后续选项)**:若日后要做 web 端共用同一端点,或用 runtime 的 BuiltInAgent / server-side tools / 中间件 / 多 agent 路由,可把 fetch-native 的 `CopilotRuntime`(`createCopilotRuntimeHandler`)挂到 Supabase Edge(Deno)。注意:`InMemory` / `Sqlite` AgentRunner 在 serverless 上不持久,需自写 **Postgres-backed 的自定义 AgentRunner**;Intelligence 模式不可自托管;Edge 的 CPU/墙钟上限照旧。v1 用方案 B(直连 `@ag-ui/client`),持久化由本项目的 Supabase 层承担,无论将来是否上 runtime 都用得上。
 
