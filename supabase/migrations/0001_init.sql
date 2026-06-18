@@ -1,4 +1,4 @@
--- 「芯」(Incipel)初始 schema:sessions / documents / document_versions / messages。
+-- 「织幕」(Incipel)初始 schema:sessions / documents / document_versions / messages。
 -- 数据模型见 docs/system-design.md §8;RLS 按 user_id 隔离见 §8 末与 §4。
 -- 一会话 ⟷ 一剧本严格 1:1;documents.state 存当前权威剧本(@incipel/shared 的 Screenplay)。
 
@@ -9,7 +9,7 @@ create extension if not exists "pgcrypto" with schema extensions;
 -- 表
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- 会话:用户与「芯」推进一部剧本的那条对话线。匿名与正式用户一视同仁。
+-- 会话:用户与「织幕」推进一部剧本的那条对话线。匿名与正式用户一视同仁。
 create table public.sessions (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users (id) on delete cascade,
