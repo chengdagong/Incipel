@@ -17,6 +17,30 @@
 
 被驳回的三项见文末「附:经核查不予立项」。
 
+## 修复状态(本分支)
+
+六项均已修复。以下为修复位置与对应回归测试:
+
+| 编号 | 修复位置 | 回归测试 | 验证 |
+|---|---|---|---|
+| KI-1 | `run.ts` 重试按尝试克隆 state、整轮单一 messageId、失败补发干净 STATE_SNAPSHOT | `packages/agent/test/run-retry.test.ts`(含失败-重试-已吐文本场景) | 已跑通(Vitest) |
+| KI-2 | `0002` save_turn 增 `p_run_id` 幂等早返回;`run.ts`/`store.ts`/`MemoryStore` 透传 runId;**`client.ts` 重试经 `retry()` 复用同一 runId** | `save-turn-idempotency.test.ts`(store 层)+ `reliability_test.sql`(DB 层) | store/DB 已跑通;客户端 retry 仅类型校验 |
+| KI-3 | `0002` save_turn 取会话级 `pg_advisory_xact_lock` 串行化 turn_index | `reliability_test.sql`(顺序路径) | pgTAP 已跑通 |
+| KI-4 | `auth.ts` 给两处 `jwtVerify` 传 issuer/audience | `packages/agent/test/auth.test.ts` | 已跑通(Vitest)+ 真实 GoTrue 匿名 token 核验 iss/aud |
+| KI-5 | `0002` 新增 `create_session_if_missing` 原子 RPC;`store.ts` 改调它,`loadSession` 用 `maybeSingle` 容忍缺失 | `reliability_test.sql`(原子/幂等/补齐/归属) | pgTAP 已跑通 |
+| KI-6 | `index.ts` `/run` 加单条消息、messages 数组上限与 **Content-Length 预检**,超限 413 | `packages/agent/test/index-validation.test.ts` | 已跑通(Vitest) |
+
+数据库相关项(KI-2 DB 层、KI-3、KI-5)的 pgTAP 需 `supabase start && supabase test db`;本分支已实跑通过(13/13)。
+
+### 对修复的对抗式评审(2026-06-18)
+
+对这批修复又做了一轮对抗式评审(5 个分区 reviewer + 逐条 refute),确认 4 条需处理、已全部修复,另 11 条经核查为 nit 或设计本意不予处理:
+
+- **KI-1(regression)**:原「每次尝试独立 messageId + 失败补发 END」会把失败尝试残文定稿成重复气泡——已改回整轮单一 messageId(见上「实际采用的修复」),并补了「失败尝试已吐文本」的回归测试。
+- **KI-2(incomplete)**:服务端幂等键在真实重发路径不生效,因客户端每次 `runAgent` 生成新 runId——已让 `client.ts` 在一逻辑轮内生成稳定 runId,并新增 `retry()` 在重试时复用它(而非重新 `sendMessage`)。
+- **KI-6(low)**:大 body 在解析前未拦——已加 `Content-Length` 预检。
+- 被驳回的 11 条:多为 dev 替身的细微差异、防御性建议(如非唯一索引、双斜杠 URL)、或已属设计本意/已接受的瑕疵。
+
 ---
 
 ## KI-1 重试循环未按尝试隔离状态与流式输出 — High
@@ -46,14 +70,15 @@
 - **机制**:二者在循环外声明(`run.ts:90-91`),不被重置块清除。`markTextStarted` 只在首段文本返回 true(`run.ts:111-114`),故第二次尝试的文本不再发 `TEXT_MESSAGE_START`,仍用同一 `messageId` 续发 `TEXT_MESSAGE_CONTENT`。客户端按 `textMessageBuffer + delta` 累加(`client.ts:125-126`),把两次文本拼接;而 `assistantText` 每次清空,`saveTurn` 只存第二次。
 - **影响**:进行中显示「第一次+第二次」拼接文本;落库后只剩第二次,与刚才屏幕不符。
 
-### 统一修复(一个改动覆盖四种表现)
+### 实际采用的修复
 
-把每次尝试做成隔离的:
-1. 每次尝试前对 `state` 深拷贝(`structuredClone(loaded.state)`),仅在该尝试成功后提交为正式 `state`;失败丢弃副本,下次从干净基线起跑。
-2. 把本次尝试产出的事件(文本、`STATE_DELTA`)先缓冲在尝试局部,成功才一次性 flush 给消费方;失败整批丢弃,从不写进 SSE 流。
-3. 每次尝试用独立 `messageId` 并重置 `textStarted`。
+数据完整性是重点,流式即时性必须保住,因此**没有**采用「成功才 flush」的全缓冲(那会让常见的首次成功路径失去打字机式流式)。最终做法:
 
-若不接受「成功才发」的延迟,退一步:失败后向客户端补发一条以干净基线为准的 `STATE_SNAPSHOT`,并约定客户端收到新 snapshot 时清空本轮 `streamingText`——但这必须与第 1 点的 `state` 深拷贝配套,否则 `documents.state` 仍会重复。
+1. **每次尝试前对 `state` 深拷贝**(`structuredClone(loaded.state)`),仅在该尝试整段成功后才把副本提交为正式 `state`;失败丢弃副本,下一尝试从干净基线起跑。这消除「重复实体写进权威 `documents.state`」(表现 1)。
+2. **失败需重试时,补发一条干净基线的 `STATE_SNAPSHOT`**,客户端据此退回失败尝试已应用的 `STATE_DELTA`,下一尝试重发。事件仍即时外发,流式不受影响(表现 2/3)。
+3. **整轮共用同一 `messageId`,轮末只发唯一一条 `TEXT_MESSAGE_END`**。注意:一度尝试过「每次尝试用独立 `messageId` + 失败时补发 `TEXT_MESSAGE_END`」,但对这批修复的对抗式评审发现:失败尝试若已吐过文本,这会把残文定稿成**另一条** assistant 消息,客户端多出一条重复气泡、且与落库分叉——比改之前更糟。故改回整轮单一 `messageId`(表现 4)。
+
+**残留的可接受瑕疵**:失败尝试已流式吐出的文本,会在同一条气泡里与重试文本短暂拼接显示;落库只存成功尝试的文本,重新载入会话即自我纠正。彻底消除需客户端在收到纠偏 `STATE_SNAPSHOT` 时清空本轮 `streamingText`(留待客户端侧处理)。
 
 ### 应加的回归测试(伪 provider + `MemoryStore`,离线)
 

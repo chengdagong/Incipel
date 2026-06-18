@@ -47,6 +47,15 @@ const LoglineBody = z.object({
   idea: z.string().optional(),
 });
 
+// /run 输入上限(见 docs/known-issues.md KI-6):约束单条 user 消息与 messages 数组大小,
+// 防止单个大请求推高 token 成本/延迟、撞 Edge CPU 上限,或把大块文本写进 DB。
+// §9 的「token 量有上界」原本只覆盖剧本状态与最近 N 轮窗口,这里补上单条新消息的上界。
+const MAX_USER_MESSAGE_CHARS = 8000;
+const MAX_MESSAGES = 200;
+// /run 请求体字节上限:在 c.req.json() 解析前按 Content-Length 拦截,避免把超大 body
+// 整体读进内存再校验(见 KI-6)。给 messages 数组 + 单条消息上限留足余量。
+const MAX_BODY_BYTES = 256 * 1024;
+
 // 从 RunAgentInput.messages 取最后一条 user 消息的纯文本。
 function lastUserText(messages: Message[] | undefined): string {
   if (!Array.isArray(messages)) return '';
@@ -84,6 +93,12 @@ app.post('/run', async (c) => {
     }
   }
 
+  // 解析前先按 Content-Length 挡掉超大 body(见 KI-6)。
+  const declaredLen = Number(c.req.header('Content-Length'));
+  if (Number.isFinite(declaredLen) && declaredLen > MAX_BODY_BYTES) {
+    return c.json({ error: `请求体过大(上限 ${MAX_BODY_BYTES} 字节)` }, 413);
+  }
+
   let input: RunAgentInput;
   try {
     input = (await c.req.json()) as RunAgentInput;
@@ -97,9 +112,16 @@ app.post('/run', async (c) => {
   }
   const runId = typeof input.runId === 'string' && input.runId ? input.runId : nanoid();
 
+  if (Array.isArray(input.messages) && input.messages.length > MAX_MESSAGES) {
+    return c.json({ error: `messages 过多(上限 ${MAX_MESSAGES} 条)` }, 413);
+  }
+
   const userMessage = lastUserText(input.messages);
   if (!userMessage) {
     return c.json({ error: 'messages 中没有可用的 user 消息' }, 400);
+  }
+  if (userMessage.length > MAX_USER_MESSAGE_CHARS) {
+    return c.json({ error: `本轮消息过长(上限 ${MAX_USER_MESSAGE_CHARS} 字)` }, 413);
   }
 
   // forwardedProps 可带新建会话用的 accent / title。
