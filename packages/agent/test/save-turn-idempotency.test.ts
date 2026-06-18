@@ -91,4 +91,40 @@ describe('KI-2 落库幂等', () => {
       .join('');
     expect(replayText).toBe('立了阿七。');
   });
+
+  it('重放也带回本轮 options(CUSTOM)与 newConnection=false 时补发 STATE_SNAPSHOT', async () => {
+    const store = new MemoryStore();
+    await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
+    const okProvider = fakeProvider([
+      [
+        { type: 'text', delta: '你想往哪走?' },
+        { type: 'tool-call', call: { toolCallId: '1', toolName: 'propose_options', args: { options: ['悬疑', '温情'] } } },
+      ],
+    ]);
+    const first: Record<string, any>[] = [];
+    for await (const e of runTurnCore({ threadId: 't', runId: 'r6', userId: 'u', userMessage: 'm', newConnection: true }, { provider: okProvider, store })) {
+      first.push(e as Record<string, any>);
+    }
+
+    // 重放(newConnection=false):补发 STATE_SNAPSHOT,并带回 options。
+    const guard = {
+      async *streamTurn() {
+        throw new Error('不应调用');
+        // eslint-disable-next-line no-unreachable
+        yield undefined as never;
+      },
+      async completeLogline() {
+        return '';
+      },
+    };
+    const replay: Record<string, any>[] = [];
+    for await (const e of runTurnCore({ threadId: 't', runId: 'r6', userId: 'u', userMessage: 'm', newConnection: false }, { provider: guard, store })) {
+      replay.push(e as Record<string, any>);
+    }
+    const types = replay.map((e) => e.type);
+    expect(types).toContain(EventType.STATE_SNAPSHOT); // newConnection=false 时重放补发基线
+    expect(types).toContain(EventType.CUSTOM);
+    const opts = replay.find((e) => e.type === EventType.CUSTOM)?.value;
+    expect(opts).toEqual(['悬疑', '温情']);
+  });
 });

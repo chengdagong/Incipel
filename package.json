@@ -7,6 +7,8 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "test:db": "supabase db reset && supabase test db",
     "agent:dev": "pnpm --filter @incipel/agent dev",
     "mobile:start": "pnpm --filter @incipel/mobile start",
     "db:reset": "supabase db reset"
