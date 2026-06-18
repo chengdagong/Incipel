@@ -52,14 +52,23 @@ export type SaveTurnInput = {
   changed: boolean;
 };
 
+// 某一 run 已落库的结果(幂等重放用,见 docs/known-issues.md KI-2 与 Codex 评审 P1)。
+export type SavedTurn = {
+  assistantText: string;
+  options: string[];
+};
+
 // 一轮核心循环依赖的数据层契约(seam)。
 export interface Store {
   // 据 threadId 载入权威剧本与最近对话。会话必须存在且属于该 userId。
   loadSession(threadId: string, userId: string, recentLimit?: number): Promise<LoadedSession>;
   // 若该 threadId 尚无会话则建会话 + 空剧本(forwardedProps 可带 accent/title);已存在则不动。
   createSessionIfMissing(input: CreateSessionInput): Promise<void>;
-  // 一轮结束的原子落库,调用 save_turn RPC(签名不变)。
+  // 一轮结束的原子落库,调用 save_turn RPC。
   saveTurn(input: SaveTurnInput): Promise<void>;
+  // 查询某 run 是否已落库(幂等重放用):已落则返回其助手文本与本轮 options,否则 null。
+  // 让重发同一 runId 的请求在调用模型前就被识别、直接重放已落库结果,而非重跑模型再被去重。
+  findSavedTurn(threadId: string, runId: string): Promise<SavedTurn | null>;
 }
 
 export class StoreError extends Error {
@@ -167,6 +176,26 @@ export class SupabaseStore implements Store {
       p_changed: input.changed,
     });
     if (error) throw new StoreError(`落库失败 (save_turn): ${error.message}`);
+  }
+
+  // 据 (session_id, run_id) 查该 run 的 assistant 消息;存在即说明本轮已落库。
+  // save_turn 的幂等保证同一 run 至多一条 assistant 消息(messages_session_run_idx 支持此查询)。
+  async findSavedTurn(threadId: string, runId: string): Promise<SavedTurn | null> {
+    const db = getServiceClient();
+    const { data, error } = await db
+      .from('messages')
+      .select('text, options')
+      .eq('session_id', threadId)
+      .eq('run_id', runId)
+      .eq('role', 'assistant')
+      .limit(1);
+    if (error) throw new StoreError(`查询已落库轮失败: ${error.message}`);
+    const row = data?.[0];
+    if (!row) return null;
+    return {
+      assistantText: String(row.text ?? ''),
+      options: Array.isArray(row.options) ? (row.options as string[]) : [],
+    };
   }
 }
 

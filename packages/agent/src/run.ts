@@ -72,6 +72,33 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     yield ev({ type: EventType.STATE_SNAPSHOT, snapshot: state });
   }
 
+  // 幂等重放(见 docs/known-issues.md KI-2 / Codex 评审 P1):若该 runId 已落库(首次请求已提交、
+  // 但客户端没收到 RUN_FINISHED 就重发),不再调用模型——当前 documents.state 已含该轮改动(上面的
+  // STATE_SNAPSHOT 已发),只补发已落库的助手文本与本轮 options 后结束。否则会二次跑模型、向客户端
+  // 流式一份随后被 save_turn 去重丢弃的新回复,造成客户端与库分叉并多花一次模型调用。
+  let saved: Awaited<ReturnType<typeof store.findSavedTurn>> = null;
+  try {
+    saved = await store.findSavedTurn(threadId, input.runId);
+  } catch {
+    saved = null; // 查询失败不阻断,退回正常生成路径
+  }
+  if (saved) {
+    if (!input.newConnection) {
+      yield ev({ type: EventType.STATE_SNAPSHOT, snapshot: state });
+    }
+    if (saved.assistantText) {
+      const replayId = nanoid();
+      yield ev({ type: EventType.TEXT_MESSAGE_START, messageId: replayId, role: 'assistant' });
+      yield ev({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: replayId, delta: saved.assistantText });
+      yield ev({ type: EventType.TEXT_MESSAGE_END, messageId: replayId });
+    }
+    if (saved.options.length) {
+      yield optionsEvent(saved.options);
+    }
+    yield ev({ type: EventType.RUN_FINISHED, threadId, runId });
+    return;
+  }
+
   const { system, prompt } = buildPrompt({
     state,
     recent: loaded.recent,
