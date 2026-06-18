@@ -6,7 +6,6 @@
     "version": "0.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.incipel.app",
@@ -19,7 +18,11 @@
       "bundler": "metro",
       "output": "single"
     },
-    "plugins": ["expo-router", "expo-apple-authentication"],
+    "plugins": [
+      "expo-router",
+      "expo-apple-authentication",
+      "expo-font"
+    ],
     "experiments": {
       "typedRoutes": true
     }
