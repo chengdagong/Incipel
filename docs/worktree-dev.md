@@ -1,7 +1,7 @@
 # 多 worktree 并行跑模拟器
 
 同一台机器上有多个 git worktree 时,让每个 worktree 跑在自己专属的模拟器实例上、互不干扰。
-本仓库的隔离分三层,各自独立生效。
+干扰点分布在前端(Metro、模拟器)与后端(agent 服务、Supabase)两侧,本文逐层说明隔离办法。
 
 ## 一句话用法
 
@@ -10,12 +10,13 @@
 ```bash
 pnpm dev:ios          # 本 worktree 专属 iOS 模拟器 + 专属 Metro 端口(Expo Go)
 pnpm dev:android      # 本 worktree 选定的 Android 设备 + 专属 Metro 端口(Expo Go)
+pnpm dev:agent        # 本 worktree 专属端口上的 agent 服务
 
 pnpm dev:ios -- --dev-client      # 改用 development build
 pnpm dev:android -- --dev-client
 ```
 
-首次运行会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库),记下分到的端口与模拟器名,之后保持稳定。
+首次运行会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库),记下分到的 Metro / agent 端口与模拟器名,之后保持稳定;同时会按需从 `.env.example` 生成 `apps/mobile/.env` 与 `packages/agent/.env`,并把 agent 端口、`EXPO_PUBLIC_AGENT_URL` 写好(只动这两个键,密钥仍需你自己填一次)。
 
 ## 三层隔离
 
@@ -29,6 +30,20 @@ pnpm dev:android -- --dev-client
    多台模拟器同时开机时,Expo CLI 默认指向「最近打开的那台」(expo/expo#42611)。
    - iOS:按模拟器名创建/复用一台(稳定 UDID),用 `xcrun simctl openurl <UDID>` 显式定向。
    - Android:用 `adb -s <serial> reverse` 把端口转发进指定设备,再 `am start` 打开。
+
+## Agent 服务与 Supabase(后端进程)
+
+模拟器只是前端,每个 worktree 的 app 还要连两个后端进程,它们各有自己的端口/状态,也会打架:
+
+- **Agent 服务**(`pnpm agent:dev` → Hono,`PORT ?? 8787`)
+  端口独占,两个 worktree 都起会撞车。`worktree-dev-env.sh` 从 8787 起为每个 worktree 分配独立 `AGENT_PORT`,写进 `packages/agent/.env` 的 `PORT` 与 `apps/mobile/.env` 的 `EXPO_PUBLIC_AGENT_URL`。`dev-agent.sh` 据此启动。
+  - iOS 模拟器的 `localhost` 直通宿主机;**Android 模拟器的 `localhost` 是模拟器自身**,`dev-android.sh` 已对 agent 与 Supabase 端口一并 `adb reverse`,使两端都能用 `localhost`。
+
+- **Supabase 本地栈**(`supabase start` → Docker,按 `project_id` 命名、端口写死)
+  CLI 按 `project_id` 认栈,所以多个 worktree **共用同一套**,而非各得一套。真正的风险不是端口,而是共享了同一个数据库 / auth / storage:在一个 worktree 跑 `supabase db reset` 或改 `supabase/migrations`,会冲掉另一个 worktree 的数据。建议:
+  1. **共用一套(默认)**:`supabase start` 一次,各 worktree 的 `.env` 都指向同一 API 端口(`.env.example` 的默认值);别在别人测试时 reset,migration 保持一致,用不同测试账号隔离数据。
+  2. **不连 Supabase**:只做 UI / agent 迭代的 worktree,在 `packages/agent/.env` 设 `STORE=memory`、`DEV_NO_AUTH=1`,完全跳过——最轻的隔离。
+  3. **每树一套独立栈(重)**:仅当真要隔离数据库时,给每个 worktree 不同的 `project_id` 与整段不同端口,代价是每套一组 Docker 容器、数 GB 内存;或改用云端 Supabase 的 branching。
 
 ## 不需要做的事(本拓扑下)
 

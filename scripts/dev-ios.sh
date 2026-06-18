@@ -46,6 +46,7 @@ udid_for_name() {
 
 echo "▸ worktree     : $REPO_ROOT"
 echo "▸ Metro 端口   : $EXPO_PORT"
+echo "▸ Agent 端口   : $AGENT_PORT"
 echo "▸ iOS 模拟器   : $IOS_SIMULATOR_NAME"
 
 UDID="$(udid_for_name "$IOS_SIMULATOR_NAME" || true)"
