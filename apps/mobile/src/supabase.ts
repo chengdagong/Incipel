@@ -4,6 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -54,17 +55,23 @@ export async function signInAnonymously(): Promise<Session> {
 
 // Apple Sign-In(仅 iOS;登录页的 Apple 按钮只在 iOS 渲染)。
 // 取 Apple 的 identity token,经 supabase.auth.signInWithIdToken 换 Supabase 会话(ADR-0004)。
+// - 防重放(Codex P2):生成随机 raw nonce,向 Apple 传它的 SHA-256 哈希;Supabase 用 raw nonce
+//   校验该 identity token 确为本次登录所签,截获的旧 token 无法重放。
 // - 用户取消会抛出 code 'ERR_REQUEST_CANCELED',由调用方静默处理(system-design §11)。
 // - 后台未配置(Apple Developer / Supabase Apple provider)时,signInWithIdToken 返回 error 而非崩溃,
 //   app 照常运行、匿名入口仍可用。
-// 注:此处用原生 identity-token 流(Supabase 官方 RN 示例),不需手动 nonce;
-//   若日后要防重放加固,可改为向 Apple 传 hashed nonce、向 signInWithIdToken 传原始 nonce。
 export async function signInWithApple(): Promise<Session> {
+  const rawNonce = Crypto.randomUUID();
+  const hashedNonce = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    rawNonce,
+  );
   const credential = await AppleAuthentication.signInAsync({
     requestedScopes: [
       AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
       AppleAuthentication.AppleAuthenticationScope.EMAIL,
     ],
+    nonce: hashedNonce,
   });
   if (!credential.identityToken) {
     throw new Error('Apple 未返回 identity token');
@@ -72,6 +79,7 @@ export async function signInWithApple(): Promise<Session> {
   const { data, error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
     token: credential.identityToken,
+    nonce: rawNonce,
   });
   if (error || !data.session) {
     throw error ?? new Error('Apple 登录未返回会话');
