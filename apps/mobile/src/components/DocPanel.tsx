@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Character, type CharacterAttr, type Screenplay } from '@incipel/shared';
 import { defaultTheme, type Theme } from '../theme';
 import { useT } from '../i18n';
+import { PortraitThumb } from './PortraitThumb';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
 
@@ -136,28 +137,33 @@ export function DocSheet({
           >
             {characters.map((c) => (
               <View key={c.id} style={[styles.charCard, { width }]}>
-                <Text style={styles.charName}>{c.name || '未命名角色'}</Text>
-                {!!c.role && <Text style={styles.charRole}>{c.role}</Text>}
-                {c.attrs.length > 0 && (
-                  <View style={styles.attrList}>
-                    {c.attrs.map((a) => (
-                      <Pressable
-                        key={a.id}
-                        onPress={onFocusAttr ? () => onFocusAttr(c, a) : undefined}
-                        style={({ pressed }) => [styles.attrRow, pressed && styles.attrRowPressed]}
-                        accessibilityRole="button"
-                      >
-                        <Text style={styles.attrLabel}>{a.label}</Text>
-                        <Text style={styles.attrValue}>{a.value}</Text>
+                <View style={styles.charRow}>
+                  <PortraitThumb character={c} />
+                  <View style={styles.charInfo}>
+                    <Text style={styles.charName}>{c.name || '未命名角色'}</Text>
+                    {!!c.role && <Text style={styles.charRole}>{c.role}</Text>}
+                    {c.attrs.length > 0 && (
+                      <View style={styles.attrList}>
+                        {c.attrs.map((a) => (
+                          <Pressable
+                            key={a.id}
+                            onPress={onFocusAttr ? () => onFocusAttr(c, a) : undefined}
+                            style={({ pressed }) => [styles.attrRow, pressed && styles.attrRowPressed]}
+                            accessibilityRole="button"
+                          >
+                            <Text style={styles.attrLabel}>{a.label}</Text>
+                            <Text style={styles.attrValue}>{a.value}</Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    )}
+                    {!!onFocusCharacter && (
+                      <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6}>
+                        <Text style={[styles.charAction, { color: accent }]}>聊聊 TA →</Text>
                       </Pressable>
-                    ))}
+                    )}
                   </View>
-                )}
-                {!!onFocusCharacter && (
-                  <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6}>
-                    <Text style={[styles.charAction, { color: accent }]}>聊聊 TA →</Text>
-                  </Pressable>
-                )}
+                </View>
               </View>
             ))}
           </ScrollView>
@@ -271,7 +277,9 @@ const styles = StyleSheet.create({
   },
   swipeHint: { fontSize: 11, color: DOC.swipeHint },
   charScroller: { marginBottom: 28 },
-  charCard: { paddingHorizontal: 26, gap: 4 },
+  charCard: {},
+  charRow: { flexDirection: 'row', gap: 14, paddingHorizontal: 26 },
+  charInfo: { flex: 1, gap: 4 },
   charName: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 16, fontWeight: '600', color: DOC.charName },
   charRole: { fontSize: 12, color: DOC.charRole, marginBottom: 3 },
   attrList: { marginTop: 4 },

@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Act, Character, CharacterAttr, Scene, WorldSection } from '@incipel/shared';
 import { defaultTheme, type Theme } from '../theme';
 import { useT } from '../i18n';
+import { PortraitThumb } from './PortraitThumb';
 
 // 本轮卡片只承载「新增/改动的实体切片」,各区可空。
 export type InlineCardData = {
@@ -106,28 +107,33 @@ function CharacterBlock({
   return (
     <View style={styles.section}>
       <Text style={[styles.label, { color: theme.accent }]}>{t('secChars')}</Text>
-      {!!c.name && <Text style={[styles.charName, { color: palette.textPrimary }]}>{c.name}</Text>}
-      {!!c.role && <Text style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</Text>}
-      {c.attrs.length > 0 && (
-        <View style={styles.attrList}>
-          {c.attrs.map((a) => (
-            <Pressable
-              key={a.id}
-              onPress={onFocusAttr ? () => onFocusAttr(c, a) : undefined}
-              style={({ pressed }) => [styles.attrRow, pressed && styles.attrRowPressed]}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.attrLabel, { color: palette.textSecondary }]}>{a.label}</Text>
-              <Text style={[styles.attrValue, { color: palette.textPrimaryAlt }]}>{a.value}</Text>
+      <View style={styles.charRow}>
+        <PortraitThumb character={c} />
+        <View style={styles.charInfo}>
+          {!!c.name && <Text style={[styles.charName, { color: palette.textPrimary }]}>{c.name}</Text>}
+          {!!c.role && <Text style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</Text>}
+          {c.attrs.length > 0 && (
+            <View style={styles.attrList}>
+              {c.attrs.map((a) => (
+                <Pressable
+                  key={a.id}
+                  onPress={onFocusAttr ? () => onFocusAttr(c, a) : undefined}
+                  style={({ pressed }) => [styles.attrRow, pressed && styles.attrRowPressed]}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.attrLabel, { color: palette.textSecondary }]}>{a.label}</Text>
+                  <Text style={[styles.attrValue, { color: palette.textPrimaryAlt }]}>{a.value}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {!!onFocusCharacter && (
+            <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6} accessibilityRole="button">
+              <Text style={[styles.charAction, { color: theme.accent }]}>聊聊 TA →</Text>
             </Pressable>
-          ))}
+          )}
         </View>
-      )}
-      {!!onFocusCharacter && (
-        <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6} accessibilityRole="button">
-          <Text style={[styles.charAction, { color: theme.accent }]}>聊聊 TA →</Text>
-        </Pressable>
-      )}
+      </View>
     </View>
   );
 }
@@ -135,6 +141,8 @@ function CharacterBlock({
 const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, padding: 12, marginTop: 8, gap: 10 },
   section: { gap: 2 },
+  charRow: { flexDirection: 'row', gap: 12, marginTop: 6 },
+  charInfo: { flex: 1, gap: 2 },
   charName: { fontSize: 15, fontWeight: '600' },
   charRole: { fontSize: 12, marginTop: 1 },
   attrList: { marginTop: 6 },

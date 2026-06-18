@@ -18,6 +18,8 @@ import {
 import { useScreenplayAgent, newThreadId } from '../src/agui/client';
 import { Composer, type ComposerHandle } from '../src/components/Composer';
 import { DocSheet } from '../src/components/DocPanel';
+import { PortraitSheet } from '../src/components/PortraitSheet';
+import { PortraitProvider } from '../src/portrait';
 import { InlineCard, type InlineCardData } from '../src/components/InlineCard';
 import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../src/config';
@@ -136,6 +138,7 @@ export default function ChatScreen() {
   const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id;
 
   return (
+    <PortraitProvider>
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
       <Header
         title={title}
@@ -203,7 +206,11 @@ export default function ChatScreen() {
         onFocusCharacter={focusCharacter}
         onFocusAttr={focusAttr}
       />
+
+      {/* 肖像生成弹窗(#14):从 usePortrait() 读 sheetChar,卡片点「生成肖像」/↻ 唤出。 */}
+      <PortraitSheet />
     </View>
+    </PortraitProvider>
   );
 }
 
