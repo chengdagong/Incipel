@@ -102,8 +102,15 @@ app.post('/run', async (c) => {
     return c.json({ error: 'messages 中没有可用的 user 消息' }, 400);
   }
 
-  // forwardedProps 可带新建会话用的 accent / title。
-  const fp = (input.forwardedProps ?? {}) as { accent?: string; title?: string };
+  // forwardedProps 可带新建会话用的 accent / title,以及自定义的助手显示名 assistantName。
+  const fp = (input.forwardedProps ?? {}) as {
+    accent?: string;
+    title?: string;
+    assistantName?: string;
+  };
+  // 助手显示名:客户端传入则用之,否则走默认「主管编剧」(在 prompt 层兜底)。
+  // 这是「用户自定义助手名」的服务端入口;日后可改为按会话/用户持久化读取。
+  const assistantName = typeof fp.assistantName === 'string' ? fp.assistantName : undefined;
 
   const store = getStore();
   // 据 threadId 建会话与空剧本(已存在则不动);这同时让本轮成为该会话的「新连接」。
@@ -131,6 +138,7 @@ app.post('/run', async (c) => {
         userId: user.userId,
         userMessage,
         newConnection: true,
+        assistantName,
       },
       { store },
     )) {

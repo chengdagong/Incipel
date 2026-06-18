@@ -1,4 +1,5 @@
-// 「芯」的 system 人格与每轮 prompt 拼装。
+// 主管编剧(AI 助手)的 system 人格与每轮 prompt 拼装。
+// 产品名是「织幕」;助手角色名独立、且可由用户自定义,默认「主管编剧」(见 CONTEXT.md「名称」)。
 //
 // 上下文与成本策略(见 system-design §9):每轮不发完整 transcript,只发
 //   1. SYSTEM(稳定不变,走 prompt caching);
@@ -16,8 +17,14 @@ export type PromptMessage = {
 // 每轮带进 prompt 的最近对话轮数上限(系统设计给的是 6–10 轮)。
 export const RECENT_MESSAGE_LIMIT = 10;
 
-// 「芯」的人格与硬约束。稳定不变,作为 prompt caching 的命中前缀。
-export const SYSTEM = `你是「芯」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
+// AI 助手的默认显示名。产品名是「织幕」(见 CONTEXT.md);助手角色名独立,默认「主管编剧」,
+// 且可由用户自定义。改名只换这里与调用方入参,人格内容不变。
+export const DEFAULT_ASSISTANT_NAME = '主管编剧';
+
+// 助手的人格与硬约束。同一助手名下稳定不变,作为 prompt caching 的命中前缀。
+// 助手名通过参数注入,默认「主管编剧」;为日后「用户自定义助手名」预留入口。
+export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): string {
+  return `你是「${assistantName}」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
 
 # 你的姿态:每轮自行判断「引导」还是「接管」
 - 引导:给用户至多 3 个可点选项(调 propose_options),或问一个聚焦的问题,把决定权交回用户。
@@ -52,6 +59,7 @@ export const SYSTEM = `你是「芯」,一个 AI 原生的编剧助手。你与�
 
 # 语气
 - 中文,专业而亲切,像一位懂行又愿意把手弄脏的编剧搭档。简洁,不啰嗦。`;
+}
 
 // 把当前剧本序列化成模型可读的文本(含各实体 id),作为 cached prefix。
 // 用稳定的纯文本结构而非 JSON——既便于模型阅读,也避免诱导模型模仿输出 JSON。
@@ -92,10 +100,10 @@ export function serializeScreenplay(state: Screenplay): string {
   return lines.join('\n');
 }
 
-// 把最近若干轮对话拼成文本。
-function serializeRecent(messages: PromptMessage[]): string {
+// 把最近若干轮对话拼成文本。助手发言用其显示名(默认「主管编剧」)标注。
+function serializeRecent(messages: PromptMessage[], assistantName: string): string {
   if (!messages.length) return '';
-  const lines = messages.map((m) => `${m.role === 'user' ? '用户' : '芯'}: ${m.text}`);
+  const lines = messages.map((m) => `${m.role === 'user' ? '用户' : assistantName}: ${m.text}`);
   return ['# 最近对话', ...lines].join('\n');
 }
 
@@ -105,6 +113,8 @@ export type BuildPromptInput = {
   recent: PromptMessage[];
   // 本轮用户新消息。
   userMessage: string;
+  // 助手显示名;缺省「主管编剧」。为日后「用户自定义助手名」预留:调用方可按会话/用户传入。
+  assistantName?: string;
 };
 
 export type BuiltPrompt = {
@@ -114,20 +124,21 @@ export type BuiltPrompt = {
 
 /**
  * 拼一轮的输入。
- * - system:SYSTEM 常量(走 prompt caching,稳定不变)。
+ * - system:buildSystem(assistantName)(同一助手名下稳定不变,走 prompt caching)。
  * - prompt:[剧本快照(cached prefix)] + [最近对话] + [本轮新消息]。
  *   剧本快照放在最前作为低变动前缀,利于缓存命中。
  */
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
+  const assistantName = input.assistantName ?? DEFAULT_ASSISTANT_NAME;
   const recent = input.recent.slice(-RECENT_MESSAGE_LIMIT);
   const parts = [
     serializeScreenplay(input.state),
-    serializeRecent(recent),
+    serializeRecent(recent, assistantName),
     `# 本轮用户消息\n${input.userMessage}`,
   ].filter((p) => p.length > 0);
 
   return {
-    system: SYSTEM,
+    system: buildSystem(assistantName),
     prompt: parts.join('\n\n'),
   };
 }

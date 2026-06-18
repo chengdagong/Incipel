@@ -37,6 +37,8 @@ export type RunInput = {
   userMessage: string;
   // 是否新连接:为真时在 RUN_STARTED 后补发 STATE_SNAPSHOT 基线。
   newConnection: boolean;
+  // 助手显示名;缺省「主管编剧」。为日后「用户自定义助手名」预留:由调用方按会话/用户传入。
+  assistantName?: string;
 };
 
 // 核心循环的依赖(seam)。缺省时各自走线上默认实现。
@@ -75,6 +77,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     state,
     recent: loaded.recent,
     userMessage: input.userMessage,
+    assistantName: input.assistantName,
   });
   // 工具 schema 按当前状态生成:含 update_*/remove_* 的 id 枚举门控。
   const tools = buildToolSchemas(idSetsOf(state));

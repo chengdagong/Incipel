@@ -1,6 +1,6 @@
 # Incipel — 给 Claude 的项目须知
 
-AI 原生编剧助手「芯」。项目背景见 [README.md](README.md),领域术语见 [CONTEXT.md](CONTEXT.md),
+AI 原生编剧助手「织幕」。项目背景见 [README.md](README.md),领域术语见 [CONTEXT.md](CONTEXT.md),
 关键决策见 [docs/adr/](docs/adr/)。本文件只放与日常操作相关、容易踩坑的约定。
 
 ## 并行 worktree:跑模拟器 / 服务 / 自动化测试前必读

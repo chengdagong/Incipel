@@ -60,7 +60,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
-        <Stack.Screen name="index" options={{ title: '芯' }} />
+        <Stack.Screen name="index" options={{ title: '织幕' }} />
         {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="history" options={{ title: '历史会话' }} />

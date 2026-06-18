@@ -1,6 +1,6 @@
 # supabase/ — 数据层
 
-「芯」(Incipel)的数据层:Postgres 表结构、Row Level Security 策略、原子落库函数 `save_turn`,以及本地开发配置。计算层(agent 运行时)与此分离 —— 这里只做数据层,不承载 agent(见系统设计 §4)。
+「织幕」(Incipel)的数据层:Postgres 表结构、Row Level Security 策略、原子落库函数 `save_turn`,以及本地开发配置。计算层(agent 运行时)与此分离 —— 这里只做数据层,不承载 agent(见系统设计 §4)。
 
 ```
 config.toml              本地开发配置(端口、auth、storage 等)
