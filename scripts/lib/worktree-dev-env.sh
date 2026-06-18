@@ -36,7 +36,7 @@ port_is_listening() {
 # 收集其它 worktree 在各自 .worktree-dev.env 里已声明的某个端口键
 claimed_ports() { # $1 = 键名(EXPO_PORT / AGENT_PORT)
   git worktree list --porcelain 2>/dev/null \
-    | awk '/^worktree /{print $2}' \
+    | awk '/^worktree /{print substr($0, 10)}' \
     | while IFS= read -r wt; do
         f="$wt/.worktree-dev.env"
         [ "$f" = "$ENV_FILE" ] && continue
