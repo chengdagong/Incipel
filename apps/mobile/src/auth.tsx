@@ -1,10 +1,14 @@
 // 会话状态的单一来源:启动只读现有会话(getExistingSession),并订阅 supabase 的鉴权变化。
-// 路由据此声明式门控(ADR-0004):有会话进创作页、无会话进登录页;
-// 登录页点 Apple / 先随便逛逛成功后,onAuthStateChange 推来新会话,登录页自动重定向走。
+// 路由据此集中门控(ADR-0004,见 app/_layout.tsx 的 effect):无会话 → 登录页,有会话 → 创作页;
+// 登录页点 Apple / 先随便逛逛成功后,onAuthStateChange 推来新会话,门控自动把人放进去。
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { getExistingSession, supabase } from './supabase';
+
+// 本地开发开关:置 1 时跳过登录门、不需要 Supabase 会话(对应 agent 的 DEV_NO_AUTH/STORE=memory,
+// 见 CLAUDE.md「只做 UI/agent 逻辑、完全不碰 Supabase」)。生产默认关闭。
+export const DEV_NO_AUTH = process.env.EXPO_PUBLIC_DEV_NO_AUTH === '1';
 
 type AuthState = {
   session: Session | null;

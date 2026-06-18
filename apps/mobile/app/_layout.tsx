@@ -4,10 +4,11 @@
 // 平台差异封装在 ../src/polyfills 里(原生装 polyfill;web 走 polyfills.web.ts 空实现)。
 import '../src/polyfills';
 
+import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { AuthProvider, useAuth } from '../src/auth';
+import { AuthProvider, DEV_NO_AUTH, useAuth } from '../src/auth';
 import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme, fonts } from '../src/theme';
 
@@ -21,10 +22,26 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { ready: authReady } = useAuth();
+  const { session, ready: authReady } = useAuth();
   // 标题衬线体(Noto Serif SC):原生打包一个字重,web 走 Google Fonts CDN(见 src/useAppFonts*)。
   const fontsLoaded = useAppFonts();
   const ready = authReady && fontsLoaded;
+  const segments = useSegments();
+  const router = useRouter();
+
+  // 集中式会话门控,覆盖所有路由(深链 / 刷新直接打开 /chat、/history、/works 也会被拦):
+  // 无会话 → 除登录页外都跳登录页;有会话却停在登录页 → 进创作页。
+  // DEV_NO_AUTH(本地只做 UI/agent、完全不碰 Supabase)下不拦截。
+  useEffect(() => {
+    if (!ready) return;
+    const onLogin = segments[0] === 'login';
+    const needsAuth = !session && !DEV_NO_AUTH;
+    if (needsAuth && !onLogin) {
+      router.replace('/login');
+    } else if (!needsAuth && onLogin) {
+      router.replace('/');
+    }
+  }, [ready, session, segments, router]);
 
   if (!ready) {
     return (
@@ -37,7 +54,7 @@ function RootNavigator() {
     );
   }
 
-  // 路由门控是声明式的:index / login 各自按 useAuth().session 决定是否 <Redirect>。
+  // 会话门控集中在上面的 effect;此处只渲染导航栈。
   // 方案 B 不需要 Provider:每个对话屏用 useScreenplayAgent(threadId) 自持一个 HttpAgent,
   // 直接消费共享状态(Screenplay)与文本流。见 src/agui/client.ts。
   return (
