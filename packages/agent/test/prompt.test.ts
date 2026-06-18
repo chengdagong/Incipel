@@ -7,7 +7,7 @@ import {
   buildPrompt,
   buildLoglinePrompt,
   RECENT_MESSAGE_LIMIT,
-  SYSTEM,
+  buildSystem,
   type PromptMessage,
 } from '../src/prompt';
 
@@ -48,17 +48,17 @@ describe('serializeScreenplay', () => {
 });
 
 describe('buildPrompt', () => {
-  it('system 为 SYSTEM 常量;prompt 含剧本快照、最近对话与本轮消息', () => {
+  it('system 为 buildSystem() 输出(默认助手名);prompt 含剧本快照、最近对话与本轮消息', () => {
     const recent: PromptMessage[] = [
       { role: 'user', text: '想写末日废土' },
       { role: 'assistant', text: '好,先定个 logline' },
     ];
     const { system, prompt } = buildPrompt({ state: sample(), recent, userMessage: '给两个人物' });
-    expect(system).toBe(SYSTEM);
+    expect(system).toBe(buildSystem());
     expect(prompt).toContain('# 当前剧本');
     expect(prompt).toContain('# 最近对话');
     expect(prompt).toContain('用户: 想写末日废土');
-    expect(prompt).toContain('芯: 好,先定个 logline');
+    expect(prompt).toContain('主管编剧: 好,先定个 logline');
     expect(prompt).toContain('# 本轮用户消息\n给两个人物');
   });
 

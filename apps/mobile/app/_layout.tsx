@@ -4,35 +4,27 @@
 // 平台差异封装在 ../src/polyfills 里(原生装 polyfill;web 走 polyfills.web.ts 空实现)。
 import '../src/polyfills';
 
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ensureSession } from '../src/supabase';
+import { AuthProvider, useAuth } from '../src/auth';
 import { useAppFonts } from '../src/useAppFonts';
-import { defaultTheme, fonts } from '../src/theme';
+import { defaultTheme } from '../src/theme';
 
 export default function RootLayout() {
-  const [sessionReady, setSessionReady] = useState(false);
+  // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0005)。
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
+
+function RootNavigator() {
+  const { ready: authReady } = useAuth();
   // 标题衬线体(Noto Serif SC):原生打包一个字重,web 走 Google Fonts CDN(见 src/useAppFonts*)。
   const fontsLoaded = useAppFonts();
-  const ready = sessionReady && fontsLoaded;
-
-  // 初始化 Supabase 匿名登录(system-design §2/§16)。
-  useEffect(() => {
-    let mounted = true;
-    ensureSession()
-      .catch(() => {
-        // Supabase 未配置/不可达时,匿名登录失败不应阻塞 app
-        //(本地试用走 agent 的 DEV_NO_AUTH,不依赖 Supabase)。
-      })
-      .finally(() => {
-        if (mounted) setSessionReady(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const ready = authReady && fontsLoaded;
 
   if (!ready) {
     return (
@@ -45,26 +37,22 @@ export default function RootLayout() {
     );
   }
 
-  // 方案 B 不需要 Provider:每个对话屏用 useScreenplayAgent(threadId) 自持一个 HttpAgent,
-  // 直接消费共享状态(Screenplay)与文本流。见 src/agui/client.ts。
+  // 会话门控集中在 (app) group 的 layout 里:无会话时受保护屏不挂载(避免重定向前先发请求);
+  // 登录页在组外、无会话可达。各对话屏用 useScreenplayAgent(threadId) 自持一个 HttpAgent
+  // 直接消费共享状态(Screenplay)与文本流,故根层不需要 Provider(方案 B,见 src/agui/client.ts)。
   return (
     <>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: defaultTheme.palette.pageBg },
-          headerTintColor: defaultTheme.palette.textPrimary,
-          headerTitleAlign: 'center',
-          headerShadowVisible: false,
-          headerTitleStyle: { fontFamily: fonts.serifTitle, fontWeight: '600' },
+          headerShown: false,
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
-        <Stack.Screen name="index" options={{ title: '织幕' }} />
-        {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
-        <Stack.Screen name="chat" options={{ headerShown: false }} />
-        <Stack.Screen name="history" options={{ title: '历史会话' }} />
-        <Stack.Screen name="works" options={{ title: '作品' }} />
+        {/* 登录页(组外,无会话可达);自带品牌区与全屏布局。 */}
+        <Stack.Screen name="login" />
+        {/* 受保护路由组:其 layout 做会话门控,内部各屏自带顶栏。 */}
+        <Stack.Screen name="(app)" />
       </Stack>
     </>
   );

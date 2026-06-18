@@ -14,12 +14,12 @@ import {
   deriveStage,
   emptyScreenplay,
 } from '@incipel/shared';
-import { useScreenplayAgent, newThreadId } from '../src/agui/client';
-import { Composer } from '../src/components/Composer';
-import { DocPanel } from '../src/components/DocPanel';
-import { InlineCard, type InlineCardData } from '../src/components/InlineCard';
-import { DEFAULT_ASSISTANT_NAME } from '../src/config';
-import { defaultTheme } from '../src/theme';
+import { useScreenplayAgent, newThreadId } from '../../src/agui/client';
+import { Composer } from '../../src/components/Composer';
+import { DocPanel } from '../../src/components/DocPanel';
+import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
+import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
+import { defaultTheme } from '../../src/theme';
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
 function messageText(m: Message): string {

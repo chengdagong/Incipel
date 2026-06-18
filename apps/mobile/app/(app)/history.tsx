@@ -4,9 +4,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { DEFAULT_ASSISTANT_NAME } from '../src/config';
-import { supabase } from '../src/supabase';
-import { defaultTheme } from '../src/theme';
+import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
+import { supabase } from '../../src/supabase';
+import { defaultTheme } from '../../src/theme';
 
 // sessions 行的子集(见 system-design §8 数据模型)。
 type SessionRow = {
