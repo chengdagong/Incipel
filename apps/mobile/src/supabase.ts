@@ -8,6 +8,9 @@ import * as Crypto from 'expo-crypto';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+// DEV_NO_AUTH(与 src/auth.tsx 的同名开关一致):此模式不取 token、不碰 Supabase auth
+//(agent 端也不校验 JWT),避免本地栈停掉时 getSession() 因过期会话刷新而卡住(Codex P3)。
+const DEV_NO_AUTH = process.env.EXPO_PUBLIC_DEV_NO_AUTH === '1';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   // 在开发期尽早暴露缺失的环境变量,避免后续匿名请求静默 401。
@@ -89,6 +92,7 @@ export async function signInWithApple(): Promise<Session> {
 
 // 取当前匿名 JWT,供 AG-UI 请求头携带(见 src/agui/client.ts)。
 export async function getAccessToken(): Promise<string | null> {
+  if (DEV_NO_AUTH) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }
