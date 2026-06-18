@@ -12,6 +12,7 @@ import { ensureSession } from '../src/supabase';
 import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme, fonts } from '../src/theme';
 import { DrawerProvider } from '../src/drawer/DrawerProvider';
+import { I18nProvider } from '../src/i18n';
 
 export default function RootLayout() {
   const [sessionReady, setSessionReady] = useState(false);
@@ -35,20 +36,23 @@ export default function RootLayout() {
     };
   }, []);
 
-  if (!ready) {
-    return (
-      <View style={[styles.loading, { backgroundColor: defaultTheme.palette.pageBg }]}>
-        <ActivityIndicator color={defaultTheme.accent} />
-        <Text style={[styles.loadingText, { color: defaultTheme.palette.textSecondary }]}>
-          正在准备…
-        </Text>
-      </View>
-    );
-  }
+  // I18nProvider 包住一切(含抽屉),任意屏用 useT() 取界面文案(见 issue #13);
+  // 它只切界面文案,不影响 AI 回复语言(见 ADR-0004 / i18n.tsx 的 langDesc)。
+  return <I18nProvider>{ready ? <AppShell /> : <Preparing />}</I18nProvider>;
+}
 
-  // 方案 B 不需要 Provider:每个对话屏用 useScreenplayAgent(threadId) 自持一个 HttpAgent,
-  // 直接消费共享状态(Screenplay)与文本流。见 src/agui/client.ts。
+function Preparing() {
+  return (
+    <View style={[styles.loading, { backgroundColor: defaultTheme.palette.pageBg }]}>
+      <ActivityIndicator color={defaultTheme.accent} />
+      <Text style={[styles.loadingText, { color: defaultTheme.palette.textSecondary }]}>正在准备…</Text>
+    </View>
+  );
+}
+
+function AppShell() {
   // DrawerProvider 把侧边抽屉浮层挂在整个 Stack 之上,任意屏可 useDrawer().open()(system-design §2.1)。
+  // history / works 的标题由各屏自设(用 t(),随语言切换),settings 自带顶栏。
   return (
     <DrawerProvider>
       <StatusBar style="dark" />
@@ -62,12 +66,12 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
-        {/* 欢迎屏自带页内顶栏(左上汉堡唤抽屉),对齐原型,隐藏原生 Stack 顶栏。 */}
+        {/* 欢迎屏自带页内顶栏(左上汉堡唤抽屉),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
         {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="chat" options={{ headerShown: false }} />
-        <Stack.Screen name="history" options={{ title: '历史会话' }} />
-        <Stack.Screen name="works" options={{ title: '作品' }} />
+        {/* 设置屏自带顶栏(返回 + 标题)。 */}
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
       </Stack>
     </DrawerProvider>
   );

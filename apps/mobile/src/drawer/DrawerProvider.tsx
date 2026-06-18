@@ -110,8 +110,11 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
             router.push({ pathname: '/chat', params: { sessionId: id } });
           }}
           onToggleStar={toggleStar}
-          // 设置页(含多语言)属另一轮范围;未实现时不传,头像渲染为非交互品牌标。
-          onOpenSettings={undefined}
+          // 抽屉头像 → 设置页(含多语言,见 issue #13)。
+          onOpenSettings={() => {
+            close();
+            router.push('/settings');
+          }}
         />
       </View>
     </DrawerContext.Provider>

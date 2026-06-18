@@ -11,7 +11,7 @@ import {
   type CharacterAttr,
   type Message,
   type Screenplay,
-  STAGE_LABELS,
+  type Stage,
   deriveStage,
   emptyScreenplay,
 } from '@incipel/shared';
@@ -21,6 +21,16 @@ import { DocSheet } from '../src/components/DocPanel';
 import { InlineCard, type InlineCardData } from '../src/components/InlineCard';
 import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../src/config';
+import { useT, type TKey } from '../src/i18n';
+
+// 阶段 → i18n key(STAGE_LABELS 是 shared 里的中文常量,这里映射到可切换的文案)。
+const STAGE_TKEY: Record<Stage, TKey> = {
+  idea: 'stageIdea',
+  world: 'stageWorld',
+  characters: 'stageChars',
+  outline: 'stageOutline',
+  scenes: 'stageScenes',
+};
 import { defaultTheme } from '../src/theme';
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
@@ -56,6 +66,7 @@ export default function ChatScreen() {
 
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
+  const t = useT();
 
   const { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry } =
     useScreenplayAgent(threadId);
@@ -128,7 +139,7 @@ export default function ChatScreen() {
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
       <Header
         title={title}
-        stage={STAGE_LABELS[stage]}
+        stage={t(STAGE_TKEY[stage])}
         docOpen={docOpen}
         onBack={() => router.back()}
         onToggleDoc={() => setDocOpen((v) => !v)}
@@ -211,6 +222,7 @@ function Header({
 }) {
   const { palette } = defaultTheme;
   const insets = useSafeAreaInsets();
+  const t = useT();
   return (
     <View style={[styles.header, { paddingTop: insets.top, borderColor: palette.border }]}>
       <View style={styles.headerInner}>
@@ -222,7 +234,10 @@ function Header({
           <Text style={[styles.headerTitle, { color: palette.textPrimary }]} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={[styles.headerSub, { color: palette.textSecondary }]}>阶段 · {stage}</Text>
+          <Text style={[styles.headerSub, { color: palette.textSecondary }]}>
+            {t('stagePrefix')}
+            {stage}
+          </Text>
         </View>
 
         <Pressable
@@ -233,7 +248,7 @@ function Header({
           <View
             style={[styles.docDot, { backgroundColor: docOpen ? defaultTheme.accent : palette.dot }]}
           />
-          <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>文档</Text>
+          <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>{t('docBtn')}</Text>
         </Pressable>
       </View>
     </View>

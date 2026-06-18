@@ -8,6 +8,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { defaultTheme, type Theme } from '../theme';
 import type { FocusChip } from '../focus';
+import { useT } from '../i18n';
 
 export type ComposerHandle = { focus: () => void };
 
@@ -26,6 +27,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   ref,
 ) {
   const { palette } = theme;
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   const inputRef = useRef<TextInput>(null);
@@ -60,7 +62,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
                   onPress={() => onRemoveChip?.(ch.key)}
                   hitSlop={6}
                   accessibilityRole="button"
-                  accessibilityLabel="移除聚焦"
+                  accessibilityLabel={t('remove')}
                 >
                   <Text style={[styles.chipX, { color: theme.accent }]}>×</Text>
                 </Pressable>
@@ -73,7 +75,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           style={[styles.input, { color: palette.textPrimary }]}
           value={text}
           onChangeText={setText}
-          placeholder={hasChips ? '补充你的想法，或直接发送…' : '写下你的想法…'}
+          placeholder={hasChips ? t('composerPlaceholderChips') : t('composerPlaceholder')}
           placeholderTextColor={palette.textSecondaryAlt}
           multiline
           // 回车发送(系统设计:回车发送)。

@@ -8,6 +8,7 @@ import { type Screenplay, deriveStage, STAGE_LABELS } from '@incipel/shared';
 import { supabase } from '../src/supabase';
 import { MenuButton } from '../src/components/Drawer';
 import { useDrawer } from '../src/drawer/DrawerProvider';
+import { useT } from '../src/i18n';
 import { defaultTheme } from '../src/theme';
 
 // sessions join documents 的查询结果:一会话 ⟷ 一作品(其剧本),严格 1:1(§16)。
@@ -24,6 +25,7 @@ export default function WorksScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const drawer = useDrawer();
+  const t = useT();
   const { palette } = defaultTheme;
   const [rows, setRows] = useState<WorkRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,9 +33,10 @@ export default function WorksScreen() {
   // 表头右上汉堡:唤出侧边抽屉(对齐原型作品页顶栏)。
   useEffect(() => {
     navigation.setOptions({
+      title: t('worksTitle'),
       headerRight: () => <MenuButton variant="plain" onPress={drawer.open} />,
     });
-  }, [navigation, drawer.open]);
+  }, [navigation, drawer.open, t]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,10 +79,8 @@ export default function WorksScreen() {
   if (rows.length === 0) {
     return (
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
-        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>还没有作品</Text>
-        <Text style={[styles.emptySub, { color: palette.textSecondary }]}>
-          开始一段创作,剧本会在这里成形。
-        </Text>
+        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>{t('noWorksTitle')}</Text>
+        <Text style={[styles.emptySub, { color: palette.textSecondary }]}>{t('noWorksDesc')}</Text>
       </View>
     );
   }
@@ -98,7 +99,7 @@ export default function WorksScreen() {
           >
             <Text style={[styles.title, { color: palette.textPrimary }]} numberOfLines={1}>
               {r.starred ? '★ ' : ''}
-              {r.title || screenplay?.meta.title || '未命名作品'}
+              {r.title || screenplay?.meta.title || t('untitled')}
             </Text>
             {!!logline && (
               <Text style={[styles.logline, { color: palette.textSecondary }]} numberOfLines={2}>

@@ -19,6 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Character, type CharacterAttr, type Screenplay } from '@incipel/shared';
 import { defaultTheme, type Theme } from '../theme';
+import { useT } from '../i18n';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
 
@@ -66,6 +67,7 @@ export function DocSheet({
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const { accent } = theme;
+  const t = useT();
 
   // translateY:开 0 / 关 height(滑出屏下)。初值取当前 open,避免 view=doc 进入时多一次滑动。
   const anim = useRef(new Animated.Value(open ? 1 : 0)).current;
@@ -79,7 +81,7 @@ export function DocSheet({
   const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [height, 0] });
 
   const { meta, world, characters, outline, scenes } = screenplay;
-  const title = meta.title?.trim() || '无题';
+  const title = meta.title?.trim() || t('untitled');
 
   return (
     <Animated.View
@@ -88,9 +90,9 @@ export function DocSheet({
     >
       {/* 顶栏:eyebrow + 收起 */}
       <View style={[styles.header, { paddingTop: insets.top + 14 }]}>
-        <Text style={styles.eyebrow}>剧本草稿 · 自动生成</Text>
+        <Text style={styles.eyebrow}>{t('draftAuto')}</Text>
         <Pressable onPress={onClose} accessibilityRole="button" hitSlop={8}>
-          <Text style={styles.collapse}>收起 ✕</Text>
+          <Text style={styles.collapse}>{t('collapse')}</Text>
         </Pressable>
       </View>
 
@@ -99,11 +101,11 @@ export function DocSheet({
         {meta.logline?.trim() ? (
           <Text style={[styles.logline, { borderLeftColor: accent }]}>{meta.logline}</Text>
         ) : (
-          <Text style={styles.pending}>一句话故事 · 待沉淀</Text>
+          <Text style={styles.pending}>{t('loglinePending')}</Text>
         )}
 
         {/* 世界观 · 设定 */}
-        <SectionLabel accent={accent} text="世界观 · 设定" />
+        <SectionLabel accent={accent} text={t('secWorld')} />
         {world.length > 0 ? (
           <View style={styles.worldBlock}>
             {world.map((w) => (
@@ -114,15 +116,15 @@ export function DocSheet({
             ))}
           </View>
         ) : (
-          <EmptyHint text="▢ 还没建立世界观" />
+          <EmptyHint text={t('worldEmpty')} />
         )}
 
         {/* 人物 · 左右滑动 */}
         <View style={styles.charsHeader}>
           <Text style={[styles.sectionLabel, { color: accent }]}>
-            人物 <Text style={styles.charCount}>· {characters.length}</Text>
+            {t('secChars')} <Text style={styles.charCount}>· {characters.length}</Text>
           </Text>
-          {characters.length > 1 && <Text style={styles.swipeHint}>← 左右滑动 →</Text>}
+          {characters.length > 1 && <Text style={styles.swipeHint}>{t('swipeHint')}</Text>}
         </View>
         {characters.length > 0 ? (
           <ScrollView
@@ -160,11 +162,11 @@ export function DocSheet({
             ))}
           </ScrollView>
         ) : (
-          <EmptyHint text="▢ 还没聊到人物" />
+          <EmptyHint text={t('charsEmpty')} />
         )}
 
         {/* 大纲 */}
-        <SectionLabel accent={accent} text="大纲" />
+        <SectionLabel accent={accent} text={t('secOutline')} />
         {outline.length > 0 ? (
           <View style={styles.outlineBlock}>
             {outline.map((a) => (
@@ -175,11 +177,11 @@ export function DocSheet({
             ))}
           </View>
         ) : (
-          <EmptyHint text="▢ 还没搭大纲" />
+          <EmptyHint text={t('outlineEmpty')} />
         )}
 
         {/* 分场 · 对白 */}
-        <SectionLabel accent={accent} text="分场 · 对白" />
+        <SectionLabel accent={accent} text={t('secScenes')} />
         {scenes.length > 0 ? (
           <View style={styles.sceneBlock}>
             {scenes.map((s) => (
@@ -190,11 +192,11 @@ export function DocSheet({
             ))}
           </View>
         ) : (
-          <EmptyHint text="▢ 还没写到具体场景" last />
+          <EmptyHint text={t('scenesEmpty')} last />
         )}
 
         <View style={styles.liveNote}>
-          <Text style={styles.liveNoteText}>这份文档随对话实时更新。</Text>
+          <Text style={styles.liveNoteText}>{t('docLiveNote')}</Text>
         </View>
       </ScrollView>
     </Animated.View>

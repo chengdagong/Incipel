@@ -3,8 +3,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { DEFAULT_ASSISTANT_NAME } from '../src/config';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useT } from '../src/i18n';
 import { supabase } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
 
@@ -19,6 +19,7 @@ type SessionRow = {
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const t = useT();
   const { palette } = defaultTheme;
   const [rows, setRows] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,6 +69,7 @@ export default function HistoryScreen() {
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
+        <Stack.Screen options={{ title: t('historyTitle') }} />
         <ActivityIndicator color={defaultTheme.accent} />
       </View>
     );
@@ -76,15 +78,14 @@ export default function HistoryScreen() {
   if (rows.length === 0) {
     return (
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
-        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>还没有会话</Text>
-        <Text style={[styles.emptySub, { color: palette.textSecondary }]}>
-          回到欢迎页,给{DEFAULT_ASSISTANT_NAME}一个灵感开始创作。
-        </Text>
+        <Stack.Screen options={{ title: t('historyTitle') }} />
+        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>{t('noHistoryTitle')}</Text>
+        <Text style={[styles.emptySub, { color: palette.textSecondary }]}>{t('noHistoryDesc')}</Text>
         <Pressable
           style={[styles.cta, { backgroundColor: defaultTheme.accent }]}
           onPress={() => router.replace('/')}
         >
-          <Text style={styles.ctaLabel}>开始创作</Text>
+          <Text style={styles.ctaLabel}>{t('startNew')}</Text>
         </Pressable>
       </View>
     );
@@ -95,6 +96,7 @@ export default function HistoryScreen() {
       style={{ backgroundColor: palette.pageBg }}
       contentContainerStyle={styles.list}
     >
+      <Stack.Screen options={{ title: t('historyTitle') }} />
       {rows.map((r) => (
         <View
           key={r.id}

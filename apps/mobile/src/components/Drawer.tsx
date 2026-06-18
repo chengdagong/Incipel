@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { defaultTheme, type Theme } from '../theme';
+import { useT, type I18nApi } from '../i18n';
+import { PRODUCT_NAME } from '../config';
 
 // 抽屉里的一条会话(= 一部作品,严格 1:1,见 system-design §16)。
 export type DrawerSession = {
@@ -60,18 +62,18 @@ type Props = {
   onOpenSettings?: () => void; // 设置页未实现时不传,头像渲染为非交互品牌标
 };
 
-export function timeAgo(iso: string): string {
-  const t = new Date(iso).getTime();
-  if (!t || Number.isNaN(t)) return '';
-  const diff = Date.now() - t;
+export function timeAgo(iso: string, tr: I18nApi['t']): string {
+  const ms = new Date(iso).getTime();
+  if (!ms || Number.isNaN(ms)) return '';
+  const diff = Date.now() - ms;
   const m = Math.floor(diff / 60000);
-  if (m < 1) return '刚刚';
-  if (m < 60) return `${m} 分钟前`;
+  if (m < 1) return tr('timeJustNow');
+  if (m < 60) return tr('timeMin', { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h} 小时前`;
+  if (h < 24) return tr('timeHour', { n: h });
   const d = Math.floor(h / 24);
-  if (d < 30) return `${d} 天前`;
-  return new Date(t).toLocaleDateString();
+  if (d < 30) return tr('timeDay', { n: d });
+  return new Date(ms).toLocaleDateString();
 }
 
 export function DrawerOverlay({
@@ -81,7 +83,7 @@ export function DrawerOverlay({
   starred,
   recent,
   sessionCount,
-  accountInitial = '你',
+  accountInitial,
   onNew,
   onOpenSessions,
   onOpenSession,
@@ -89,6 +91,9 @@ export function DrawerOverlay({
   onOpenSettings,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const t = useT();
+  // 匿名默认取「你」首字(账号体系在另一 worktree;有账号后由调用方传 accountInitial)。
+  const initial = accountInitial ?? t('guestName').charAt(0) ?? '你';
   const { width } = useWindowDimensions();
   // 原型:width 308px,max-width 84%。
   const panelWidth = Math.min(308, width * 0.84);
@@ -122,7 +127,7 @@ export function DrawerOverlay({
       >
         {/* 顶栏:品牌「织幕」+ 头像/设置入口 */}
         <View style={[styles.header, { paddingTop: insets.top + 18 }]}>
-          <Text style={styles.brand}>织幕</Text>
+          <Text style={styles.brand}>{PRODUCT_NAME}</Text>
           {onOpenSettings ? (
             <Pressable
               style={styles.avatar}
@@ -130,21 +135,21 @@ export function DrawerOverlay({
               accessibilityRole="button"
               accessibilityLabel="设置"
             >
-              <Text style={styles.avatarText}>{accountInitial}</Text>
+              <Text style={styles.avatarText}>{initial}</Text>
             </Pressable>
           ) : (
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{accountInitial}</Text>
+              <Text style={styles.avatarText}>{initial}</Text>
             </View>
           )}
         </View>
 
         {/* 导航:新建创作 / 会话 */}
         <View style={styles.nav}>
-          <NavRow icon={<PencilIcon />} label="新建创作" onPress={onNew} />
+          <NavRow icon={<PencilIcon />} label={t('newChat')} onPress={onNew} />
           <NavRow
             icon={<BubbleIcon />}
-            label="会话"
+            label={t('sessions')}
             onPress={onOpenSessions}
             trailing={<Text style={styles.count}>{sessionCount}</Text>}
           />
@@ -153,18 +158,19 @@ export function DrawerOverlay({
         {/* 列表:收藏 + 最近 */}
         <ScrollView style={styles.lists} contentContainerStyle={styles.listsContent}>
           {empty ? (
-            <Text style={styles.emptyText}>还没有会话。{'\n'}新建一个开始创作吧。</Text>
+            <Text style={styles.emptyText}>{t('noSessionsDrawer')}</Text>
           ) : (
             <>
               {starred.length > 0 && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>收藏</Text>
+                  <Text style={styles.sectionLabel}>{t('starred')}</Text>
                   {starred.map((s) => (
                     <SessionRow
                       key={s.id}
-                      title={s.title || '未命名作品'}
+                      title={s.title || t('untitled')}
                       starred
                       accent={theme.accent}
+                      t={t}
                       onOpen={() => onOpenSession(s.id)}
                       onToggleStar={() => onToggleStar(s.id)}
                     />
@@ -173,13 +179,14 @@ export function DrawerOverlay({
               )}
               {recent.length > 0 && (
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>最近</Text>
+                  <Text style={styles.sectionLabel}>{t('recent')}</Text>
                   {recent.map((s) => (
                     <SessionRow
                       key={s.id}
-                      title={s.title || '未命名作品'}
-                      subtitle={timeAgo(s.updatedAt)}
+                      title={s.title || t('untitled')}
+                      subtitle={timeAgo(s.updatedAt, t)}
                       accent={theme.accent}
+                      t={t}
                       onOpen={() => onOpenSession(s.id)}
                       onToggleStar={() => onToggleStar(s.id)}
                     />
@@ -198,7 +205,7 @@ export function DrawerOverlay({
           accessibilityRole="button"
         >
           <Text style={styles.floatPlus}>＋</Text>
-          <Text style={styles.floatLabel}>新建创作</Text>
+          <Text style={styles.floatLabel}>{t('newChat')}</Text>
         </Pressable>
       </Animated.View>
     </View>
@@ -234,6 +241,7 @@ function SessionRow({
   subtitle,
   starred,
   accent,
+  t,
   onOpen,
   onToggleStar,
 }: {
@@ -241,6 +249,7 @@ function SessionRow({
   subtitle?: string;
   starred?: boolean;
   accent: string;
+  t: I18nApi['t'];
   onOpen: () => void;
   onToggleStar: () => void;
 }) {
@@ -260,7 +269,7 @@ function SessionRow({
         style={styles.starBtn}
         onPress={onToggleStar}
         accessibilityRole="button"
-        accessibilityLabel={starred ? '取消收藏' : '收藏'}
+        accessibilityLabel={starred ? t('unstarTitle') : t('starTitle')}
         hitSlop={6}
       >
         {starred ? (
@@ -281,13 +290,14 @@ export function MenuButton({
   variant?: 'circle' | 'plain';
   onPress: () => void;
 }) {
+  const t = useT();
   const circle = variant === 'circle';
   const barColor = circle ? '#56524B' : '#9A958C';
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel="菜单"
+      accessibilityLabel={t('menuTitle')}
       hitSlop={8}
       style={({ pressed }) => [
         circle ? styles.menuCircle : styles.menuPlain,

@@ -5,6 +5,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Act, Character, CharacterAttr, Scene, WorldSection } from '@incipel/shared';
 import { defaultTheme, type Theme } from '../theme';
+import { useT } from '../i18n';
 
 // 本轮卡片只承载「新增/改动的实体切片」,各区可空。
 export type InlineCardData = {
@@ -26,6 +27,7 @@ type Props = {
 
 export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr, onFocusCharacter }: Props) {
   const { palette } = theme;
+  const t = useT();
   const hasAny =
     !!data.world?.length ||
     !!data.characters?.length ||
@@ -37,7 +39,7 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr,
   return (
     <View style={[styles.card, { backgroundColor: palette.cardBg, borderColor: palette.border }]}>
       {data.world?.map((w) => (
-        <Section key={w.id} label="世界观" title={w.title} body={w.text} theme={theme} />
+        <Section key={w.id} label={t('secWorld')} title={w.title} body={w.text} theme={theme} />
       ))}
       {data.characters?.map((c) => (
         <CharacterBlock
@@ -49,10 +51,10 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr,
         />
       ))}
       {data.outline?.map((a) => (
-        <Section key={a.id} label="大纲" title={a.act} body={a.beat} theme={theme} />
+        <Section key={a.id} label={t('secOutline')} title={a.act} body={a.beat} theme={theme} />
       ))}
       {data.scenes?.map((s) => (
-        <Section key={s.id} label="分场 · 对白" title={s.slug} body={s.content} theme={theme} />
+        <Section key={s.id} label={t('secScenes')} title={s.slug} body={s.content} theme={theme} />
       ))}
 
       <Text
@@ -60,7 +62,7 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr,
         onPress={onOpenDoc}
         accessibilityRole="button"
       >
-        打开文档 →
+        {t('openDocWork')}
       </Text>
     </View>
   );
@@ -100,9 +102,10 @@ function CharacterBlock({
   onFocusCharacter?: (c: Character) => void;
 }) {
   const { palette } = theme;
+  const t = useT();
   return (
     <View style={styles.section}>
-      <Text style={[styles.label, { color: theme.accent }]}>人物</Text>
+      <Text style={[styles.label, { color: theme.accent }]}>{t('secChars')}</Text>
       {!!c.name && <Text style={[styles.charName, { color: palette.textPrimary }]}>{c.name}</Text>}
       {!!c.role && <Text style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</Text>}
       {c.attrs.length > 0 && (
