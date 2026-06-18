@@ -21,10 +21,30 @@ export const RECENT_MESSAGE_LIMIT = 10;
 // 且可由用户自定义。改名只换这里与调用方入参,人格内容不变。
 export const DEFAULT_ASSISTANT_NAME = '主管编剧';
 
+// 助手名最长字符数。这是 display name,不需要长;超出即截断。
+const ASSISTANT_NAME_MAX = 24;
+
+// 助手名来自客户端(/run 的 forwardedProps.assistantName),会被插进 system 角色的提示里。
+// 必须当「数据」而非「指令」处理:去掉换行 / 控制字符、去掉用作名字边界的「」、折叠空白并截断;
+// 清洗后为空则回落默认名。否则带换行或额外指令的名字会成为高优先级的 system 文本,
+// 削弱本轮的工具与输出约束(prompt injection)。
+export function sanitizeAssistantName(name?: string): string {
+  if (typeof name !== 'string') return DEFAULT_ASSISTANT_NAME;
+  const cleaned = name
+    .replace(/\p{Cc}/gu, ' ') // 控制字符(含换行 / 制表)→ 空格
+    .replace(/[「」]/g, '') // 名字在提示里用「」包裹,去掉以免越界
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, ASSISTANT_NAME_MAX);
+  return cleaned.length > 0 ? cleaned : DEFAULT_ASSISTANT_NAME;
+}
+
 // 助手的人格与硬约束。同一助手名下稳定不变,作为 prompt caching 的命中前缀。
 // 助手名通过参数注入,默认「主管编剧」;为日后「用户自定义助手名」预留入口。
+// 名字先经 sanitizeAssistantName 清洗,绝不把原始客户端字符串直接拼进 system 提示。
 export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): string {
-  return `你是「${assistantName}」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
+  const name = sanitizeAssistantName(assistantName);
+  return `你是「${name}」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
 
 # 你的姿态:每轮自行判断「引导」还是「接管」
 - 引导:给用户至多 3 个可点选项(调 propose_options),或问一个聚焦的问题,把决定权交回用户。
@@ -129,7 +149,7 @@ export type BuiltPrompt = {
  *   剧本快照放在最前作为低变动前缀,利于缓存命中。
  */
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
-  const assistantName = input.assistantName ?? DEFAULT_ASSISTANT_NAME;
+  const assistantName = sanitizeAssistantName(input.assistantName);
   const recent = input.recent.slice(-RECENT_MESSAGE_LIMIT);
   const parts = [
     serializeScreenplay(input.state),
