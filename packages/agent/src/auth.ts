@@ -26,6 +26,26 @@ export type AuthedUser = {
 // 接受的非对称算法。Supabase 默认 ES256;RS256/EdDSA 一并放行以兼容其他配置。
 const ASYMMETRIC_ALGS = ['ES256', 'RS256', 'EdDSA'];
 
+// 期望的 audience:Supabase 的终端用户 access token(匿名与正式)其 aud 均为 'authenticated'。
+// 不据此区分匿名/正式(产品本意是一视同仁),只用它把「非面向终端用户签发」的 token 挡在门外。
+const DEFAULT_AUDIENCE = 'authenticated';
+
+// 校验 token 的作用范围(issuer / audience),而不只看签名(见 docs/known-issues.md KI-4)。
+// 只校验签名会接受任何用同一密钥材料签出的 token——尤其是 agent 自己持有的 service_role JWT;
+// 钉住 iss/aud 后,只有面向本项目终端用户签发的 token 才放行。
+//   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用 SUPABASE_JWT_ISS 覆盖。
+//   · audience:默认 'authenticated';可用 SUPABASE_JWT_AUD 覆盖。
+function expectedClaims(): { issuer: string; audience: string } {
+  const audience = process.env.SUPABASE_JWT_AUD || DEFAULT_AUDIENCE;
+  const issOverride = process.env.SUPABASE_JWT_ISS;
+  if (issOverride) return { issuer: issOverride, audience };
+  const url = process.env.SUPABASE_URL;
+  if (!url) {
+    throw new AuthError('SUPABASE_URL 未配置(校验 JWT issuer 需要)');
+  }
+  return { issuer: `${url.replace(/\/$/, '')}/auth/v1`, audience };
+}
+
 function jwtSecretKey(): Uint8Array {
   const secret = process.env.SUPABASE_JWT_SECRET;
   if (!secret) {
@@ -68,14 +88,25 @@ export async function verifyJwt(token: string): Promise<AuthedUser> {
     throw new AuthError(`JWT 解析失败: ${(err as Error).message}`);
   }
 
+  // 除签名外,一并校验 issuer / audience(见 KI-4);jose 会在不匹配时抛错。
+  const { issuer, audience } = expectedClaims();
+
   let payload: JWTPayload;
   try {
     if (alg === 'HS256') {
       // 旧项目:共享 secret(对称)。
-      ({ payload } = await jwtVerify(token, jwtSecretKey(), { algorithms: ['HS256'] }));
+      ({ payload } = await jwtVerify(token, jwtSecretKey(), {
+        algorithms: ['HS256'],
+        issuer,
+        audience,
+      }));
     } else {
       // 现默认:JWT 签名密钥(非对称),公钥经 JWKS 按 kid 取。
-      ({ payload } = await jwtVerify(token, getJwks(), { algorithms: ASYMMETRIC_ALGS }));
+      ({ payload } = await jwtVerify(token, getJwks(), {
+        algorithms: ASYMMETRIC_ALGS,
+        issuer,
+        audience,
+      }));
     }
   } catch (err) {
     throw new AuthError(`JWT 校验失败: ${(err as Error).message}`);

@@ -55,7 +55,7 @@ export default function ChatScreen() {
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
 
-  const { messages, screenplay, streamingText, options, isRunning, error, sendMessage } =
+  const { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry } =
     useScreenplayAgent(threadId);
 
   // 「作品」入口可带 view=doc 直接进文档视图。
@@ -149,7 +149,20 @@ export default function ChatScreen() {
         )}
 
         {!!error && (
-          <Text style={[styles.error, { color: defaultTheme.accent }]}>出错了:{error}</Text>
+          <View style={styles.errorRow}>
+            <Text style={[styles.error, { color: defaultTheme.accent }]}>出错了:{error}</Text>
+            {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复落库(见 KI-2)。
+                务必走 retry 而非重新 sendMessage——后者会生成新 runId、绕开幂等。 */}
+            <Pressable
+              onPress={() => void retry()}
+              disabled={isRunning}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="重试本轮"
+            >
+              <Text style={[styles.retry, { color: defaultTheme.accent }]}>重试</Text>
+            </Pressable>
+          </View>
         )}
       </ScrollView>
 
@@ -339,5 +352,7 @@ const styles = StyleSheet.create({
   optionArrow: { fontSize: 11 },
   optionLabel: { fontSize: 16 },
 
+  errorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   error: { fontSize: 13, fontWeight: '600' },
+  retry: { fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
 });
