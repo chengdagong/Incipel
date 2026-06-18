@@ -104,11 +104,11 @@ export default function WorksScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700' },
+  emptyTitle: { fontSize: 18, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
   list: { padding: 16, gap: 12 },
   card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 6 },
-  title: { fontSize: 17, fontWeight: '700' },
+  title: { fontSize: 17, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   logline: { fontSize: 14, lineHeight: 20 },
   stage: { fontSize: 12, fontWeight: '600' },
 });

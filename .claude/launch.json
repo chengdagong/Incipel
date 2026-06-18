@@ -18,6 +18,12 @@
       "runtimeExecutable": "supabase",
       "runtimeArgs": ["start"],
       "port": 54321
+    },
+    {
+      "name": "mobile-web",
+      "runtimeExecutable": "/Users/chengdagong/.hermes/node/bin/pnpm",
+      "runtimeArgs": ["--filter", "@incipel/mobile", "run", "web"],
+      "port": 8081
     }
   ]
 }
