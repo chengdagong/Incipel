@@ -16,7 +16,7 @@ import {
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../src/auth';
+import { DEV_NO_AUTH, useAuth } from '../src/auth';
 import { signInAnonymously, signInWithApple } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
 
@@ -43,7 +43,8 @@ export default function LoginScreen() {
   }, []);
 
   // 已有会话(含匿名登录成功后由 onAuthStateChange 推来的)→ 进创作页。
-  if (session) {
+  // DEV_NO_AUTH 下也直接放行:此模式不碰 Supabase,登录页不应拦人(与 (app) 组的门控一致,Codex P2)。
+  if (session || DEV_NO_AUTH) {
     return <Redirect href="/" />;
   }
 
