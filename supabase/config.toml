@@ -1,12 +1,17 @@
 # 「芯」(Incipel)本地开发用 Supabase 配置。
 # 仅本地开发生效;远端项目的等价设置在 Dashboard 配置(见 README)。
 # project_id 用作本地容器命名前缀,不与任何远端项目挂钩。
+#
+# 端口刻意用 5452x 段(而非 Supabase 默认 5432x):本机可能同时跑别的本地
+# Supabase 栈(默认占 5432x、5442x),本项目独占 5452x,互不抢端口。
+# 改这里的端口后,务必同步 packages/agent/.env(SUPABASE_URL)与
+# apps/mobile/.env(EXPO_PUBLIC_SUPABASE_URL),见 README。
 project_id = "incipel"
 
 [api]
 enabled = true
 # REST/GraphQL/Realtime 的本地端口(Kong 网关)。
-port = 54321
+port = 54521
 # 通过 PostgREST 暴露的 schema。
 schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
@@ -15,15 +20,15 @@ max_rows = 1000
 
 [db]
 # 本地 Postgres 端口。
-port = 54322
+port = 54522
 # `db diff` 用的影子库端口。
-shadow_port = 54320
+shadow_port = 54520
 # 与生产对齐的大版本号。
 major_version = 15
 
 [db.pooler]
 enabled = false
-port = 54329
+port = 54529
 pool_mode = "transaction"
 default_pool_size = 20
 max_client_conn = 100
@@ -33,13 +38,13 @@ enabled = true
 
 [studio]
 enabled = true
-port = 54323
-api_url = "http://127.0.0.1:54321"
+port = 54523
+api_url = "http://127.0.0.1:54521"
 
 # 本地抓取发出的邮件(确认/找回等),不真正投递。
 [inbucket]
 enabled = true
-port = 54324
+port = 54524
 
 [storage]
 enabled = true
@@ -78,7 +83,8 @@ enabled = false
 enabled = true
 # 本地 Edge Function 的运行策略:oneshot 便于热重载调试。
 policy = "oneshot"
-inspector_port = 8083
+# 留在 5452x 段内,避免与默认 8083 或其他本地服务冲突。
+inspector_port = 54525
 
 [analytics]
 enabled = false
