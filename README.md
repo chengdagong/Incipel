@@ -5,6 +5,7 @@ AI 原生的编剧助手:一条流式对话持续沉淀出一份结构化剧本�
 - 系统设计:[`docs/system-design.md`](docs/system-design.md)
 - 术语表:[`CONTEXT.md`](CONTEXT.md)
 - 关键决策:[`docs/adr/`](docs/adr/)
+- Apple 登录后台配置:[`docs/apple-sign-in-setup.md`](docs/apple-sign-in-setup.md)
 
 ## Monorepo 结构
 
