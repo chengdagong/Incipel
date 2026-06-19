@@ -7,7 +7,7 @@
 //
 // 无 react-native-svg / expo-linear-gradient:占位底用纯 HSL 单色(由人物名确定,同名同色)。
 
-import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Character } from '@incipel/shared';
 
 export type PortraitStyle = 'cinematic' | 'illustration' | 'lineart' | 'watercolor';
@@ -49,6 +49,7 @@ function attr(c: Character, label: string): string {
 
 // 由人物 外貌 + 性格(并纳入 年龄/性别/角色)拼出提示词(肖像规格「四、提示词拼接」)。
 // 真实生图在 v1 之外;此提示词只在弹窗内展示/编辑,不持久化。
+const CURATED_LABELS = ['年龄', '性别', '外貌', '性格'];
 export function buildPortraitPrompt(c: Character): string {
   const bits: string[] = [];
   const age = attr(c, '年龄');
@@ -60,6 +61,10 @@ export function buildPortraitPrompt(c: Character): string {
   if (look) bits.push(look);
   const personality = attr(c, '性格');
   if (personality) bits.push(`${personality}的气质`);
+  // 其余属性(含非中文 label / 别的维度)按「label：value」补在后面,避免跨语言剧本里这些字段被静默丢掉。
+  for (const a of c.attrs) {
+    if (!CURATED_LABELS.includes(a.label) && a.value) bits.push(`${a.label}：${a.value}`);
+  }
   const s = bits.join('，');
   return (s ? `${s}；` : '') + '浅景深半身肖像。';
 }
@@ -96,6 +101,14 @@ export function PortraitProvider({ children }: { children: React.ReactNode }) {
       setPortraits((prev) => ({ ...prev, [id]: { status: 'done', style } }));
       delete timers.current[id];
     }, FAKE_GEN_MS);
+  }, []);
+
+  // 卸载时清掉所有未完成的「生成」定时器,避免它们在组件已卸载后才回调。
+  useEffect(() => {
+    const pending = timers.current;
+    return () => {
+      for (const t of Object.values(pending)) clearTimeout(t);
+    };
   }, []);
 
   const api = useMemo<PortraitApi>(

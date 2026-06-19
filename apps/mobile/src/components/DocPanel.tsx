@@ -2,8 +2,8 @@
 // 累积的剧本全文随对话实时更新;世界观/人物/大纲/分场分区,人物区可左右滑动,空分区显示虚线占位。
 // 阶段(stage)由 @incipel/shared 的 deriveStage 派生(system-design §5)。
 //
-// 与原型差异:导出(Fountain/PDF)按 system-design §15 移出 v1,略去;人物卡的肖像(#14)与
-// 属性级聚焦(#12)留作后续,本轮先做面板骨架 + 人物名/小传 + 左右滑动。
+// 与原型差异:导出(Fountain/PDF)按 system-design §15 移出 v1,略去。
+// 人物卡含肖像缩略图(#14,占位生成)、可点属性行与「聊聊 TA」属性级/整体聚焦(#12),均已实现。
 
 import { useEffect, useRef } from 'react';
 import {
@@ -140,7 +140,7 @@ export function DocSheet({
                 <View style={styles.charRow}>
                   <PortraitThumb character={c} />
                   <View style={styles.charInfo}>
-                    <Text style={styles.charName}>{c.name || '未命名角色'}</Text>
+                    <Text style={styles.charName}>{c.name || t('unnamedChar')}</Text>
                     {!!c.role && <Text style={styles.charRole}>{c.role}</Text>}
                     {c.attrs.length > 0 && (
                       <View style={styles.attrList}>
@@ -159,7 +159,7 @@ export function DocSheet({
                     )}
                     {!!onFocusCharacter && (
                       <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6}>
-                        <Text style={[styles.charAction, { color: accent }]}>聊聊 TA →</Text>
+                        <Text style={[styles.charAction, { color: accent }]}>{t('chatAboutChar')}</Text>
                       </Pressable>
                     )}
                   </View>

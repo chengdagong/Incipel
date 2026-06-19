@@ -45,9 +45,20 @@ function diffCard(prev: Screenplay, next: Screenplay): InlineCardData {
     const had = new Set(before.map((x) => x.id));
     return after.filter((x) => !had.has(x.id));
   };
+  // 人物按属性级 diff:全新人物整张显示;已存在人物若本轮新增了属性,只挑出新属性单独显示
+  // (否则给已存在人物加属性时,内联卡片不反映这次改动,用户得去文档面板才看得到)。
+  const characters = next.characters
+    .map((c): Character | null => {
+      const before = prev.characters.find((p) => p.id === c.id);
+      if (!before) return c; // 全新人物
+      const hadAttr = new Set(before.attrs.map((a) => a.id));
+      const freshAttrs = c.attrs.filter((a) => !hadAttr.has(a.id));
+      return freshAttrs.length ? { ...c, attrs: freshAttrs } : null;
+    })
+    .filter((c): c is Character => c !== null);
   return {
     world: newOnly(prev.world, next.world),
-    characters: newOnly(prev.characters, next.characters),
+    characters,
     outline: newOnly(prev.outline, next.outline),
     scenes: newOnly(prev.scenes, next.scenes),
   };
@@ -339,13 +350,16 @@ function MessageBubble({
 }
 
 // 流式打字光标:主色细竖条,闪烁(对齐原型 caret)。
+// 光标内联在助手气泡的 <Text> 里;原生端嵌套 Text 会被摊平、没有独立的可动画视图,
+// 用 native driver 的 opacity 动画落不到这个 span 上(真机不闪)。故用 JS 驱动(useNativeDriver:false),
+// 由 JS 线程更新该文本 span 的 opacity。
 function BlinkCaret() {
   const op = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(op, { toValue: 0.1, duration: 500, useNativeDriver: true }),
-        Animated.timing(op, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 0.1, duration: 500, useNativeDriver: false }),
+        Animated.timing(op, { toValue: 1, duration: 500, useNativeDriver: false }),
       ]),
     );
     loop.start();
@@ -377,15 +391,19 @@ function ThinkingDots() {
 function Dot({ delay }: { delay: number }) {
   const op = useRef(new Animated.Value(0.2)).current;
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(op, { toValue: 1, duration: 400, useNativeDriver: true }),
-        Animated.timing(op, { toValue: 0.2, duration: 400, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
+    // 起始错峰(delay)只做一次、放在循环外;循环本体三点一致(800ms 周期),保持固定相位差。
+    // 若把 delay 放进被 loop 的 sequence,三点周期会变成 800/1000/1200ms、相位逐渐漂移。
+    const anim = Animated.sequence([
+      Animated.delay(delay),
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(op, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(op, { toValue: 0.2, duration: 400, useNativeDriver: true }),
+        ]),
+      ),
+    ]);
+    anim.start();
+    return () => anim.stop();
   }, [op, delay]);
   return <Animated.View style={[styles.dot, { opacity: op }]} />;
 }

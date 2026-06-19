@@ -110,7 +110,7 @@ function CharacterBlock({
       <View style={styles.charRow}>
         <PortraitThumb character={c} />
         <View style={styles.charInfo}>
-          {!!c.name && <Text style={[styles.charName, { color: palette.textPrimary }]}>{c.name}</Text>}
+          <Text style={[styles.charName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</Text>
           {!!c.role && <Text style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</Text>}
           {c.attrs.length > 0 && (
             <View style={styles.attrList}>
@@ -129,7 +129,7 @@ function CharacterBlock({
           )}
           {!!onFocusCharacter && (
             <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6} accessibilityRole="button">
-              <Text style={[styles.charAction, { color: theme.accent }]}>聊聊 TA →</Text>
+              <Text style={[styles.charAction, { color: theme.accent }]}>{t('chatAboutChar')}</Text>
             </Pressable>
           )}
         </View>

@@ -191,22 +191,32 @@ describe('apply.ts — 人物属性(add/update/remove_character_attr)', () => {
 });
 
 describe('apply.ts — 重放不变量(客户端重放增量 == 服务端最终态)', () => {
-  it('一轮多次工具调用:patch 依次应用到初始快照后等于最终 state', () => {
+  it('一轮多次工具调用(含人物属性增/改/删):patch 依次应用到初始快照后等于最终 state', () => {
     const s = fresh();
     const snapshot = structuredClone(s); // 重放起点 = 与工具调用相同的初始态
 
     const all: JsonPatchOp[] = [];
     const collect = (tool: string, args: unknown) => {
       const { patch } = applyToolCall(tool, args, s);
-      all.push(...patch);
+      // 增量在生产里经 SSE 以 JSON 下发(STATE_DELTA),这里同样做一次 JSON round-trip:
+      // 让 patch 的 value 与活动 state 脱钩,避免后续对 s 的原地改动(如给人物 attrs 增删)
+      // 反过来污染先前收集的 patch(引用别名)。
+      all.push(...(JSON.parse(JSON.stringify(patch)) as JsonPatchOp[]));
     };
 
     collect('set_meta', { title: '末日废土', logline: '一句话' });
-    collect('add_character', { name: '林深', role: '外科医生' });
+    // 建人物即带一条初始属性(同轮建人物 + 赋属性);林深为 index 0、attrs[0] = 外貌。
+    collect('add_character', { name: '林深', role: '外科医生', attrs: [{ label: '外貌', value: '高瘦' }] });
     collect('add_character', { name: '阿七', role: '少年' });
     collect('add_world_section', { title: '废土', text: '资源稀缺' });
-    const charId = s.characters[0]!.id;
-    collect('update_character', { id: charId, role: '前外科医生' });
+    const linId = s.characters[0]!.id;
+    collect('add_character_attr', { characterId: linId, label: '性格', value: '寡言' }); // attrs[1]
+    collect('add_character_attr', { characterId: linId, label: '年龄', value: '40' }); // attrs[2]
+    const looksAttrId = s.characters[0]!.attrs[0]!.id; // 外貌
+    collect('update_character_attr', { attrId: looksAttrId, value: '高瘦、左手有疤' });
+    const personalityAttrId = s.characters[0]!.attrs[1]!.id; // 性格(中间项)
+    collect('remove_character_attr', { attrId: personalityAttrId }); // 删中间属性,测嵌套 splice 位移
+    collect('update_character', { id: linId, role: '前外科医生' });
     collect('add_act', { act: '第一幕', beat: '相遇' });
     collect('remove_character', { id: s.characters[1]!.id }); // 删阿七
 
@@ -215,6 +225,9 @@ describe('apply.ts — 重放不变量(客户端重放增量 == 服务端最终�
     // 顺带核对最终态符合预期。
     expect(s.characters.map((c) => c.name)).toEqual(['林深']);
     expect(s.characters[0]!.role).toBe('前外科医生');
+    // 林深最终属性:外貌(改过值)+ 年龄;性格被删。
+    expect(s.characters[0]!.attrs.map((a) => a.label)).toEqual(['外貌', '年龄']);
+    expect(s.characters[0]!.attrs[0]!.value).toBe('高瘦、左手有疤');
     expect(s.world).toHaveLength(1);
     expect(s.outline).toHaveLength(1);
   });

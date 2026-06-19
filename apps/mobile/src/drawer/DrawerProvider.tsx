@@ -87,7 +87,8 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from('sessions').update({ starred: next }).eq('id', id);
     if (error) {
       console.warn('[drawer] 收藏切换失败:', error.message);
-      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, starred: !next } : s)));
+      // 回滚按当前态翻转(而非用闭包里的 next),避免连点同一条时用到过期值。
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, starred: !s.starred } : s)));
     }
   }, []);
 
