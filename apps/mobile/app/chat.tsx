@@ -235,12 +235,12 @@ function MessageBubble({
     );
   }
 
-  // 「芯」的回复:头像 + 「助手」标签,正文为页面上的纯文本(无气泡);其下挂内联卡片与选项列表。
+  // 「织幕」的回复:头像 + 「助手」标签,正文为页面上的纯文本(无气泡);其下挂内联卡片与选项列表。
   return (
     <View style={styles.assistantBlock}>
       <View style={styles.assistantHeader}>
         <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
-          <Text style={styles.avatarText}>芯</Text>
+          <Text style={styles.avatarText}>织</Text>
         </View>
         <Text style={[styles.assistantName, { color: palette.textSecondary }]}>助手</Text>
       </View>
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   userBubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
   userText: { fontSize: 16, lineHeight: 26 },
 
-  // 「芯」回复块
+  // 「织幕」回复块
   assistantBlock: { width: '100%' },
   assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   avatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },

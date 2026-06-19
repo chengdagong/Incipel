@@ -70,7 +70,7 @@ function RootNavigator() {
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
-        <Stack.Screen name="index" options={{ title: '芯' }} />
+        <Stack.Screen name="index" options={{ title: '织幕' }} />
         {/* 登录页自带品牌区与全屏布局,隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="login" options={{ headerShown: false }} />
         {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}

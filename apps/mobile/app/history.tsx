@@ -77,7 +77,7 @@ export default function HistoryScreen() {
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
         <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>还没有会话</Text>
         <Text style={[styles.emptySub, { color: palette.textSecondary }]}>
-          回到欢迎页,给「芯」一个灵感开始创作。
+          回到欢迎页,给「织幕」一个灵感开始创作。
         </Text>
         <Pressable
           style={[styles.cta, { backgroundColor: defaultTheme.accent }]}

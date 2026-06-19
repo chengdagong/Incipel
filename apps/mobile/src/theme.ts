@@ -11,7 +11,7 @@ export const palette = {
   pageBg: '#F4F1EA', // 页面底(暖米色)
   cardBg: '#FBFAF7', // 卡片
   userBubbleBg: '#E8E5DF', // 用户气泡(暖灰)
-  avatarBg: '#2B2926', // 「芯」头像底(深)
+  avatarBg: '#2B2926', // 「织幕」头像底(深)
   sendBg: '#E7C6AF', // 发送按钮(柔和肉粉)
   dot: '#A0A18E', // 「文档」chip 的小圆点(灰绿)
   textPrimary: '#2A2825', // 正文(深)
