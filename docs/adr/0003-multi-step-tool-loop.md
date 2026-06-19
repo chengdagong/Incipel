@@ -1,6 +1,6 @@
 # 模型每轮多步生成:工具调用后再产出总结文本
 
-「芯」一轮的模型调用走 Vercel AI SDK 的**多步**(multi-step):工具带一个 **ack-only 的 `execute`**(只返回 `{ ok: true }`、不碰剧本),并设 `maxSteps`(v4;v5 为 `stopWhen`)。剧本的实际改动仍在 `run.ts` 消费 `tool-call` 时由 `apply.ts` 完成——`execute` 不应用剧本,它唯一的作用是让 SDK 拿到工具结果后**再生成一步**,而那一步才产出给用户的自然语言总结(`TEXT_MESSAGE_*`)。
+「织幕」一轮的模型调用走 Vercel AI SDK 的**多步**(multi-step):工具带一个 **ack-only 的 `execute`**(只返回 `{ ok: true }`、不碰剧本),并设 `maxSteps`(v4;v5 为 `stopWhen`)。剧本的实际改动仍在 `run.ts` 消费 `tool-call` 时由 `apply.ts` 完成——`execute` 不应用剧本,它唯一的作用是让 SDK 拿到工具结果后**再生成一步**,而那一步才产出给用户的自然语言总结(`TEXT_MESSAGE_*`)。
 
 之所以这么做:单步时,模型一旦进入「调工具」模式,常常**只发工具调用、不产任何文本**,该步以 `finishReason: "tool-calls"` 结束,聊天里就是一个空的助手气泡。这是 Vercel AI SDK 一个广为人知的行为(见 [vercel/ai#8738](https://github.com/vercel/ai/discussions/8738)、[#3433](https://github.com/vercel/ai/issues/3433)、[loop-control 文档](https://ai-sdk.dev/docs/agents/loop-control));不同模型不一,Claude 常带一句确认、GPT/Gemini 多为空。我们在 Claude Sonnet 4.5 上实测 **0/5** 全为空(prompt 硬约束也搬不动);改多步后,同样 5 个强接管措辞 **5/5 既写了内容又给了简短总结**。
 

@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../src/auth';
 import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme } from '../src/theme';
+import { I18nProvider } from '../src/i18n';
 
 export default function RootLayout() {
   // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0005)。
@@ -26,20 +27,22 @@ function RootNavigator() {
   const fontsLoaded = useAppFonts();
   const ready = authReady && fontsLoaded;
 
-  if (!ready) {
-    return (
-      <View style={[styles.loading, { backgroundColor: defaultTheme.palette.pageBg }]}>
-        <ActivityIndicator color={defaultTheme.accent} />
-        <Text style={[styles.loadingText, { color: defaultTheme.palette.textSecondary }]}>
-          正在准备…
-        </Text>
-      </View>
-    );
-  }
+  // I18nProvider 包住一切(含抽屉),任意屏用 useT() 取界面文案(见 issue #13);
+  // 它只切界面文案,不影响 AI 回复语言(见 ADR-0004 / i18n.tsx 的 langDesc)。
+  return <I18nProvider>{ready ? <AppShell /> : <Preparing />}</I18nProvider>;
+}
 
-  // 会话门控集中在 (app) group 的 layout 里:无会话时受保护屏不挂载(避免重定向前先发请求);
-  // 登录页在组外、无会话可达。各对话屏用 useScreenplayAgent(threadId) 自持一个 HttpAgent
-  // 直接消费共享状态(Screenplay)与文本流,故根层不需要 Provider(方案 B,见 src/agui/client.ts)。
+function Preparing() {
+  return (
+    <View style={[styles.loading, { backgroundColor: defaultTheme.palette.pageBg }]}>
+      <ActivityIndicator color={defaultTheme.accent} />
+      <Text style={[styles.loadingText, { color: defaultTheme.palette.textSecondary }]}>正在准备…</Text>
+    </View>
+  );
+}
+
+function AppShell() {
+  // 根 Stack 只挂登录页与受保护路由组 (app);会话门控与侧边抽屉(DrawerProvider)都在 (app)/_layout 里。
   return (
     <>
       <StatusBar style="dark" />
@@ -51,7 +54,7 @@ function RootNavigator() {
       >
         {/* 登录页(组外,无会话可达);自带品牌区与全屏布局。 */}
         <Stack.Screen name="login" />
-        {/* 受保护路由组:其 layout 做会话门控,内部各屏自带顶栏。 */}
+        {/* 受保护路由组:其 layout 做会话门控 + 挂侧边抽屉,内部各屏自带顶栏。 */}
         <Stack.Screen name="(app)" />
       </Stack>
     </>

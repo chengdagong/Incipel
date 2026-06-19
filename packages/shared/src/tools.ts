@@ -14,6 +14,9 @@ export const TOOL_NAMES = [
   'add_character',
   'update_character',
   'remove_character',
+  'add_character_attr',
+  'update_character_attr',
+  'remove_character_attr',
   'add_act',
   'update_act',
   'remove_act',
@@ -25,9 +28,11 @@ export const TOOL_NAMES = [
 export type ToolName = (typeof TOOL_NAMES)[number];
 
 // 各实体当前存在的 id 集合,用来按轮生成 update/remove 的枚举门控。
+// characterAttrs 是所有人物属性 id 的扁平集合(attrId 全局唯一),供 update/remove_character_attr 门控。
 export type IdSets = {
   world: string[];
   characters: string[];
+  characterAttrs: string[];
   acts: string[];
   scenes: string[];
 };
@@ -36,6 +41,7 @@ export function idSetsOf(s: Screenplay): IdSets {
   return {
     world: s.world.map((x) => x.id),
     characters: s.characters.map((x) => x.id),
+    characterAttrs: s.characters.flatMap((c) => c.attrs.map((a) => a.id)),
     acts: s.outline.map((x) => x.id),
     scenes: s.scenes.map((x) => x.id),
   };
@@ -56,7 +62,15 @@ export function buildToolSchemas(ids: IdSets): Record<string, z.ZodTypeAny> {
   const tools: Record<string, z.ZodTypeAny> = {
     set_meta: z.object({ title: z.string().optional(), logline: z.string().optional() }),
     add_world_section: z.object({ title: z.string(), text: z.string() }),
-    add_character: z.object({ name: z.string(), note: z.string() }),
+    // 人物:名字 + 一句话定位(role)+ 可选的初始属性 attrs。
+    // 新建时一并带 attrs,是为了让「本轮新建人物 + 给它属性」能一次完成——新人物的 id 本轮还不在
+    // characters 枚举里,add_character_attr 当轮无法引用它(见 ADR-0001 扩展段)。attr id 仍由服务端生成。
+    // 后续对已存在人物增删改属性,走 *_character_attr。
+    add_character: z.object({
+      name: z.string(),
+      role: z.string().optional(),
+      attrs: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
+    }),
     add_act: z.object({ act: z.string(), beat: z.string() }),
     add_scene: z.object({ slug: z.string(), content: z.string() }),
     propose_options: z.object({ options: z.array(z.string()).max(3) }),
@@ -74,9 +88,24 @@ export function buildToolSchemas(ids: IdSets): Record<string, z.ZodTypeAny> {
     tools.update_character = z.object({
       id: idEnum(ids.characters),
       name: z.string().optional(),
-      note: z.string().optional(),
+      role: z.string().optional(),
     });
     tools.remove_character = z.object({ id: idEnum(ids.characters) });
+    // 给某个已存在的人物加一条属性(characterId 枚举锁死到现有人物)。
+    tools.add_character_attr = z.object({
+      characterId: idEnum(ids.characters),
+      label: z.string(),
+      value: z.string(),
+    });
+  }
+  if (ids.characterAttrs.length) {
+    // attrId 全局唯一,枚举锁死到现有属性;无需再带 characterId。
+    tools.update_character_attr = z.object({
+      attrId: idEnum(ids.characterAttrs),
+      label: z.string().optional(),
+      value: z.string().optional(),
+    });
+    tools.remove_character_attr = z.object({ attrId: idEnum(ids.characterAttrs) });
   }
   if (ids.acts.length) {
     tools.update_act = z.object({

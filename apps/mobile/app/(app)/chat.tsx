@@ -1,25 +1,31 @@
 // 对话屏。用 useScreenplayAgent(threadId) 消费 AG-UI 共享状态(Screenplay)与文本流:
 // 渲染消息、流式打字气泡、内联卡片(本轮剧本相对上一版的新增实体)、可点选项、输入栏;
-// 右上「文档」开关 DocPanel。阶段用 @incipel/shared 的 deriveStage / STAGE_LABELS 显示(system-design §5)。
+// 右上「文档」开关 DocPanel。阶段由 deriveStage 派生,再经 STAGE_TKEY 映射到可切换文案显示(system-design §5)。
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   type Character,
+  type CharacterAttr,
   type Message,
   type Screenplay,
-  STAGE_LABELS,
   deriveStage,
   emptyScreenplay,
 } from '@incipel/shared';
 import { useScreenplayAgent, newThreadId } from '../../src/agui/client';
-import { Composer } from '../../src/components/Composer';
-import { DocPanel } from '../../src/components/DocPanel';
+import { Composer, type ComposerHandle } from '../../src/components/Composer';
+import { DocSheet } from '../../src/components/DocPanel';
+import { PortraitSheet } from '../../src/components/PortraitSheet';
+import { PortraitProvider } from '../../src/portrait';
 import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
+import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
+import { useT, STAGE_TKEY } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
+
+// 阶段 → i18n key 的映射统一放在 src/i18n.tsx(STAGE_TKEY),与作品列表共用。
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
 function messageText(m: Message): string {
@@ -54,12 +60,17 @@ export default function ChatScreen() {
 
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
+  const t = useT();
 
   const { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry } =
     useScreenplayAgent(threadId);
 
   // 「作品」入口可带 view=doc 直接进文档视图。
   const [docOpen, setDocOpen] = useState(params.view === 'doc');
+
+  // 聚焦标签(#12):瞬时;发送时拼进消息、随即清空。
+  const [chips, setChips] = useState<FocusChip[]>([]);
+  const composerRef = useRef<ComposerHandle>(null);
 
   const stage = useMemo(() => deriveStage(screenplay), [screenplay]);
   const title = screenplay.meta.title?.trim() || '无题';
@@ -92,36 +103,39 @@ export default function ChatScreen() {
     }
   }, [assistantCount, isRunning, screenplay]);
 
-  // 点人物卡「聊聊 TA」:发一条聚焦该角色的消息(带 character.id)。
-  function focusCharacter(c: Character) {
-    void sendMessage(`我想再聊聊角色「${c.name}」(id: ${c.id})。`);
+  // 聚焦标签:点属性 / 点人物 → 加一枚 chip,关文档面板并聚焦输入框(对齐原型 discussAttr/discussCharacter)。
+  function addChip(chip: FocusChip) {
+    setChips((prev) => (prev.some((c) => c.key === chip.key) ? prev : [...prev, chip]));
     setDocOpen(false);
+    setTimeout(() => composerRef.current?.focus(), 50);
   }
+  const removeChip = (key: string) => setChips((prev) => prev.filter((c) => c.key !== key));
+  const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a));
+  const focusCharacter = (c: Character) => addChip(chipFromCharacter(c));
 
-  if (docOpen) {
-    return (
-      <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
-        <Header
-          title={title}
-          stage={STAGE_LABELS[stage]}
-          docOpen
-          onBack={() => router.back()}
-          onToggleDoc={() => setDocOpen((v) => !v)}
-        />
-        <DocPanel screenplay={screenplay} onFocusCharacter={focusCharacter} />
-      </View>
-    );
+  // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用兜底话术),发出后清空 chip。
+  function sendComposed(text: string) {
+    const msg = composeFocusMessage(text, chips);
+    if (!msg) return;
+    setChips([]);
+    void sendMessage(msg);
+  }
+  // 快捷选项 / 直接发送:不带聚焦上下文,但发送即清空残留 chip(对齐原型 pushUserAndReply)。
+  function sendPlain(text: string) {
+    setChips([]);
+    void sendMessage(text);
   }
 
   // 最后一条 assistant 消息挂本轮卡片与选项(瞬时,随下一轮清空)。
   const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id;
 
   return (
+    <PortraitProvider>
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
       <Header
         title={title}
-        stage={STAGE_LABELS[stage]}
-        docOpen={false}
+        stage={t(STAGE_TKEY[stage])}
+        docOpen={docOpen}
         onBack={() => router.back()}
         onToggleDoc={() => setDocOpen((v) => !v)}
       />
@@ -137,15 +151,20 @@ export default function ChatScreen() {
               text={messageText(m)}
               card={isLastAssistant ? card : undefined}
               options={isLastAssistant ? options : undefined}
-              onSend={sendMessage}
+              onSend={sendPlain}
               onOpenDoc={() => setDocOpen(true)}
+              onFocusAttr={focusAttr}
+              onFocusCharacter={focusCharacter}
             />
           );
         })}
 
+        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。 */}
+        {isRunning && !streamingText && <ThinkingDots />}
+
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
-          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendMessage} onOpenDoc={() => setDocOpen(true)} />
+          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={() => setDocOpen(true)} />
         )}
 
         {!!error && (
@@ -166,8 +185,27 @@ export default function ChatScreen() {
         )}
       </ScrollView>
 
-      <Composer busy={isRunning} onSend={sendMessage} />
+      <Composer
+        ref={composerRef}
+        busy={isRunning}
+        onSend={sendComposed}
+        chips={chips}
+        onRemoveChip={removeChip}
+      />
+
+      {/* 文档面板:从底部滑出的浮层,覆盖在对话之上;收起按钮在面板内(system-design §2.1 / #11)。 */}
+      <DocSheet
+        open={docOpen}
+        onClose={() => setDocOpen(false)}
+        screenplay={screenplay}
+        onFocusCharacter={focusCharacter}
+        onFocusAttr={focusAttr}
+      />
+
+      {/* 肖像生成弹窗(#14):从 usePortrait() 读 sheetChar,卡片点「生成肖像」/↻ 唤出。 */}
+      <PortraitSheet />
     </View>
+    </PortraitProvider>
   );
 }
 
@@ -186,6 +224,7 @@ function Header({
 }) {
   const { palette } = defaultTheme;
   const insets = useSafeAreaInsets();
+  const t = useT();
   return (
     <View style={[styles.header, { paddingTop: insets.top, borderColor: palette.border }]}>
       <View style={styles.headerInner}>
@@ -197,7 +236,10 @@ function Header({
           <Text style={[styles.headerTitle, { color: palette.textPrimary }]} numberOfLines={1}>
             {title}
           </Text>
-          <Text style={[styles.headerSub, { color: palette.textSecondary }]}>阶段 · {stage}</Text>
+          <Text style={[styles.headerSub, { color: palette.textSecondary }]}>
+            {t('stagePrefix')}
+            {stage}
+          </Text>
         </View>
 
         <Pressable
@@ -205,14 +247,10 @@ function Header({
           style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
           accessibilityRole="button"
         >
-          {docOpen ? (
-            <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>← 返回对话</Text>
-          ) : (
-            <>
-              <View style={[styles.docDot, { backgroundColor: palette.dot }]} />
-              <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>文档</Text>
-            </>
-          )}
+          <View
+            style={[styles.docDot, { backgroundColor: docOpen ? defaultTheme.accent : palette.dot }]}
+          />
+          <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>{t('docBtn')}</Text>
         </Pressable>
       </View>
     </View>
@@ -227,6 +265,8 @@ function MessageBubble({
   options,
   onSend,
   onOpenDoc,
+  onFocusAttr,
+  onFocusCharacter,
 }: {
   role: 'user' | 'assistant';
   text: string;
@@ -235,6 +275,8 @@ function MessageBubble({
   options?: string[];
   onSend: (text: string) => void;
   onOpenDoc: () => void;
+  onFocusAttr?: (c: Character, a: CharacterAttr) => void;
+  onFocusCharacter?: (c: Character) => void;
 }) {
   const { palette } = defaultTheme;
 
@@ -263,11 +305,18 @@ function MessageBubble({
 
       <Text style={[styles.assistantText, { color: palette.textPrimary }]}>
         {text}
-        {streaming ? '▋' : ''}
+        {streaming ? <BlinkCaret /> : null}
       </Text>
 
-      {/* 内联卡片:本轮新增实体(由剧本 diff 得出)。 */}
-      {card && <InlineCard data={card} onOpenDoc={onOpenDoc} />}
+      {/* 内联卡片:本轮新增实体(由剧本 diff 得出);人物属性可点生成聚焦标签(#12)。 */}
+      {card && (
+        <InlineCard
+          data={card}
+          onOpenDoc={onOpenDoc}
+          onFocusAttr={onFocusAttr}
+          onFocusCharacter={onFocusCharacter}
+        />
+      )}
 
       {/* 可点选项(quick reply):带分隔线的列表,点击即以用户身份发该文本。 */}
       {!!options?.length && (
@@ -287,6 +336,58 @@ function MessageBubble({
       )}
     </View>
   );
+}
+
+// 流式打字光标:主色细竖条,闪烁(对齐原型 caret)。
+function BlinkCaret() {
+  const op = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(op, { toValue: 0.1, duration: 500, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [op]);
+  return <Animated.Text style={[styles.caret, { color: defaultTheme.accent, opacity: op }]}>▏</Animated.Text>;
+}
+
+// 思考中:助手头像 + 三点闪烁(首 token 到达前;对齐原型 typing dots)。
+function ThinkingDots() {
+  const { palette } = defaultTheme;
+  return (
+    <View style={styles.assistantBlock}>
+      <View style={styles.assistantHeader}>
+        <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
+          <Text style={styles.avatarText}>{DEFAULT_ASSISTANT_NAME.slice(0, 1)}</Text>
+        </View>
+        <Text style={[styles.assistantName, { color: palette.textSecondary }]}>{DEFAULT_ASSISTANT_NAME}</Text>
+      </View>
+      <View style={styles.dots}>
+        <Dot delay={0} />
+        <Dot delay={200} />
+        <Dot delay={400} />
+      </View>
+    </View>
+  );
+}
+
+function Dot({ delay }: { delay: number }) {
+  const op = useRef(new Animated.Value(0.2)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(op, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.timing(op, { toValue: 0.2, duration: 400, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [op, delay]);
+  return <Animated.View style={[styles.dot, { opacity: op }]} />;
 }
 
 const styles = StyleSheet.create({
@@ -339,6 +440,9 @@ const styles = StyleSheet.create({
   avatarText: { color: '#fff', fontSize: 14, fontFamily: defaultTheme.fonts.serifTitle },
   assistantName: { fontSize: 14 },
   assistantText: { fontSize: 16, lineHeight: 26 },
+  caret: { fontSize: 16, fontWeight: '700' },
+  dots: { flexDirection: 'row', gap: 5, paddingVertical: 6 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#BDB8AE' },
 
   // 选项列表
   options: { marginTop: 14 },

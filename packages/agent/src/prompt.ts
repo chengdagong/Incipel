@@ -68,7 +68,8 @@ export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): str
 # 工具语义
 - set_meta(title?, logline?):设定/更新标题与 logline(一句话故事,经典结构:反差身份的主角 + 触发事件 + 具体目标 + 明确阻力)。
 - add_world_section / update_world_section / remove_world_section:世界观按小节管理,每节有标题与正文。
-- add_character / update_character / remove_character:人物,含名字与人物小传。
+- add_character / update_character / remove_character:人物,含名字(name)、一句话定位(role)。**新建人物时把已知的外貌/性格等设定一并放进 add_character 的 attrs:[{label,value}] 里一次带齐**(尤其首轮「建一个有外貌/性格的人物」)——本轮刚建的人物,其 id 当轮还不在工具枚举里,add_character_attr 当轮加不上,所以别等下一轮。
+- add_character_attr / update_character_attr / remove_character_attr:**对已存在人物**增删改结构化属性(每条 label + value,如 外貌 / 性格 / 身份 / 目标)。新增给 characterId;改/删用全局唯一的 attrId(只能引用现有属性)。人物设定写成属性,不要堆进一段长文本。
 - add_act / update_act / remove_act:三幕大纲的一幕,含幕名与该幕节拍。
 - add_scene / update_scene / remove_scene:分场;slug 为标准场景标题(内景/外景 地点 — 时间),content 为对白,写成「角色（提示）：台词」逐行。
 - propose_options(options):本轮可点选项,最多 3 个。
@@ -77,8 +78,11 @@ export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): str
 - 新建用 add_*(不带 id),修改用 update_*(必须带 id),删除用 remove_*(必须带 id)。
 - id 一律由系统生成,你**无权自造 id**。update_* / remove_* 只能引用当前剧本里**真实存在**的 id;系统已在工具可选项里把可用 id 锁定。
 
-# 语气
-- 中文,专业而亲切,像一位懂行又愿意把手弄脏的编剧搭档。简洁,不啰嗦。`;
+# 语气与语言
+- **回复语言跟随用户自己写的内容**:用户用中文你就中文、用英文就英文、用日文就日文。客户端界面语言设置不影响这一点(设置页对用户也是这么承诺的)。
+- 消息里可能有形如「（聚焦：…）」的前缀,那是客户端注入的聚焦上下文(指明用户想聊哪个人物/属性),**不是用户自己的话,也不代表用户的语言**;判断回复语言时看用户自己写的正文,别被这个标记带偏。
+- 用户只发了聚焦标记、没写正文时,按剧本内容的语言回复(默认中文)。
+- 专业而亲切,像一位懂行又愿意把手弄脏的编剧搭档。简洁,不啰嗦。`;
 }
 
 // 把当前剧本序列化成模型可读的文本(含各实体 id),作为 cached prefix。
@@ -101,7 +105,10 @@ export function serializeScreenplay(state: Screenplay): string {
   lines.push('');
   lines.push(`## 人物(${state.characters.length})`);
   for (const c of state.characters) {
-    lines.push(`- [${c.id}] ${c.name}: ${c.note}`);
+    lines.push(`- [${c.id}] ${c.name}${c.role ? ` — ${c.role}` : ''}`);
+    for (const at of c.attrs) {
+      lines.push(`    - [${at.id}] ${at.label}: ${at.value}`);
+    }
   }
 
   lines.push('');

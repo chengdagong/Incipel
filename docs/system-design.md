@@ -135,14 +135,16 @@ type Screenplay = {
   scenes:     Scene[];         // 扁平,不挂在某一幕下
 };
 
-type WorldSection = { id: string; title: string; text: string };
-type Character    = { id: string; name: string; note: string };
-type Act          = { id: string; act: string;  beat: string };
-type Scene        = { id: string; slug: string; content: string };
+type WorldSection  = { id: string; title: string; text: string };
+type CharacterAttr = { id: string; label: string; value: string };  // 外貌/性格/身份…
+type Character     = { id: string; name: string; role: string; attrs: CharacterAttr[] };
+type Act           = { id: string; act: string;  beat: string };
+type Scene         = { id: string; slug: string; content: string };
 ```
 
 - **每个实体都有稳定 id,由服务端生成**(模型无权自造)。id 让 STATE_DELTA 精确 patch 单个实体而不重发整组,也让「针对某角色 / 某节深入」稳稳命中同一对象。原型里靠名字定位,改名即失联。
 - **世界观拆成带 id 的小节**(标题任意):可精确改某一节而不动其余,与人物/幕/场一致。原型里世界观是整段文本、整段覆盖,partial 编辑会丢内容(见 ADR-0001)。
+- **人物是结构化的**:名字 + 一句话定位(role)+ 若干带 id 的属性(`attrs`,如 外貌/性格/身份)。`attrId` 全局唯一。这取代早期的单段 `note`,以支持「点某条属性回对话深聊」(聚焦标签)与「由 外貌+性格 拼肖像提示词」;每条属性单独 patch、单独引用(见 ADR-0001 的人物属性扩展段)。
 - **scenes 扁平**,不与幕建父子关系:slug(内景/外景 地点 — 时间)即标准场景标题,顺序由对话给出。要「按幕折叠浏览」再 later 加 `actId`。
 - **阶段(stage)不进状态**:`灵感/世界观/人物/大纲/分场` 由客户端按哪些区块有内容派生(`scenes>outline>characters>world>idea`),避免存储态与内容不一致。
 - **options(可点选项)不进剧本**:它是一轮内的瞬时 UI 状态(见 §7),随下一轮用户输入清空。
@@ -195,9 +197,14 @@ add_world_section({ title, text })            新建一节(标题任意),id 由�
 update_world_section({ id, title?, text? })   改某一节;id 受枚举约束
 remove_world_section({ id })
 
-add_character({ name, note })                 新建人物
-update_character({ id, name?, note? })        改某人物
+add_character({ name, role? })                新建人物(名字 + 一句话定位)
+update_character({ id, name?, role? })        改人物的名字 / 定位
 remove_character({ id })
+
+# 人物属性:结构化 label/value(外貌/性格/身份…),支持点属性深聊与肖像提示词
+add_character_attr({ characterId, label, value })  给某人物加一条属性(characterId 受枚举约束)
+update_character_attr({ attrId, label?, value? })  改某条属性(attrId 全局唯一,受枚举约束)
+remove_character_attr({ attrId })
 
 add_act({ act, beat })                        新建一幕
 update_act({ id, act?, beat? })
@@ -283,7 +290,7 @@ messages
 | 点人物卡「聊聊 TA」 | 前端发一条聚焦该角色的消息(带 `character.id`),触发一次 run |
 | 打开文档 / 收起 | 纯客户端;数据来自已同步的共享状态 |
 | 侧栏/历史/作品列表 | supabase-js 直接查 `sessions` join `documents` |
-| 收藏 / 删除 | 直接 update / delete `sessions` 行(RLS 保护) |
+| 收藏 / 删除 | 收藏 = 客户端列级 update `sessions.starred`(列级授权 + RLS;见 migration 0003);删除 = client delete `sessions` 行(RLS) |
 | 续写旧会话 | 查 `messages`(含 deltas/options)+ `documents.state`;打开 AG-UI 连接并以该状态作 STATE_SNAPSHOT |
 
 > 导出(Fountain / PDF)移出 v1,见 §15。

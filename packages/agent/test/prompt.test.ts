@@ -6,8 +6,8 @@ import {
   serializeScreenplay,
   buildPrompt,
   buildLoglinePrompt,
-  RECENT_MESSAGE_LIMIT,
   buildSystem,
+  RECENT_MESSAGE_LIMIT,
   type PromptMessage,
 } from '../src/prompt';
 
@@ -17,8 +17,8 @@ function sample(): Screenplay {
     meta: { title: '末日废土', logline: '一句话', accent: '#C2724E', updatedAt: '2026-06-18T00:00:00Z' },
     world: [{ id: 'world_a', title: '废土', text: '资源稀缺' }],
     characters: [
-      { id: 'char_a', name: '林深', note: '医生' },
-      { id: 'char_b', name: '阿七', note: '少年' },
+      { id: 'char_a', name: '林深', role: '医生', attrs: [{ id: 'cattr_a', label: '外貌', value: '高瘦' }] },
+      { id: 'char_b', name: '阿七', role: '少年', attrs: [] },
     ],
     outline: [{ id: 'act_a', act: '第一幕', beat: '相遇' }],
     scenes: [{ id: 'scene_a', slug: '内景 诊所 — 夜', content: '林深:别动。' }],
@@ -36,6 +36,8 @@ describe('serializeScreenplay', () => {
     expect(text).toContain('## 分场(1)');
     expect(text).toContain('[world_a]');
     expect(text).toContain('[char_a]');
+    expect(text).toContain('[cattr_a]'); // 人物属性带 id 标注(#12 结构化属性)
+    expect(text).toContain('外貌: 高瘦');
     expect(text).toContain('[scene_a]');
   });
 
@@ -58,7 +60,7 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('# 当前剧本');
     expect(prompt).toContain('# 最近对话');
     expect(prompt).toContain('用户: 想写末日废土');
-    expect(prompt).toContain('主管编剧: 好,先定个 logline');
+    expect(prompt).toContain('主管编剧: 好,先定个 logline'); // 助手发言用默认显示名标注
     expect(prompt).toContain('# 本轮用户消息\n给两个人物');
   });
 

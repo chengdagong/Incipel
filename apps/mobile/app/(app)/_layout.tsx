@@ -5,6 +5,7 @@
 
 import { Redirect, Stack } from 'expo-router';
 import { DEV_NO_AUTH, useAuth } from '../../src/auth';
+import { DrawerProvider } from '../../src/drawer/DrawerProvider';
 import { defaultTheme, fonts } from '../../src/theme';
 
 export default function ProtectedLayout() {
@@ -15,22 +16,29 @@ export default function ProtectedLayout() {
     return <Redirect href="/login" />;
   }
 
+  // DrawerProvider 把侧边抽屉浮层挂在受保护区的 Stack 之上(任意屏 useDrawer().open());
+  // history / works 的标题由各屏自设(t(),随语言切换),此处为初始/兜底;settings、index 自带顶栏。
   return (
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: defaultTheme.palette.pageBg },
-        headerTintColor: defaultTheme.palette.textPrimary,
-        headerTitleAlign: 'center',
-        headerShadowVisible: false,
-        headerTitleStyle: { fontFamily: fonts.serifTitle, fontWeight: '600' },
-        contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: '织幕' }} />
-      {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
-      <Stack.Screen name="chat" options={{ headerShown: false }} />
-      <Stack.Screen name="history" options={{ title: '历史会话' }} />
-      <Stack.Screen name="works" options={{ title: '作品' }} />
-    </Stack>
+    <DrawerProvider>
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: defaultTheme.palette.pageBg },
+          headerTintColor: defaultTheme.palette.textPrimary,
+          headerTitleAlign: 'center',
+          headerShadowVisible: false,
+          headerTitleStyle: { fontFamily: fonts.serifTitle, fontWeight: '600' },
+          contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
+        }}
+      >
+        {/* 欢迎屏自带页内顶栏(左上汉堡唤抽屉),隐藏原生 Stack 顶栏。 */}
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+        {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
+        <Stack.Screen name="chat" options={{ headerShown: false }} />
+        <Stack.Screen name="history" options={{ title: '历史会话' }} />
+        <Stack.Screen name="works" options={{ title: '作品' }} />
+        {/* 设置屏自带顶栏(返回 + 标题)。 */}
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+      </Stack>
+    </DrawerProvider>
   );
 }

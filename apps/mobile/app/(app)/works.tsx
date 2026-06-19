@@ -3,9 +3,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { type Screenplay, deriveStage, STAGE_LABELS } from '@incipel/shared';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
+import { type Screenplay, deriveStage } from '@incipel/shared';
 import { supabase } from '../../src/supabase';
+import { MenuButton } from '../../src/components/Drawer';
+import { useDrawer } from '../../src/drawer/DrawerProvider';
+import { useT, STAGE_TKEY } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
 
 // sessions join documents 的查询结果:一会话 ⟷ 一作品(其剧本),严格 1:1(§16)。
@@ -20,9 +23,20 @@ type WorkRow = {
 
 export default function WorksScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const drawer = useDrawer();
+  const t = useT();
   const { palette } = defaultTheme;
   const [rows, setRows] = useState<WorkRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // 表头右上汉堡:唤出侧边抽屉(对齐原型作品页顶栏)。
+  useEffect(() => {
+    navigation.setOptions({
+      title: t('worksTitle'),
+      headerRight: () => <MenuButton variant="plain" onPress={drawer.open} />,
+    });
+  }, [navigation, drawer.open, t]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +67,10 @@ export default function WorksScreen() {
   function open(id: string) {
     router.push({ pathname: '/chat', params: { sessionId: id, view: 'doc' } });
   }
+  // 空状态「开始新创作」→ 回欢迎页。
+  function startNew() {
+    router.replace('/');
+  }
 
   if (loading) {
     return (
@@ -65,19 +83,21 @@ export default function WorksScreen() {
   if (rows.length === 0) {
     return (
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
-        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>还没有作品</Text>
-        <Text style={[styles.emptySub, { color: palette.textSecondary }]}>
-          开始一段创作,剧本会在这里成形。
-        </Text>
+        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>{t('noWorksTitle')}</Text>
+        <Text style={[styles.emptySub, { color: palette.textSecondary }]}>{t('noWorksDesc')}</Text>
+        <Pressable style={[styles.cta, { backgroundColor: defaultTheme.accent }]} onPress={startNew}>
+          <Text style={styles.ctaLabel}>{t('startNew')}</Text>
+        </Pressable>
       </View>
     );
   }
 
   return (
     <ScrollView style={{ backgroundColor: palette.pageBg }} contentContainerStyle={styles.list}>
+      <Text style={[styles.intro, { color: palette.textSecondaryAlt }]}>{t('worksIntro')}</Text>
       {rows.map((r) => {
         const screenplay = r.documents?.state;
-        const stageLabel = screenplay ? STAGE_LABELS[deriveStage(screenplay)] : STAGE_LABELS.idea;
+        const stageLabel = t(STAGE_TKEY[screenplay ? deriveStage(screenplay) : 'idea']);
         const logline = screenplay?.meta.logline ?? '';
         return (
           <Pressable
@@ -87,14 +107,17 @@ export default function WorksScreen() {
           >
             <Text style={[styles.title, { color: palette.textPrimary }]} numberOfLines={1}>
               {r.starred ? '★ ' : ''}
-              {r.title || screenplay?.meta.title || '未命名作品'}
+              {r.title || screenplay?.meta.title || t('untitled')}
             </Text>
             {!!logline && (
               <Text style={[styles.logline, { color: palette.textSecondary }]} numberOfLines={2}>
                 {logline}
               </Text>
             )}
-            <Text style={[styles.stage, { color: defaultTheme.accent }]}>{stageLabel}</Text>
+            <View style={styles.cardFooter}>
+              <Text style={[styles.stage, { color: palette.textSecondaryAlt }]}>{stageLabel}</Text>
+              <Text style={[styles.openWork, { color: defaultTheme.accent }]}>{t('openDocWork')}</Text>
+            </View>
           </Pressable>
         );
       })}
@@ -106,9 +129,14 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   emptyTitle: { fontSize: 18, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  cta: { borderRadius: 14, paddingHorizontal: 26, paddingVertical: 13, marginTop: 12 },
+  ctaLabel: { color: '#fff', fontWeight: '600', fontSize: 14 },
   list: { padding: 16, gap: 12 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 16, gap: 6 },
+  intro: { fontSize: 12.5, lineHeight: 20, marginHorizontal: 4, marginBottom: 4 },
+  card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 9 },
   title: { fontSize: 17, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
-  logline: { fontSize: 14, lineHeight: 20 },
-  stage: { fontSize: 12, fontWeight: '600' },
+  logline: { fontSize: 13, lineHeight: 21 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  stage: { fontSize: 11.5 },
+  openWork: { fontSize: 11.5, fontWeight: '600' },
 });
