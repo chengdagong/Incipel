@@ -1,6 +1,6 @@
 // 对话屏。用 useScreenplayAgent(threadId) 消费 AG-UI 共享状态(Screenplay)与文本流:
 // 渲染消息、流式打字气泡、内联卡片(本轮剧本相对上一版的新增实体)、可点选项、输入栏;
-// 右上「文档」开关 DocPanel。阶段用 @incipel/shared 的 deriveStage / STAGE_LABELS 显示(system-design §5)。
+// 右上「文档」开关 DocPanel。阶段由 deriveStage 派生,再经 STAGE_TKEY 映射到可切换文案显示(system-design §5)。
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -11,7 +11,6 @@ import {
   type CharacterAttr,
   type Message,
   type Screenplay,
-  type Stage,
   deriveStage,
   emptyScreenplay,
 } from '@incipel/shared';
@@ -23,17 +22,10 @@ import { PortraitProvider } from '../../src/portrait';
 import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
 import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
-import { useT, type TKey } from '../../src/i18n';
+import { useT, STAGE_TKEY } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
 
-// 阶段 → i18n key(STAGE_LABELS 是 shared 里的中文常量,这里映射到可切换的文案)。
-const STAGE_TKEY: Record<Stage, TKey> = {
-  idea: 'stageIdea',
-  world: 'stageWorld',
-  characters: 'stageChars',
-  outline: 'stageOutline',
-  scenes: 'stageScenes',
-};
+// 阶段 → i18n key 的映射统一放在 src/i18n.tsx(STAGE_TKEY),与作品列表共用。
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
 function messageText(m: Message): string {
@@ -118,12 +110,12 @@ export default function ChatScreen() {
     setTimeout(() => composerRef.current?.focus(), 50);
   }
   const removeChip = (key: string) => setChips((prev) => prev.filter((c) => c.key !== key));
-  const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a));
-  const focusCharacter = (c: Character) => addChip(chipFromCharacter(c));
+  const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a, t));
+  const focusCharacter = (c: Character) => addChip(chipFromCharacter(c, t));
 
   // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用兜底话术),发出后清空 chip。
   function sendComposed(text: string) {
-    const msg = composeFocusMessage(text, chips);
+    const msg = composeFocusMessage(text, chips, t);
     if (!msg) return;
     setChips([]);
     void sendMessage(msg);

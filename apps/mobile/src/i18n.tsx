@@ -10,6 +10,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Stage } from '@incipel/shared';
 
 // 可选语言(native name,各语言下显示一致)。顺序即下拉展示顺序。
 export const LANGS = [
@@ -92,6 +93,14 @@ const DICT = {
     stageChars: "人物",
     stageOutline: "大纲",
     stageScenes: "分场 · 对白",
+    // 聚焦标签(#12):chip 类别 + 发送时并入消息的聚焦描述,随界面语言切换(见 src/focus.ts)。
+    focusKindChar: "人物",
+    focusUnnamed: "角色",
+    focusAttrDetail: "「{name}」的{label}（当前为：{value}）",
+    focusCharDetail: "人物「{name}」",
+    focusWrap: "（聚焦：{ctx}）",
+    focusJoin: "；",
+    focusFallback: "帮我打磨这部分设定，先给我几个不同方向。",
     docBtn: "文档",
     assistant: "助手",
     secWorld: "世界观 · 设定",
@@ -216,6 +225,13 @@ const DICT = {
     stageChars: "Characters",
     stageOutline: "Outline",
     stageScenes: "Scenes · Dialogue",
+    focusKindChar: "Character",
+    focusUnnamed: "this character",
+    focusAttrDetail: "{name}'s {label} (currently: {value})",
+    focusCharDetail: "the character “{name}”",
+    focusWrap: "(Focus: {ctx})",
+    focusJoin: "; ",
+    focusFallback: "Help me refine this part of the setup — give me a few different directions to start.",
     docBtn: "Doc",
     assistant: "Assistant",
     secWorld: "World · Setting",
@@ -340,6 +356,13 @@ const DICT = {
     stageChars: "登場人物",
     stageOutline: "アウトライン",
     stageScenes: "シーン · セリフ",
+    focusKindChar: "登場人物",
+    focusUnnamed: "このキャラクター",
+    focusAttrDetail: "「{name}」の{label}（現在：{value}）",
+    focusCharDetail: "登場人物「{name}」",
+    focusWrap: "（フォーカス：{ctx}）",
+    focusJoin: "、",
+    focusFallback: "この設定を一緒に練りたい。まずは方向性をいくつか提案して。",
     docBtn: "原稿",
     assistant: "アシスタント",
     secWorld: "世界観 · 設定",
@@ -464,6 +487,13 @@ const DICT = {
     stageChars: "人物",
     stageOutline: "大綱",
     stageScenes: "分場 · 對白",
+    focusKindChar: "人物",
+    focusUnnamed: "角色",
+    focusAttrDetail: "「{name}」的{label}（目前為：{value}）",
+    focusCharDetail: "人物「{name}」",
+    focusWrap: "（聚焦：{ctx}）",
+    focusJoin: "；",
+    focusFallback: "幫我打磨這部分設定，先給我幾個不同方向。",
     docBtn: "文件",
     assistant: "助手",
     secWorld: "世界觀 · 設定",
@@ -524,6 +554,16 @@ const DICT = {
 
 export type TKey = keyof typeof DICT.zh;
 type Vars = Record<string, string | number>;
+
+// 阶段(deriveStage 派生)→ 可切换文案的 i18n key。chat 顶栏与作品列表共用,
+// 避免直接渲染 shared 的中文常量 STAGE_LABELS(切到非中文界面时会漏翻)。
+export const STAGE_TKEY: Record<Stage, TKey> = {
+  idea: 'stageIdea',
+  world: 'stageWorld',
+  characters: 'stageChars',
+  outline: 'stageOutline',
+  scenes: 'stageScenes',
+};
 
 // {name}/{n} 占位替换;未给的占位原样保留。
 function interpolate(s: string, vars?: Vars): string {

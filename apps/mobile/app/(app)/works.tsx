@@ -4,11 +4,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { type Screenplay, deriveStage, STAGE_LABELS } from '@incipel/shared';
+import { type Screenplay, deriveStage } from '@incipel/shared';
 import { supabase } from '../../src/supabase';
 import { MenuButton } from '../../src/components/Drawer';
 import { useDrawer } from '../../src/drawer/DrawerProvider';
-import { useT } from '../../src/i18n';
+import { useT, STAGE_TKEY } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
 
 // sessions join documents 的查询结果:一会话 ⟷ 一作品(其剧本),严格 1:1(§16)。
@@ -97,7 +97,7 @@ export default function WorksScreen() {
       <Text style={[styles.intro, { color: palette.textSecondaryAlt }]}>{t('worksIntro')}</Text>
       {rows.map((r) => {
         const screenplay = r.documents?.state;
-        const stageLabel = screenplay ? STAGE_LABELS[deriveStage(screenplay)] : STAGE_LABELS.idea;
+        const stageLabel = t(STAGE_TKEY[screenplay ? deriveStage(screenplay) : 'idea']);
         const logline = screenplay?.meta.logline ?? '';
         return (
           <Pressable
