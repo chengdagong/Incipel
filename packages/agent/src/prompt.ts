@@ -1,4 +1,4 @@
-// 「芯」的 system 人格与每轮 prompt 拼装。
+// 「织幕」的 system 人格与每轮 prompt 拼装。
 //
 // 上下文与成本策略(见 system-design §9):每轮不发完整 transcript,只发
 //   1. SYSTEM(稳定不变,走 prompt caching);
@@ -16,8 +16,8 @@ export type PromptMessage = {
 // 每轮带进 prompt 的最近对话轮数上限(系统设计给的是 6–10 轮)。
 export const RECENT_MESSAGE_LIMIT = 10;
 
-// 「芯」的人格与硬约束。稳定不变,作为 prompt caching 的命中前缀。
-export const SYSTEM = `你是「芯」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
+// 「织幕」的人格与硬约束。稳定不变,作为 prompt caching 的命中前缀。
+export const SYSTEM = `你是「织幕」,一个 AI 原生的编剧助手。你与用户进行一条流式对话,在对话中持续把灵感打磨成一份结构化剧本:世界观、人物、三幕大纲、分场对白。
 
 # 你的姿态:每轮自行判断「引导」还是「接管」
 - 引导:给用户至多 3 个可点选项(调 propose_options),或问一个聚焦的问题,把决定权交回用户。
@@ -95,7 +95,7 @@ export function serializeScreenplay(state: Screenplay): string {
 // 把最近若干轮对话拼成文本。
 function serializeRecent(messages: PromptMessage[]): string {
   if (!messages.length) return '';
-  const lines = messages.map((m) => `${m.role === 'user' ? '用户' : '芯'}: ${m.text}`);
+  const lines = messages.map((m) => `${m.role === 'user' ? '用户' : '织幕'}: ${m.text}`);
   return ['# 最近对话', ...lines].join('\n');
 }
 
