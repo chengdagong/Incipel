@@ -10,7 +10,6 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Stage } from '@incipel/shared';
 
 // 可选语言(native name,各语言下显示一致)。顺序即下拉展示顺序。
 export const LANGS = [
@@ -87,12 +86,6 @@ const DICT = {
     openDocWork: "打开文档 →",
     draftTitle: "无题 · 草稿",
     untitled: "无题",
-    stagePrefix: "阶段 · ",
-    stageIdea: "灵感",
-    stageWorld: "世界观",
-    stageChars: "人物",
-    stageOutline: "大纲",
-    stageScenes: "分场 · 对白",
     docBtn: "文档",
     assistant: "助手",
     secWorld: "世界观 · 设定",
@@ -213,12 +206,6 @@ const DICT = {
     openDocWork: "Open document →",
     draftTitle: "Untitled · Draft",
     untitled: "Untitled",
-    stagePrefix: "Stage · ",
-    stageIdea: "Idea",
-    stageWorld: "World",
-    stageChars: "Characters",
-    stageOutline: "Outline",
-    stageScenes: "Scenes · Dialogue",
     docBtn: "Doc",
     assistant: "Assistant",
     secWorld: "World · Setting",
@@ -339,12 +326,6 @@ const DICT = {
     openDocWork: "ドキュメントを開く →",
     draftTitle: "無題 · 下書き",
     untitled: "無題",
-    stagePrefix: "ステージ · ",
-    stageIdea: "ひらめき",
-    stageWorld: "世界観",
-    stageChars: "登場人物",
-    stageOutline: "アウトライン",
-    stageScenes: "シーン · セリフ",
     docBtn: "原稿",
     assistant: "アシスタント",
     secWorld: "世界観 · 設定",
@@ -465,12 +446,6 @@ const DICT = {
     openDocWork: "開啟文件 →",
     draftTitle: "無題 · 草稿",
     untitled: "無題",
-    stagePrefix: "階段 · ",
-    stageIdea: "靈感",
-    stageWorld: "世界觀",
-    stageChars: "人物",
-    stageOutline: "大綱",
-    stageScenes: "分場 · 對白",
     docBtn: "文件",
     assistant: "助手",
     secWorld: "世界觀 · 設定",
@@ -533,16 +508,6 @@ const DICT = {
 
 export type TKey = keyof typeof DICT.zh;
 type Vars = Record<string, string | number>;
-
-// 阶段(deriveStage 派生)→ 可切换文案的 i18n key。chat 顶栏与作品列表共用,
-// 避免直接渲染 shared 的中文常量 STAGE_LABELS(切到非中文界面时会漏翻)。
-export const STAGE_TKEY: Record<Stage, TKey> = {
-  idea: 'stageIdea',
-  world: 'stageWorld',
-  characters: 'stageChars',
-  outline: 'stageOutline',
-  scenes: 'stageScenes',
-};
 
 // {name}/{n} 占位替换;未给的占位原样保留。
 function interpolate(s: string, vars?: Vars): string {
