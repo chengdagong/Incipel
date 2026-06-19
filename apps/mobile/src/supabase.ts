@@ -93,6 +93,16 @@ export async function signInWithApple(): Promise<Session> {
   return data.session;
 }
 
+// 登出:只清「本设备」的会话(scope: 'local')。设置页这个按钮是「在本机退出」,而 Supabase
+// signOut() 默认 scope 'global' 会撤销该用户在所有设备的会话,把别的设备也一并踢下线,与按钮语义
+// 不符(Codex P2)。成功后 onAuthStateChange 推来 null,(app) 门控自动把人送回登录页,调用方无需
+// 手动导航。DEV_NO_AUTH 下没有 Supabase 会话,直接返回。
+export async function signOut(): Promise<void> {
+  if (DEV_NO_AUTH) return;
+  const { error } = await supabase.auth.signOut({ scope: 'local' });
+  if (error) throw error;
+}
+
 // 取当前匿名 JWT,供 AG-UI 请求头携带(见 src/agui/client.ts)。
 export async function getAccessToken(): Promise<string | null> {
   if (DEV_NO_AUTH) return null;

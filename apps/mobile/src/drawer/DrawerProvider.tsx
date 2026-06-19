@@ -9,6 +9,8 @@ import { createContext, useCallback, useContext, useMemo, useState } from 'react
 import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { Screenplay } from '@incipel/shared';
+import { useAuth } from '../auth';
+import { useI18n } from '../i18n';
 import { supabase } from '../supabase';
 import { DrawerOverlay, type DrawerSession } from '../components/Drawer';
 
@@ -38,8 +40,18 @@ export function useDrawer(): DrawerApi {
 
 export function DrawerProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { session } = useAuth();
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [sessions, setSessions] = useState<DrawerSession[]>([]);
+
+  // 抽屉头像首字母:已登录(非匿名,Apple)取邮箱 /「Apple 用户」首字母;匿名 / 无会话留空,
+  // 交由 Drawer 兜底显示「你」(guestName)。与设置页账号区算法一致。
+  const user = session?.user ?? null;
+  const accountInitial =
+    user && !user.is_anonymous
+      ? (user.email || t('appleUser')).charAt(0).toUpperCase()
+      : undefined;
 
   const reload = useCallback(async () => {
     // RLS 已把结果限定在当前(匿名)用户;按更新时间倒序(「最近」)。
@@ -108,6 +120,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
         <DrawerOverlay
           open={isOpen}
           onClose={close}
+          accountInitial={accountInitial}
           starred={starred}
           recent={recent}
           sessionCount={sessions.length}
