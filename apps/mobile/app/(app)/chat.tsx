@@ -110,12 +110,12 @@ export default function ChatScreen() {
     setTimeout(() => composerRef.current?.focus(), 50);
   }
   const removeChip = (key: string) => setChips((prev) => prev.filter((c) => c.key !== key));
-  const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a, t));
-  const focusCharacter = (c: Character) => addChip(chipFromCharacter(c, t));
+  const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a));
+  const focusCharacter = (c: Character) => addChip(chipFromCharacter(c));
 
   // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用兜底话术),发出后清空 chip。
   function sendComposed(text: string) {
-    const msg = composeFocusMessage(text, chips, t);
+    const msg = composeFocusMessage(text, chips);
     if (!msg) return;
     setChips([]);
     void sendMessage(msg);
