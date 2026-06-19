@@ -75,9 +75,11 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
   // 收藏开关:乐观更新,失败回滚(system-design §10:直接 update sessions 行,RLS 保护)。
   const toggleStar = useCallback(async (id: string) => {
     let next = false;
+    let prevStarred = false; // 本次切换前该行的值,失败时据此精确还原。
     setSessions((prev) =>
       prev.map((s) => {
         if (s.id === id) {
+          prevStarred = s.starred;
           next = !s.starred;
           return { ...s, starred: next };
         }
@@ -87,12 +89,12 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from('sessions').update({ starred: next }).eq('id', id);
     if (error) {
       console.warn('[drawer] 收藏切换失败:', error.message);
-      // 失败后从库重拉、与权威态对齐,而不是本地翻转:连点同一条时,早发的请求若在晚发的
-      // 成功之后才失败,本地翻转会把那次已成功的切换撤销掉(竞态)。reload 直接以 DB 为准,
-      // 各种交叠情形都正确。
-      void reload();
+      // 只把这一行还原到本次切换前的值(prevStarred),不翻转当前态、也不整列 reload:
+      // 翻转当前态在连点交叠时会撤销另一次已成功的切换;reload 在自身也失败时会把整列清空。
+      // 用本次请求自己的「切换前值」精确还原,既不误伤交叠的成功切换,也不会清掉整列。
+      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, starred: prevStarred } : s)));
     }
-  }, [reload]);
+  }, []);
 
   const starred = useMemo(() => sessions.filter((s) => s.starred), [sessions]);
   const recent = useMemo(() => sessions.filter((s) => !s.starred), [sessions]);
