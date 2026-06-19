@@ -93,6 +93,14 @@ export async function signInWithApple(): Promise<Session> {
   return data.session;
 }
 
+// 登出:清掉本地会话(并撤销服务端 refresh token)。成功后 onAuthStateChange 推来 null,
+// (app) 门控自动把人送回登录页,调用方无需手动导航。DEV_NO_AUTH 下没有 Supabase 会话,直接返回。
+export async function signOut(): Promise<void> {
+  if (DEV_NO_AUTH) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
+
 // 取当前匿名 JWT,供 AG-UI 请求头携带(见 src/agui/client.ts)。
 export async function getAccessToken(): Promise<string | null> {
   if (DEV_NO_AUTH) return null;
