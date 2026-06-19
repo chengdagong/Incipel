@@ -62,7 +62,10 @@ export async function signInAnonymously(): Promise<Session> {
 //   校验该 identity token 确为本次登录所签,截获的旧 token 无法重放。
 // - 用户取消会抛出 code 'ERR_REQUEST_CANCELED',由调用方静默处理(system-design §11)。
 // - 后台未配置(Apple Developer / Supabase Apple provider)时,signInWithIdToken 返回 error 而非崩溃,
-//   app 照常运行、匿名入口仍可用。
+//   app 照常运行、匿名入口仍可用。后台配置见 docs/apple-sign-in-setup.md。
+// - 暂不保存用户姓名:Apple 只在首次登录返回 credential.fullName,且 identity token 不含姓名;
+//   v1 无展示用户名的需求,故请求了 FULL_NAME scope 但不持久化。日后要用,须在此捕获 fullName
+//   并经 supabase.auth.updateUser 写入,且只能赶在用户首次登录那一次。
 export async function signInWithApple(): Promise<Session> {
   const rawNonce = Crypto.randomUUID();
   const hashedNonce = await Crypto.digestStringAsync(
