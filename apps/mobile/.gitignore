@@ -4,3 +4,14 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# 原生工程由 prebuild 按 app.json 生成(CNG),不入库;构建前用 `expo prebuild` 重新生成。
+/ios
+/android
+
+# Expo / Metro 本地产物
+/.expo
+*.tsbuildinfo
+
+# Apple 登录联调时为绕开代理临时 npm pack 的 prebuild 模板
+.template-dl/
