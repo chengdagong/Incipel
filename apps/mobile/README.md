@@ -1,6 +1,6 @@
 # @incipel/mobile — 本地运行说明
 
-编剧助手「芯」的 React Native / Expo 客户端。整体设计见仓库根 [`docs/system-design.md`](../../docs/system-design.md)、术语见 [`CONTEXT.md`](../../CONTEXT.md)。
+编剧助手「织幕」的 React Native / Expo 客户端。整体设计见仓库根 [`docs/system-design.md`](../../docs/system-design.md)、术语见 [`CONTEXT.md`](../../CONTEXT.md)。
 
 ## 前置
 
@@ -16,7 +16,7 @@
 
 ```
 EXPO_PUBLIC_AGENT_URL=http://localhost:8787    # iOS 模拟器用 localhost;Android 模拟器用 10.0.2.2;真机用本机局域网 IP
-EXPO_PUBLIC_SUPABASE_URL=http://localhost:54321
+EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54521
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<本地 Supabase anon key>
 ```
 
@@ -43,7 +43,7 @@ STORE=memory        # 进程级内存 store,免 Supabase schema(重启即丢)
 DEV_NO_AUTH=1       # 跳过 Supabase JWT 校验,用固定 dev 用户
 ```
 
-因此客户端的 Supabase 匿名登录失败(如本地栈未开匿名登录)不影响对话——会被 `_layout` 的 `.catch` 吞掉。**这些 DEV 开关仅本地用,prod 绝不开。**
+客户端侧再在 `apps/mobile/.env` 设 `EXPO_PUBLIC_DEV_NO_AUTH=1`:登录页是入口(见 [ADR-0005](../../docs/adr/0005-auth-entry-in-v1.md)),不设它则没有 Supabase 会话、过不了登录门、到不了创作页。**这些 DEV 开关仅本地用,prod 绝不开。**
 
 ## 这套依赖在 RN/Expo 下踩过的坑(都已修进本包,改动时勿回退)
 

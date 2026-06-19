@@ -1,4 +1,4 @@
-# 「芯」(Incipel)本地开发用 Supabase 配置。
+# 「织幕」(Incipel)本地开发用 Supabase 配置。
 # 仅本地开发生效;远端项目的等价设置在 Dashboard 配置(见 README)。
 # project_id 用作本地容器命名前缀,不与任何远端项目挂钩。
 #

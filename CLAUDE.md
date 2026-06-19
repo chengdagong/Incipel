@@ -1,6 +1,6 @@
 # Incipel — 给 Claude 的项目须知
 
-AI 原生编剧助手「芯」。项目背景见 [README.md](README.md),领域术语见 [CONTEXT.md](CONTEXT.md),
+AI 原生编剧助手「织幕」。项目背景见 [README.md](README.md),领域术语见 [CONTEXT.md](CONTEXT.md),
 关键决策见 [docs/adr/](docs/adr/)。本文件只放与日常操作相关、容易踩坑的约定。
 
 ## 并行 worktree:跑模拟器 / 服务 / 自动化测试前必读
@@ -26,7 +26,7 @@ AI 原生编剧助手「芯」。项目背景见 [README.md](README.md),领域�
 
 3. **本地 Supabase 栈是共用的,当心数据互相污染**:
    - 别在其它 worktree 可能正在测试时跑 `supabase db reset` 或写库的测试——会冲掉对方的数据;改动 migration 也要顾及共用方。
-   - 只做 UI / agent 逻辑、不需要持久化时,在 `packages/agent/.env` 设 `STORE=memory`、`DEV_NO_AUTH=1`,完全不碰 Supabase。
+   - 只做 UI / agent 逻辑、不需要持久化时,在 `packages/agent/.env` 设 `STORE=memory`、`DEV_NO_AUTH=1`,**并在 `apps/mobile/.env` 设 `EXPO_PUBLIC_DEV_NO_AUTH=1`**,完全不碰 Supabase。客户端那个开关不可省:登录页是入口(ADR-0005),不设它则没有 Supabase 会话、过不了登录门(见 [ADR-0005](docs/adr/0005-auth-entry-in-v1.md))。
    - 真要隔离数据库,才考虑每 worktree 一套独立栈(重,取舍见 [docs/worktree-dev.md](docs/worktree-dev.md))。
 
 > 一句话:在多 worktree 的机器上,跑任何模拟或自动化测试前先想「端口 / 模拟器 / 数据库会不会和别人撞」,默认走 `pnpm dev:*` 脚本。

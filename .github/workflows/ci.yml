@@ -1,0 +1,38 @@
+# CI(见 docs/testing-strategy.md §6)。
+# 阶段 1/2:typecheck + Vitest,每个 PR 跑,秒级、无外部依赖。
+# 阶段 3:pgTAP,需本地 Supabase 栈(Docker),独立 job。
+# 阶段 4:smoke / verify-summary(真实模型)刻意不在 PR 跑——花钱、不确定、需 key;
+#         如需可另建 schedule/workflow_dispatch 的 job 并注入 OPENROUTER_API_KEY。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  typecheck-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+
+  db-pgtap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      # 启动本地栈(应用 supabase/migrations)后跑 supabase/tests 下的 pgTAP。
+      - run: supabase start
+      - run: supabase test db
+      - if: always()
+        run: supabase stop

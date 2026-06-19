@@ -4,8 +4,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { supabase } from '../src/supabase';
-import { defaultTheme } from '../src/theme';
+import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
+import { supabase } from '../../src/supabase';
+import { defaultTheme } from '../../src/theme';
 
 // sessions 行的子集(见 system-design §8 数据模型)。
 type SessionRow = {
@@ -77,7 +78,7 @@ export default function HistoryScreen() {
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
         <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>还没有会话</Text>
         <Text style={[styles.emptySub, { color: palette.textSecondary }]}>
-          回到欢迎页,给「织幕」一个灵感开始创作。
+          回到欢迎页,给{DEFAULT_ASSISTANT_NAME}一个灵感开始创作。
         </Text>
         <Pressable
           style={[styles.cta, { backgroundColor: defaultTheme.accent }]}

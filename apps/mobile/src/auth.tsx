@@ -1,5 +1,5 @@
 // 会话状态的单一来源:启动只读现有会话(getExistingSession),并订阅 supabase 的鉴权变化。
-// 路由据此集中门控(ADR-0004,见 app/_layout.tsx 的 effect):无会话 → 登录页,有会话 → 创作页;
+// 路由据此集中门控(ADR-0005,见 app/_layout.tsx 的 effect):无会话 → 登录页,有会话 → 创作页;
 // 登录页点 Apple / 先随便逛逛成功后,onAuthStateChange 推来新会话,门控自动把人放进去。
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
@@ -23,6 +23,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // DEV_NO_AUTH:不碰 Supabase——直接就绪、不读会话(门控在此模式下放行),避免 getSession()
+    // 在本地栈停掉时等待 auth 初始化 / 网络刷新而把人卡在加载屏(Codex P2)。
+    if (DEV_NO_AUTH) {
+      setReady(true);
+      return;
+    }
+
     let mounted = true;
 
     // 启动只读、不创建。Supabase 不可达时返回 null,落到登录页,不阻塞启动。
