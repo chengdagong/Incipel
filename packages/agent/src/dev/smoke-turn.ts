@@ -13,7 +13,6 @@ import { config as loadEnv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import {
-  deriveStage,
   EventType,
   OPTIONS_EVENT_NAME,
   type JsonPatchOp,
@@ -169,10 +168,6 @@ async function main(): Promise<void> {
     // 该实体最终都应真实存在(apply.ts 已对不存在的 id 抛错;这里再核一遍最终态自洽)。
     const idLegit = checkDeltaIdsLegit(allDeltas, finalState);
     pass = ok('update/remove 命中的实体 id 合法(下标在最终剧本范围内)', idLegit) && pass;
-
-    // 派生阶段应已推进(至少到 world / characters / outline / scenes 之一)。
-    // eslint-disable-next-line no-console
-    console.log(`  (派生阶段: ${deriveStage(finalState)})`);
   }
 
   if (!pass) {

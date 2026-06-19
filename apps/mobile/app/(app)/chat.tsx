@@ -1,6 +1,6 @@
 // 对话屏。用 useScreenplayAgent(threadId) 消费 AG-UI 共享状态(Screenplay)与文本流:
 // 渲染消息、流式打字气泡、内联卡片(本轮剧本相对上一版的新增实体)、可点选项、输入栏;
-// 右上「文档」开关 DocPanel。阶段由 deriveStage 派生,再经 STAGE_TKEY 映射到可切换文案显示(system-design §5)。
+// 右上「文档」开关 DocPanel。
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -11,7 +11,6 @@ import {
   type CharacterAttr,
   type Message,
   type Screenplay,
-  deriveStage,
   emptyScreenplay,
 } from '@incipel/shared';
 import { useScreenplayAgent, newThreadId } from '../../src/agui/client';
@@ -22,10 +21,8 @@ import { PortraitProvider } from '../../src/portrait';
 import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
 import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
-import { useT, STAGE_TKEY } from '../../src/i18n';
+import { useT } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
-
-// 阶段 → i18n key 的映射统一放在 src/i18n.tsx(STAGE_TKEY),与作品列表共用。
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
 function messageText(m: Message): string {
@@ -60,7 +57,6 @@ export default function ChatScreen() {
 
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
-  const t = useT();
 
   const { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry } =
     useScreenplayAgent(threadId);
@@ -72,7 +68,6 @@ export default function ChatScreen() {
   const [chips, setChips] = useState<FocusChip[]>([]);
   const composerRef = useRef<ComposerHandle>(null);
 
-  const stage = useMemo(() => deriveStage(screenplay), [screenplay]);
   const title = screenplay.meta.title?.trim() || '无题';
 
   // 首轮:挂载时把欢迎页带来的 idea 作为第一条用户消息发出(只发一次)。
@@ -134,7 +129,6 @@ export default function ChatScreen() {
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
       <Header
         title={title}
-        stage={t(STAGE_TKEY[stage])}
         docOpen={docOpen}
         onBack={() => router.back()}
         onToggleDoc={() => setDocOpen((v) => !v)}
@@ -211,13 +205,11 @@ export default function ChatScreen() {
 
 function Header({
   title,
-  stage,
   docOpen,
   onBack,
   onToggleDoc,
 }: {
   title: string;
-  stage: string;
   docOpen: boolean;
   onBack: () => void;
   onToggleDoc: () => void;
@@ -235,10 +227,6 @@ function Header({
         <View style={styles.headerCenter} pointerEvents="none">
           <Text style={[styles.headerTitle, { color: palette.textPrimary }]} numberOfLines={1}>
             {title}
-          </Text>
-          <Text style={[styles.headerSub, { color: palette.textSecondary }]}>
-            {t('stagePrefix')}
-            {stage}
           </Text>
         </View>
 
@@ -412,7 +400,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { fontSize: 18, fontWeight: '600', fontFamily: defaultTheme.fonts.serifTitle },
-  headerSub: { fontSize: 12, marginTop: 2 },
   docChip: {
     flexDirection: 'row',
     alignItems: 'center',

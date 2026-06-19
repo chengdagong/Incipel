@@ -11,7 +11,7 @@
 
 | 层 | 包 | 性质 |
 |---|---|---|
-| 契约 | `@incipel/shared` | 纯函数:类型、`buildToolSchemas`、`idSetsOf`、`deriveStage`、`serialize`、`sse`。无 I/O,确定性强 |
+| 契约 | `@incipel/shared` | 纯函数:类型、`buildToolSchemas`、`idSetsOf`、`serialize`、`sse`。无 I/O,确定性强 |
 | 计算 | `@incipel/agent` | Hono 端点、AG-UI 一轮编排、模型抽象层、JWT 校验、Supabase 落库 |
 | 客户端 | `@incipel/mobile` | Expo RN + `@ag-ui/client`,事件到 React state 的映射 |
 | 数据 | `supabase/migrations/0001_init.sql` | schema + RLS + `save_turn` RPC + 表/函数授权 |
@@ -47,7 +47,6 @@
 
 - `buildToolSchemas`:某类实体为空时不暴露对应 `update_*`/`remove_*`;非空时其 `id` 参数是「恰好当前这组 id」的 `z.enum`——传入不存在的 id 必须 parse 失败,传入存在的 id 成功。
 - `idSetsOf`:从剧本正确抽出四类 id 集合。
-- `deriveStage`:优先级 `scenes > outline > characters > world > idea`,逐档构造剧本断言。
 - `emptyScreenplay`、`optionsEvent`(`CUSTOM`/`name:options` 形状)、`sse`(`data: {json}\n\n` wire 格式)各一例钉死。
 
 ### 3.2 `apply.ts` — 系统的心脏(单元,目标 ~100%)

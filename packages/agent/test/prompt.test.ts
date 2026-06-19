@@ -41,11 +41,10 @@ describe('serializeScreenplay', () => {
     expect(text).toContain('[scene_a]');
   });
 
-  it('空剧本:标题/logline 显示「(未定)」,阶段为灵感', () => {
+  it('空剧本:标题/logline 显示「(未定)」', () => {
     const text = serializeScreenplay(emptyScreenplay());
     expect(text).toContain('标题: (未定)');
     expect(text).toContain('logline: (未定)');
-    expect(text).toContain('阶段: 灵感');
   });
 });
 

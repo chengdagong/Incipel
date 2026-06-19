@@ -32,7 +32,7 @@ export default function ProtectedLayout() {
       >
         {/* 欢迎屏自带页内顶栏(左上汉堡唤抽屉),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
+        {/* 对话屏自带定制顶栏(返回 + 标题 + 文档),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="history" options={{ title: '历史会话' }} />
         <Stack.Screen name="works" options={{ title: '作品' }} />

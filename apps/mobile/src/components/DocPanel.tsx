@@ -1,6 +1,5 @@
 // 剧本文档面板:从底部滑出的浮层(对齐原型「编剧助手 原型.dc.html」DOCUMENT PANEL,见 issue #11)。
 // 累积的剧本全文随对话实时更新;世界观/人物/大纲/分场分区,人物区可左右滑动,空分区显示虚线占位。
-// 阶段(stage)由 @incipel/shared 的 deriveStage 派生(system-design §5)。
 //
 // 与原型差异:导出(Fountain/PDF)按 system-design §15 移出 v1,略去;人物卡的肖像(#14)与
 // 属性级聚焦(#12)留作后续,本轮先做面板骨架 + 人物名/小传 + 左右滑动。

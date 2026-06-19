@@ -4,11 +4,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { type Screenplay, deriveStage } from '@incipel/shared';
+import { type Screenplay } from '@incipel/shared';
 import { supabase } from '../../src/supabase';
-import { MenuButton } from '../../src/components/Drawer';
+import { MenuButton, timeAgo } from '../../src/components/Drawer';
 import { useDrawer } from '../../src/drawer/DrawerProvider';
-import { useT, STAGE_TKEY } from '../../src/i18n';
+import { useT } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
 
 // sessions join documents 的查询结果:一会话 ⟷ 一作品(其剧本),严格 1:1(§16)。
@@ -97,7 +97,6 @@ export default function WorksScreen() {
       <Text style={[styles.intro, { color: palette.textSecondaryAlt }]}>{t('worksIntro')}</Text>
       {rows.map((r) => {
         const screenplay = r.documents?.state;
-        const stageLabel = t(STAGE_TKEY[screenplay ? deriveStage(screenplay) : 'idea']);
         const logline = screenplay?.meta.logline ?? '';
         return (
           <Pressable
@@ -115,7 +114,7 @@ export default function WorksScreen() {
               </Text>
             )}
             <View style={styles.cardFooter}>
-              <Text style={[styles.stage, { color: palette.textSecondaryAlt }]}>{stageLabel}</Text>
+              <Text style={[styles.meta, { color: palette.textSecondaryAlt }]}>{timeAgo(r.updated_at, t)}</Text>
               <Text style={[styles.openWork, { color: defaultTheme.accent }]}>{t('openDocWork')}</Text>
             </View>
           </Pressable>
@@ -137,6 +136,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
   logline: { fontSize: 13, lineHeight: 21 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
-  stage: { fontSize: 11.5 },
+  meta: { fontSize: 11.5 },
   openWork: { fontSize: 11.5, fontWeight: '600' },
 });

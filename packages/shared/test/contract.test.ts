@@ -1,11 +1,10 @@
-// @incipel/shared 契约单元测试(testing-strategy §3.1):id 枚举门控、阶段派生、空剧本、事件/wire 格式。
+// @incipel/shared 契约单元测试(testing-strategy §3.1):id 枚举门控、空剧本、事件/wire 格式。
 // 纯函数、确定性、无 I/O。
 
 import { describe, it, expect } from 'vitest';
 import {
   buildToolSchemas,
   idSetsOf,
-  deriveStage,
   emptyScreenplay,
   normalizeScreenplay,
   optionsEvent,
@@ -120,36 +119,6 @@ describe('normalizeScreenplay — 归一旧结构剧本(载入边界)', () => {
       characters: [{ id: 'char_a', name: '阿七', role: '少年', attrs: [{ id: 'cattr_a', label: '外貌', value: '高瘦' }] }],
     };
     expect(normalizeScreenplay(s).characters[0]).toEqual(s.characters[0]);
-  });
-});
-
-describe('deriveStage — 优先级 scenes > outline > characters > world > idea', () => {
-  it('空剧本 → idea', () => {
-    expect(deriveStage(emptyScreenplay())).toBe('idea');
-  });
-  it('仅 world → world', () => {
-    expect(deriveStage({ ...emptyScreenplay(), world: [{ id: 'w', title: '', text: '' }] })).toBe('world');
-  });
-  it('characters 压过 world', () => {
-    expect(
-      deriveStage({
-        ...emptyScreenplay(),
-        world: [{ id: 'w', title: '', text: '' }],
-        characters: [{ id: 'c', name: '', role: '', attrs: [] }],
-      }),
-    ).toBe('characters');
-  });
-  it('仅 outline → outline', () => {
-    expect(deriveStage({ ...emptyScreenplay(), outline: [{ id: 'a', act: '', beat: '' }] })).toBe('outline');
-  });
-  it('scenes 压过 outline', () => {
-    expect(
-      deriveStage({
-        ...emptyScreenplay(),
-        outline: [{ id: 'a', act: '', beat: '' }],
-        scenes: [{ id: 's', slug: '', content: '' }],
-      }),
-    ).toBe('scenes');
   });
 });
 

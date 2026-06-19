@@ -6,7 +6,7 @@
 //   2. 当前剧本序列化文本(含各实体 id,作 cached prefix,变动小);
 //   3. 最近 6–10 轮对话 + 本轮新消息。
 
-import { deriveStage, STAGE_LABELS, type Screenplay } from '@incipel/shared';
+import { type Screenplay } from '@incipel/shared';
 
 // 一条历史消息(用于拼接最近若干轮)。
 export type PromptMessage = {
@@ -89,9 +89,7 @@ export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): str
 // 用稳定的纯文本结构而非 JSON——既便于模型阅读,也避免诱导模型模仿输出 JSON。
 export function serializeScreenplay(state: Screenplay): string {
   const lines: string[] = [];
-  const stage = deriveStage(state);
   lines.push(`# 当前剧本(只读快照;改动请调用工具)`);
-  lines.push(`阶段: ${STAGE_LABELS[stage]}`);
   lines.push(`标题: ${state.meta.title || '(未定)'}`);
   lines.push(`logline: ${state.meta.logline || '(未定)'}`);
 
