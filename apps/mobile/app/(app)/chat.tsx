@@ -45,20 +45,13 @@ function diffCard(prev: Screenplay, next: Screenplay): InlineCardData {
     const had = new Set(before.map((x) => x.id));
     return after.filter((x) => !had.has(x.id));
   };
-  // 人物按属性级 diff:全新人物整张显示;已存在人物若本轮新增了属性,只挑出新属性单独显示
-  // (否则给已存在人物加属性时,内联卡片不反映这次改动,用户得去文档面板才看得到)。
-  const characters = next.characters
-    .map((c): Character | null => {
-      const before = prev.characters.find((p) => p.id === c.id);
-      if (!before) return c; // 全新人物
-      const hadAttr = new Set(before.attrs.map((a) => a.id));
-      const freshAttrs = c.attrs.filter((a) => !hadAttr.has(a.id));
-      return freshAttrs.length ? { ...c, attrs: freshAttrs } : null;
-    })
-    .filter((c): c is Character => c !== null);
   return {
     world: newOnly(prev.world, next.world),
-    characters,
+    // 人物只取本轮全新的人物(按顶层 id)。给已存在人物新增属性时,内联卡片不单列那条属性
+    // ——刻意为之:卡片传给 PortraitThumb 的是完整 Character,而 buildPortraitPrompt 依赖全量
+    // attrs;若在这里把 attrs 截成「只剩新增」,从卡片开肖像就会丢掉既有的年龄/外貌/性格等字段。
+    // 已存在人物的属性变更在文档面板(随剧本实时更新)可见。
+    characters: newOnly(prev.characters, next.characters),
     outline: newOnly(prev.outline, next.outline),
     scenes: newOnly(prev.scenes, next.scenes),
   };

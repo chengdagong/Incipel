@@ -87,10 +87,12 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from('sessions').update({ starred: next }).eq('id', id);
     if (error) {
       console.warn('[drawer] 收藏切换失败:', error.message);
-      // 回滚按当前态翻转(而非用闭包里的 next),避免连点同一条时用到过期值。
-      setSessions((prev) => prev.map((s) => (s.id === id ? { ...s, starred: !s.starred } : s)));
+      // 失败后从库重拉、与权威态对齐,而不是本地翻转:连点同一条时,早发的请求若在晚发的
+      // 成功之后才失败,本地翻转会把那次已成功的切换撤销掉(竞态)。reload 直接以 DB 为准,
+      // 各种交叠情形都正确。
+      void reload();
     }
-  }, []);
+  }, [reload]);
 
   const starred = useMemo(() => sessions.filter((s) => s.starred), [sessions]);
   const recent = useMemo(() => sessions.filter((s) => !s.starred), [sessions]);
