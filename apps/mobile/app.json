@@ -2,6 +2,7 @@
   "expo": {
     "name": "芯 · 编剧助手",
     "slug": "incipel",
+    "owner": "chengdagong",
     "scheme": "incipel",
     "version": "0.0.0",
     "orientation": "portrait",
@@ -9,7 +10,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.incipel.app",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.incipel.app"
@@ -25,6 +29,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e7e542e0-c393-48c8-b004-aee243eba451"
+      }
     }
   }
 }
