@@ -50,7 +50,7 @@ describe('serializeScreenplay', () => {
 });
 
 describe('buildPrompt', () => {
-  it('system 为 buildSystem() 默认输出;prompt 含剧本快照、最近对话与本轮消息', () => {
+  it('system 为 buildSystem() 输出(默认助手名);prompt 含剧本快照、最近对话与本轮消息', () => {
     const recent: PromptMessage[] = [
       { role: 'user', text: '想写末日废土' },
       { role: 'assistant', text: '好,先定个 logline' },

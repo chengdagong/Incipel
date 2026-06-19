@@ -8,8 +8,8 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LANGS, useI18n } from '../src/i18n';
-import { defaultTheme } from '../src/theme';
+import { LANGS, useI18n } from '../../src/i18n';
+import { defaultTheme } from '../../src/theme';
 
 // 原型 SETTINGS 专用配色(literal,逐项对原型取色)。
 const S = {

@@ -4,37 +4,28 @@
 // 平台差异封装在 ../src/polyfills 里(原生装 polyfill;web 走 polyfills.web.ts 空实现)。
 import '../src/polyfills';
 
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { ensureSession } from '../src/supabase';
+import { AuthProvider, useAuth } from '../src/auth';
 import { useAppFonts } from '../src/useAppFonts';
-import { defaultTheme, fonts } from '../src/theme';
-import { DrawerProvider } from '../src/drawer/DrawerProvider';
+import { defaultTheme } from '../src/theme';
 import { I18nProvider } from '../src/i18n';
 
 export default function RootLayout() {
-  const [sessionReady, setSessionReady] = useState(false);
+  // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0005)。
+  return (
+    <AuthProvider>
+      <RootNavigator />
+    </AuthProvider>
+  );
+}
+
+function RootNavigator() {
+  const { ready: authReady } = useAuth();
   // 标题衬线体(Noto Serif SC):原生打包一个字重,web 走 Google Fonts CDN(见 src/useAppFonts*)。
   const fontsLoaded = useAppFonts();
-  const ready = sessionReady && fontsLoaded;
-
-  // 初始化 Supabase 匿名登录(system-design §2/§16)。
-  useEffect(() => {
-    let mounted = true;
-    ensureSession()
-      .catch(() => {
-        // Supabase 未配置/不可达时,匿名登录失败不应阻塞 app
-        //(本地试用走 agent 的 DEV_NO_AUTH,不依赖 Supabase)。
-      })
-      .finally(() => {
-        if (mounted) setSessionReady(true);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const ready = authReady && fontsLoaded;
 
   // I18nProvider 包住一切(含抽屉),任意屏用 useT() 取界面文案(见 issue #13);
   // 它只切界面文案,不影响 AI 回复语言(见 ADR-0004 / i18n.tsx 的 langDesc)。
@@ -51,29 +42,22 @@ function Preparing() {
 }
 
 function AppShell() {
-  // DrawerProvider 把侧边抽屉浮层挂在整个 Stack 之上,任意屏可 useDrawer().open()(system-design §2.1)。
-  // history / works 的标题由各屏自设(用 t(),随语言切换),settings 自带顶栏。
+  // 根 Stack 只挂登录页与受保护路由组 (app);会话门控与侧边抽屉(DrawerProvider)都在 (app)/_layout 里。
   return (
-    <DrawerProvider>
+    <>
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: defaultTheme.palette.pageBg },
-          headerTintColor: defaultTheme.palette.textPrimary,
-          headerTitleAlign: 'center',
-          headerShadowVisible: false,
-          headerTitleStyle: { fontFamily: fonts.serifTitle, fontWeight: '600' },
+          headerShown: false,
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
-        {/* 欢迎屏自带页内顶栏(左上汉堡唤抽屉),隐藏原生 Stack 顶栏。 */}
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        {/* 对话屏自带定制顶栏(返回 + 标题/阶段 + 文档),隐藏原生 Stack 顶栏。 */}
-        <Stack.Screen name="chat" options={{ headerShown: false }} />
-        {/* 设置屏自带顶栏(返回 + 标题)。 */}
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        {/* 登录页(组外,无会话可达);自带品牌区与全屏布局。 */}
+        <Stack.Screen name="login" />
+        {/* 受保护路由组:其 layout 做会话门控 + 挂侧边抽屉,内部各屏自带顶栏。 */}
+        <Stack.Screen name="(app)" />
       </Stack>
-    </DrawerProvider>
+    </>
   );
 }
 

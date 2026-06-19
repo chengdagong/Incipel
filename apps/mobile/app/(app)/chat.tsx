@@ -15,15 +15,16 @@ import {
   deriveStage,
   emptyScreenplay,
 } from '@incipel/shared';
-import { useScreenplayAgent, newThreadId } from '../src/agui/client';
-import { Composer, type ComposerHandle } from '../src/components/Composer';
-import { DocSheet } from '../src/components/DocPanel';
-import { PortraitSheet } from '../src/components/PortraitSheet';
-import { PortraitProvider } from '../src/portrait';
-import { InlineCard, type InlineCardData } from '../src/components/InlineCard';
-import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../src/focus';
-import { DEFAULT_ASSISTANT_NAME } from '../src/config';
-import { useT, type TKey } from '../src/i18n';
+import { useScreenplayAgent, newThreadId } from '../../src/agui/client';
+import { Composer, type ComposerHandle } from '../../src/components/Composer';
+import { DocSheet } from '../../src/components/DocPanel';
+import { PortraitSheet } from '../../src/components/PortraitSheet';
+import { PortraitProvider } from '../../src/portrait';
+import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
+import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../../src/focus';
+import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
+import { useT, type TKey } from '../../src/i18n';
+import { defaultTheme } from '../../src/theme';
 
 // 阶段 → i18n key(STAGE_LABELS 是 shared 里的中文常量,这里映射到可切换的文案)。
 const STAGE_TKEY: Record<Stage, TKey> = {
@@ -33,7 +34,6 @@ const STAGE_TKEY: Record<Stage, TKey> = {
   outline: 'stageOutline',
   scenes: 'stageScenes',
 };
-import { defaultTheme } from '../src/theme';
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
 function messageText(m: Message): string {

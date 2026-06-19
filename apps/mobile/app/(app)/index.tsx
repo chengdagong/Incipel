@@ -14,11 +14,11 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { authHeaders, loglineEndpoint, newThreadId } from '../src/agui/client';
-import { MenuButton } from '../src/components/Drawer';
-import { useDrawer } from '../src/drawer/DrawerProvider';
-import { useT } from '../src/i18n';
-import { defaultTheme } from '../src/theme';
+import { authHeaders, loglineEndpoint, newThreadId } from '../../src/agui/client';
+import { MenuButton } from '../../src/components/Drawer';
+import { useDrawer } from '../../src/drawer/DrawerProvider';
+import { useT } from '../../src/i18n';
+import { defaultTheme } from '../../src/theme';
 
 export default function WelcomeScreen() {
   const router = useRouter();
