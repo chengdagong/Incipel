@@ -163,8 +163,10 @@ flows/
 - `/works` 作品页已注册路由(`app/(app)/_layout.tsx`),但 v1 里没有任何界面入口导航到它
   (抽屉只通到 `/history` 与 `/settings`)。故作品页未经 UI 流程覆盖;持久化列表用历史页
   (`history-resume`)代表。日后给作品页接上入口时再补一条流程。
-- 真实模型路径(`anthropic` / `openrouter`)不在 E2E 内,靠 agent 的 `pnpm --filter @incipel/agent smoke`
-  手动核(需真实 key)。
+- 真实模型路径(`anthropic` / `openrouter`)不在 E2E 内,另由两条线覆盖:agent 的
+  `pnpm --filter @incipel/agent smoke`(真实 provider + key,多题材逐条断言结构不变量,发版前 / 夜间手动跑);
+  以及录真实一轮当 fixture 经 stub 确定性回放(`packages/agent/test/fixtures/real-turns.ts` +
+  `fixture-replay.test.ts`),压 apply / save 这条客户端依赖的数据契约在「更乱的产出」前不崩、不丢内容。
 - 本地 Supabase 栈多 worktree 共用:`supabase` 层会写测试会话(RLS 限定在该匿名用户),
   别与其它 worktree 同时跑写数据库的测试;本套件不跑 `supabase db reset`。
 
