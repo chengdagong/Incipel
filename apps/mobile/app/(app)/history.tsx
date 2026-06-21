@@ -2,7 +2,7 @@
 // 列表直接用 supabase-js 查 sessions(RLS 按 user_id 隔离,见 §8)。
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useT } from '../../src/i18n';
 import { supabase } from '../../src/supabase';
@@ -67,7 +67,18 @@ export default function HistoryScreen() {
   }
 
   // 删除是破坏性且不可恢复的:先二次确认(与设置页登出一致),用户确认后再删。
+  // 注意:react-native-web 的 Alert.alert 是空实现——既不弹窗也不回调 onPress,
+  // 在 Expo Web 上会让「删除」点了毫无反应。故 Web 走浏览器原生 confirm,原生端走 Alert。
+  // 用 globalThis 取 confirm(不依赖 DOM lib 类型);取不到时按「未确认」处理,绝不静默删除。
   function confirmRemove(id: string) {
+    if (Platform.OS === 'web') {
+      const g = globalThis as unknown as { confirm?: (message: string) => boolean };
+      const ok = typeof g.confirm === 'function'
+        ? g.confirm(`${t('deleteConfirm')}\n\n${t('deleteConfirmSub')}`)
+        : false;
+      if (ok) void remove(id);
+      return;
+    }
     Alert.alert(t('deleteConfirm'), t('deleteConfirmSub'), [
       { text: t('cancel'), style: 'cancel' },
       { text: t('deleteWork'), style: 'destructive', onPress: () => void remove(id) },
