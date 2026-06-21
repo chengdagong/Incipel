@@ -1,0 +1,21 @@
+# [supabase] 冒烟:登录页 →「先随便逛逛」匿名登录 → 欢迎页渲染。
+# 验证会话门控与登录后主界面(与 Apple 登录共用同一套 signInAnonymously→Supabase 会话→门控)。
+#
+# 这是原 .maestro/anon-login.yaml 的修正版:原末步等 "给我一个灵感"——该串在全 app 不存在
+# (欢迎页占位符是 ideaPlaceholder「比如:一个总在深夜接到陌生来电的钟点工……」),会一直等到超时。
+# 改为等真实锚点「开始创作」(startBtn,恒在欢迎页)。
+#
+# 前置:本地 Supabase 栈已起、apps/mobile/.env 填好真实 anon key、未设 EXPO_PUBLIC_DEV_NO_AUTH。
+appId: com.incipel.app
+tags:
+  - supabase
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "先随便逛逛"
+    timeout: 60000
+- tapOn: "先随便逛逛"
+- extendedWaitUntil:
+    visible: ".*开始创作.*"
+    timeout: 30000

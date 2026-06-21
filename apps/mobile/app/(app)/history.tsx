@@ -121,7 +121,7 @@ export default function HistoryScreen() {
           key={r.id}
           style={[styles.item, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
         >
-          <Pressable style={styles.itemMain} onPress={() => resume(r.id)}>
+          <Pressable style={styles.itemMain} onPress={() => resume(r.id)} testID={`history-row-${r.id}`}>
             <Text style={[styles.itemTitle, { color: palette.textPrimary }]} numberOfLines={1}>
               {r.starred ? '★ ' : ''}
               {r.title || t('untitled')}
@@ -136,6 +136,7 @@ export default function HistoryScreen() {
             accessibilityLabel={t('deleteWork')}
             hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
             style={styles.deleteBtn}
+            testID={`history-delete-${r.id}`}
           >
             <Text style={[styles.delete, { color: palette.textSecondary }]}>{t('deleteWork')}</Text>
           </Pressable>

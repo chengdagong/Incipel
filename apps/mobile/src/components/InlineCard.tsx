@@ -128,7 +128,13 @@ function CharacterBlock({
             </View>
           )}
           {!!onFocusCharacter && (
-            <Pressable onPress={() => onFocusCharacter(c)} hitSlop={6} accessibilityRole="button">
+            <Pressable
+              onPress={() => onFocusCharacter(c)}
+              hitSlop={6}
+              accessibilityRole="button"
+              // E2E:同屏多个人物时「聊聊 TA」文案相同,按人物 id 区分。
+              testID={`char-chat-${c.id}`}
+            >
               <Text style={[styles.charAction, { color: theme.accent }]}>{t('chatAboutChar')}</Text>
             </Pressable>
           )}

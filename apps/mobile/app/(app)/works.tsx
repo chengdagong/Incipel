@@ -103,6 +103,7 @@ export default function WorksScreen() {
             key={r.id}
             style={[styles.card, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
             onPress={() => open(r.id)}
+            testID={`work-card-${r.id}`}
           >
             <Text style={[styles.title, { color: palette.textPrimary }]} numberOfLines={1}>
               {r.starred ? '★ ' : ''}

@@ -56,6 +56,8 @@ export function PortraitThumb({ character }: { character: Character }) {
       style={({ pressed }) => [styles.box, styles.emptyBox, pressed && { borderColor: accent }]}
       onPress={open}
       accessibilityRole="button"
+      // E2E:同屏多个人物时「生成肖像」文案相同,按人物 id 区分(见 .maestro 套件)。
+      testID={`char-portrait-gen-${character.id}`}
     >
       <Text style={[styles.plus, { color: accent }]}>＋</Text>
       <Text style={[styles.genLabel, { color: accent }]}>{t('genPortrait')}</Text>
