@@ -85,6 +85,10 @@ tool-call 参数先过当轮 Zod schema 校验再产出,形状不偏离真实路
 这一轮内容写死,故 Maestro 用可见文本做断言锚点:助手名 `主管编剧`、人物 `林夏`、
 卡片底部 `已存入剧本草稿` / `打开文档全文 →`、引导项 `先挖她的过去`。
 
+**出错路径**:灵感(本轮用户消息)里带暗号 `STUB_ERROR_TOKEN`(`__STUB_ERROR__`)时,stub 抛错而非
+回放成功一轮——经 `runTurnCore` 重试一次仍失败 → `RUN_ERROR` → 客户端显示「出错了 + 重试本轮」。
+`error-retry` flow 据此覆盖出错与重试入口;不带暗号时一切照常。
+
 ## 流程一览
 
 ```
@@ -99,6 +103,7 @@ flows/
   creative-turn.yaml       [stub-agent]    创作主路径:一轮的流式回复 + 人物卡 + 文档沉淀 + 选项
   portrait-generate.yaml   [stub-agent]    人物卡 → 生成肖像 → 选风格 → 生成 → 绘制中 → 完成
   drawer-nav.yaml          [stub-agent]    抽屉唤出 / 导航 / 遮罩关闭(空列表)
+  error-retry.yaml         [stub-agent]    暗号触发 stub 抛错 → 出错了 + 重试本轮 → 重试再跑仍报错
   smoke-anon-login.yaml    [supabase] 匿名登录冒烟(原 anon-login.yaml 的修正版)
   star-session.yaml        [supabase] 一轮落进数据库 → 抽屉星标 → 变实心
   history-resume.yaml      [supabase] 一轮落进数据库 → 历史页出现 → 续写回对话屏
@@ -115,6 +120,7 @@ flows/
 | testID | 控件 | 组件 |
 |---|---|---|
 | `welcome-start` | 开始创作 | `app/(app)/index.tsx` |
+| `welcome-idea` | 灵感输入框(error-retry 打暗号用) | `app/(app)/index.tsx` |
 | `welcome-chip-<i>` | 建议方向 chip(0/1/2) | `app/(app)/index.tsx` |
 | `welcome-dice` | 🎲 随机灵感 | `app/(app)/index.tsx` |
 | `menu-button` | 汉堡菜单(唤出抽屉) | `src/components/Drawer.tsx` |

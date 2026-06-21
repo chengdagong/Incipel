@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { EventType } from '@incipel/shared';
 import { runTurnCore } from '../src/run';
 import { MemoryStore } from '../src/dev/memory-store';
-import { createStubProvider } from '../src/model/stub';
+import { createStubProvider, STUB_ERROR_TOKEN } from '../src/model/stub';
 
 type Ev = Record<string, any>;
 async function collect(gen: AsyncGenerator<unknown>): Promise<Ev[]> {
@@ -57,5 +57,25 @@ describe('createStubProvider — 一轮确定性创作', () => {
   it('completeLogline 返回固定非空 logline(欢迎页骰子离线可用)', async () => {
     const logline = await createStubProvider().completeLogline({ system: 's', prompt: 'p' });
     expect(logline.trim().length).toBeGreaterThan(0);
+  });
+
+  it('灵感里带暗号 → 抛错 → 经重试后发 RUN_ERROR(供 error-retry flow)', async () => {
+    const store = new MemoryStore();
+    await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
+
+    const events = await collect(
+      runTurnCore(input({ userMessage: `写个故事 ${STUB_ERROR_TOKEN}` }), {
+        provider: createStubProvider(),
+        store,
+      }),
+    );
+    const types = events.map((e) => e.type);
+
+    // 暗号轮:落到 RUN_ERROR(code=MODEL_FAILED),不发 RUN_FINISHED,也不落库(无内容可编造)。
+    expect(types).toContain(EventType.RUN_ERROR);
+    expect(types).not.toContain(EventType.RUN_FINISHED);
+    const errEv = events.find((e) => e.type === EventType.RUN_ERROR)!;
+    expect(errEv.code).toBe('MODEL_FAILED');
+    expect(store.lastSaved).toBeNull();
   });
 });

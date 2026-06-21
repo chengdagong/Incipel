@@ -102,6 +102,7 @@ export default function WelcomeScreen() {
           onBlur={() => setIdeaFocused(false)}
           placeholder={t('ideaPlaceholder')}
           placeholderTextColor={palette.placeholder}
+          testID="welcome-idea"
           multiline
         />
         <Pressable

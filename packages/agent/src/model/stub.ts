@@ -43,9 +43,18 @@ const SCRIPTED_TOOLS: ReadonlyArray<readonly [string, string, unknown]> = [
   ['stub-options', 'propose_options', { options: ['先挖她的过去', '让电话那头先开口'] }],
 ];
 
+// E2E 出错路径的暗号:灵感(本轮用户消息)里带上它,stub 即抛错(否则照常回放成功的一轮)。
+// 供 error-retry flow 触发「出错 → 重试本轮」:抛错走 runTurnCore 的重试 → RUN_ERROR → 客户端
+// 显示「出错了 + 重试」。prod 永不设 MODEL_PROVIDER=stub,故这条只在本地 / E2E 生效。
+export const STUB_ERROR_TOKEN = '__STUB_ERROR__';
+
 export function createStubProvider(): ModelProvider {
   return {
     async *streamTurn(input: StreamTurnInput): AsyncIterable<StreamChunk> {
+      // 见暗号即抛错(buildPrompt 把本轮用户消息原样拼进 prompt,故在此即可识别)。
+      if (input.prompt.includes(STUB_ERROR_TOKEN)) {
+        throw new Error('stub: 命中错误暗号,故意抛错(E2E error-retry 用)');
+      }
       for (const delta of SCRIPTED_TEXT) {
         yield { type: 'text', delta };
       }
