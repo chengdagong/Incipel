@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # 在「本 worktree 专属」的 iOS 模拟器 + 端口上跑 Maestro E2E。
 #
-#   bash scripts/e2e-ios.sh                # 默认跑 offline,fake 两层(免 Supabase)
-#   bash scripts/e2e-ios.sh offline        # 只跑无后端的纯 UI 流
-#   bash scripts/e2e-ios.sh fake           # 只跑 fake agent 创作主路径
+#   bash scripts/e2e-ios.sh                # 默认跑 frontend-only,stub-agent 两层(免 Supabase)
+#   bash scripts/e2e-ios.sh frontend-only        # 只跑无后端的纯 UI 流
+#   bash scripts/e2e-ios.sh stub-agent           # 只跑 stub agent 创作主路径
 #   bash scripts/e2e-ios.sh supabase       # 跑需真实匿名登录 + Supabase 的流(需先 supabase start)
 #
 # 三层按后端依赖切(详见 apps/mobile/.maestro/README.md):
-#   offline   仅 app(DEV_NO_AUTH bundle),不起 agent
-#   fake      app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=fake STORE=memory DEV_NO_AUTH=1)
-#   supabase  app(真实匿名登录,不设 DEV_NO_AUTH)+ agent(MODEL_PROVIDER=fake + 真 SupabaseStore)
+#   frontend-only   仅 app(DEV_NO_AUTH bundle),不起 agent
+#   stub-agent      app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1)
+#   supabase  app(真实匿名登录,不设 DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub + 真 SupabaseStore)
 #
 # 端口 / 模拟器由 scripts/lib/worktree-dev-env.sh 分配,定向逻辑镜像 scripts/dev-ios.sh
 # (按 UDID 用 simctl openurl 把「那台」模拟器指到本 worktree 的 Metro 端口,避免打错设备/旧 bundle)。
@@ -21,7 +21,7 @@
 #     JWT_SECRET,apps/mobile/.env 填好真实 EXPO_PUBLIC_SUPABASE_ANON_KEY。
 set -euo pipefail
 
-TIERS="${1:-offline,fake}"
+TIERS="${1:-frontend-only,stub-agent}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/worktree-dev-env.sh
@@ -31,10 +31,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MOBILE_ENV="$REPO_ROOT/apps/mobile/.env"
 APP_SCHEME="${APP_SCHEME:-incipel}"
 
-# supabase 层要真实会话(DEV_NO_AUTH 必须留空);offline/fake 层要 DEV_NO_AUTH=1。两者 bundle 不同,不能同跑。
-if printf '%s' "$TIERS" | grep -q 'supabase' && printf '%s' "$TIERS" | grep -qE 'offline|fake'; then
-  echo "✗ supabase 层与 offline/fake 层的 EXPO_PUBLIC_DEV_NO_AUTH bundle 不同,不能同跑。"
-  echo "  分两次:bash scripts/e2e-ios.sh offline,fake  与  bash scripts/e2e-ios.sh supabase"
+# supabase 层要真实会话(DEV_NO_AUTH 必须留空);frontend-only/stub-agent 层要 DEV_NO_AUTH=1。两者 bundle 不同,不能同跑。
+if printf '%s' "$TIERS" | grep -q 'supabase' && printf '%s' "$TIERS" | grep -qE 'frontend-only|stub-agent'; then
+  echo "✗ supabase 层与 frontend-only/stub-agent 层的 EXPO_PUBLIC_DEV_NO_AUTH bundle 不同,不能同跑。"
+  echo "  分两次:bash scripts/e2e-ios.sh frontend-only,stub-agent  与  bash scripts/e2e-ios.sh supabase"
   exit 1
 fi
 
@@ -116,20 +116,20 @@ case "$TIERS" in
   *)          set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "1" >/dev/null 2>&1 || true ;;
 esac
 
-# ── 起 fake agent(fake / supabase 层需要;offline 不起)──
+# ── 起 stub agent(stub-agent / supabase 层需要;frontend-only 不起)──
 need_agent=0
-case "$TIERS" in *fake*|*supabase*) need_agent=1 ;; esac
+case "$TIERS" in *stub-agent*|*supabase*) need_agent=1 ;; esac
 if [ "$need_agent" = 1 ]; then
-  echo "▸ 启动 fake agent(MODEL_PROVIDER=fake)…"
+  echo "▸ 启动 stub agent(MODEL_PROVIDER=stub)…"
   case "$TIERS" in
     *supabase*)
       # 真实持久化 + 真实鉴权:显式清掉 STORE / DEV_NO_AUTH,避免 .env 残留把它退回内存/免鉴权。
-      ( cd "$REPO_ROOT" && env PORT="$AGENT_PORT" MODEL_PROVIDER=fake STORE= DEV_NO_AUTH= \
+      ( cd "$REPO_ROOT" && env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE= DEV_NO_AUTH= \
           pnpm --filter @incipel/agent dev ) &
       AGENT_PID=$!
       ;;
     *)
-      ( cd "$REPO_ROOT" && env PORT="$AGENT_PORT" MODEL_PROVIDER=fake STORE=memory DEV_NO_AUTH=1 \
+      ( cd "$REPO_ROOT" && env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1 \
           pnpm --filter @incipel/agent dev ) &
       AGENT_PID=$!
       ;;

@@ -2,7 +2,7 @@
 
 「织幕」的端到端(E2E)测试用 Maestro 驱动 iOS app,**定位是导航、登录门控、AG-UI 事件流、持久化往返的确定性回归测试,模型行为明确不在其范围内**。为此 agent 提供一个 stub 模型 provider(`MODEL_PROVIDER=stub`:回放一条写死的轮——两段文字 + `set_meta` + 一个人物 + `propose_options`),让整条创作主路径离线、免 key、每次产出一致地跑。真实模型的行为不进 E2E,另由两条线覆盖:agent 的 `smoke` 脚本(真实 provider + 真 key,断言结构不变量,发版前 / 夜间手动跑),以及「录制真实轮当 fixture、经 stub 确定性回放」来压客户端对真实(往往更乱)产出的渲染。
 
-> 术语:**stub**(给罐头答案)是测试替身里准确的词——`mock` 指会校验调用、我们不校验;`fake` 指能跑的内存实现,那是 `MemoryStore`。代码里这个 provider 一度叫 `fake`,正改名为 `stub`。
+> 术语:**stub**(给罐头答案)是测试替身里准确的词——`mock` 指会校验调用、我们不校验;`fake` 指能跑的内存实现,那是 `MemoryStore`。代码里这个 provider 一度叫 `fake`,已改名为 `stub`(`MODEL_PROVIDER=stub`、`createStubProvider`、`model/stub.ts`)。
 
 ## 三层(按需要多少后端切)
 

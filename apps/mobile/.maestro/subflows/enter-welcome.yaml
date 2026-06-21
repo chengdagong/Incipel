@@ -1,5 +1,5 @@
-# 复用片段(offline / fake 层):清态启动,DEV_NO_AUTH bundle 跳过登录门直达欢迎页。
-# 前置:app 以 EXPO_PUBLIC_DEV_NO_AUTH=1 打包(scripts/e2e-ios.sh 的 offline,fake 层会接好)。
+# 复用片段(frontend-only / stub-agent 层):清态启动,DEV_NO_AUTH bundle 跳过登录门直达欢迎页。
+# 前置:app 以 EXPO_PUBLIC_DEV_NO_AUTH=1 打包(scripts/e2e-ios.sh 的 frontend-only,stub-agent 层会接好)。
 appId: com.incipel.app
 ---
 - launchApp:

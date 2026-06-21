@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { EventType, type JsonPatchOp, type Screenplay } from '@incipel/shared';
 import { runTurnCore } from '../src/run';
 import { MemoryStore } from '../src/dev/memory-store';
-import { fakeProvider, throwStep } from './helpers/fake-provider';
+import { stubProvider, throwStep } from './helpers/stub-provider';
 import { applyPatch } from './helpers/apply-patch';
 
 type Ev = Record<string, any>;
@@ -20,7 +20,7 @@ describe('KI-1 重试按尝试隔离', () => {
   it('失败尝试已 add 的实体不残留:重试成功后只落一个人物', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't1', userId: 'u1' });
-    const provider = fakeProvider([
+    const provider = stubProvider([
       // attempt 1:add 一个人物后抛错。
       [
         { type: 'tool-call', call: { toolCallId: 'a', toolName: 'add_character', args: { name: '林深', note: '' } } },
@@ -53,7 +53,7 @@ describe('KI-1 重试按尝试隔离', () => {
   it('重试补发干净基线 STATE_SNAPSHOT,且客户端重放事件 == 落库 state', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't2', userId: 'u1' });
-    const provider = fakeProvider([
+    const provider = stubProvider([
       [
         { type: 'tool-call', call: { toolCallId: 'a', toolName: 'add_character', args: { name: '弃用', note: '' } } },
         throwStep(),
@@ -88,7 +88,7 @@ describe('KI-1 重试按尝试隔离', () => {
   it('失败尝试已吐文本时:整轮仅一条 TEXT_MESSAGE_START,不产生重复气泡', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't4', userId: 'u1' });
-    const provider = fakeProvider([
+    const provider = stubProvider([
       // attempt 1:先流式吐文本,再抛错。
       [{ type: 'text', delta: '让我想想…' }, throwStep()],
       // attempt 2:写人物并收尾。
@@ -121,7 +121,7 @@ describe('KI-1 重试按尝试隔离', () => {
   it('两次都失败 → RUN_ERROR{MODEL_FAILED} 且不落库', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't3', userId: 'u1' });
-    const provider = fakeProvider([[throwStep('e1')], [throwStep('e2')]]);
+    const provider = stubProvider([[throwStep('e1')], [throwStep('e2')]]);
 
     const events = await collect(
       runTurnCore(

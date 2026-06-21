@@ -1,10 +1,10 @@
-# [fake] 抽屉基础导航:菜单唤出抽屉 → 渲染导航项 + 空会话态。
+# [stub-agent] 抽屉基础导航:菜单唤出抽屉 → 渲染导航项 + 空会话态。
 # DEV_NO_AUTH 下客户端直连 Supabase 的会话列表为空(优雅降级),故只验证「抽屉能唤出并正确渲染」。
 # 不测遮罩关闭/点导航:遮罩中心被面板挡住、「会话」与空态文案有歧义——属于 dev 友好但脆弱的交互,
 # 「会话」导航由 history-resume 覆盖。
 appId: com.incipel.app
 tags:
-  - fake
+  - stub-agent
 ---
 - runFlow: ../subflows/enter-welcome.yaml
 - tapOn: "菜单"

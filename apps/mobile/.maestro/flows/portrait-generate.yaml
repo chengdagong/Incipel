@@ -1,4 +1,4 @@
-# [fake] 肖像弹窗:从人物卡打开肖像生成弹窗。
+# [stub-agent] 肖像弹窗:从人物卡打开肖像生成弹窗。
 # 先跑一轮建出人物「林夏」,再点其卡片上的「生成肖像」唤出弹窗。
 #
 # 范围说明:PortraitSheet 是 RN <Modal>,其内部控件(风格 chip / ★生成 / 取消)在 Maestro 的
@@ -7,7 +7,7 @@
 # 见 portrait.tsx「真实生图在 v1 之外」),其状态机由逻辑/单测覆盖,不在此 E2E 内。
 appId: com.incipel.app
 tags:
-  - fake
+  - stub-agent
 ---
 - runFlow: ../subflows/enter-welcome.yaml
 - runFlow: ../subflows/run-one-turn.yaml

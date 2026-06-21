@@ -45,9 +45,9 @@ pnpm test          # 各包 Vitest 单元/集成测试(packages/shared、package
 pnpm test:db       # Supabase pgTAP(supabase db reset 后跑 supabase/tests/*.sql)
 
 # 端到端(Maestro,iOS 模拟器)—— 详见 apps/mobile/.maestro/README.md
-pnpm e2e:ios             # 默认 offline,fake 两层(免 Supabase)
+pnpm e2e:ios             # 默认 frontend-only,stub-agent 两层(免 Supabase)
 pnpm e2e:ios supabase    # 需真实匿名登录 + 本地 Supabase 的流
 ```
 
-E2E 套件分三层(offline / fake / supabase),用确定性 fake provider 离线覆盖创作主路径;
+E2E 套件分三层(frontend-only / stub-agent / supabase),用确定性 stub provider 离线覆盖创作主路径;
 跑前请先用 `pnpm dev:ios --dev-client` 把 dev build 装到本 worktree 的模拟器上。

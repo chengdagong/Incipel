@@ -1,8 +1,8 @@
-# [offline] 欢迎页纯 UI:控件在位 + 建议 chip 回填灵感框。
-# 刻意不点骰子(/logline)、不进对话屏(/run)——这两者要后端,留给 fake 层。
+# [frontend-only] 欢迎页纯 UI:控件在位 + 建议 chip 回填灵感框。
+# 刻意不点骰子(/logline)、不进对话屏(/run)——这两者要后端,留给 stub-agent 层。
 appId: com.incipel.app
 tags:
-  - offline
+  - frontend-only
 ---
 - runFlow: ../subflows/enter-welcome.yaml
 # 关键控件在位

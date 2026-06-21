@@ -1,8 +1,8 @@
-# [fake] 核心价值路径:灵感 → 开始创作 → fake 一轮的流式回复 → 内联人物卡 → 文档沉淀提示 → 引导选项。
-# 需 fake agent(MODEL_PROVIDER=fake STORE=memory DEV_NO_AUTH=1)在线。这一轮内容写死在 src/model/fake.ts。
+# [stub-agent] 核心价值路径:灵感 → 开始创作 → stub 一轮的流式回复 → 内联人物卡 → 文档沉淀提示 → 引导选项。
+# 需 stub agent(MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1)在线。这一轮内容写死在 src/model/stub.ts。
 appId: com.incipel.app
 tags:
-  - fake
+  - stub-agent
 ---
 - runFlow: ../subflows/enter-welcome.yaml
 - tapOn: "一段无法言说的关系"
@@ -11,7 +11,7 @@ tags:
 - extendedWaitUntil:
     visible: "主管编剧"
     timeout: 40000
-# 内联人物卡:fake 写死的人物「林夏」与其定位
+# 内联人物卡:stub 写死的人物「林夏」与其定位
 - extendedWaitUntil:
     visible: "林夏"
     timeout: 40000

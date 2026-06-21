@@ -1,4 +1,4 @@
-// fake provider(MODEL_PROVIDER=fake)端到端核对:把真实 createFakeProvider 注入 runTurnCore,
+// stub provider(MODEL_PROVIDER=stub)端到端核对:把真实 createStubProvider 注入 runTurnCore,
 // 确认它走同一条核心循环、产出可被 apply/save 的确定性的一轮(供 Maestro 创作主路径 E2E 依赖)。
 // 与 run-orchestration.test.ts 同构:注入 provider + MemoryStore,断言事件与落进数据库产物。
 
@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { EventType } from '@incipel/shared';
 import { runTurnCore } from '../src/run';
 import { MemoryStore } from '../src/dev/memory-store';
-import { createFakeProvider } from '../src/model/fake';
+import { createStubProvider } from '../src/model/stub';
 
 type Ev = Record<string, any>;
 async function collect(gen: AsyncGenerator<unknown>): Promise<Ev[]> {
@@ -23,12 +23,12 @@ const input = (over: Partial<Record<string, any>> = {}) => ({
   ...over,
 });
 
-describe('createFakeProvider — 一轮确定性创作', () => {
+describe('createStubProvider — 一轮确定性创作', () => {
   it('一轮:文字 + 设 meta + 建人物「林夏」+ options,均落进数据库', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
 
-    const events = await collect(runTurnCore(input(), { provider: createFakeProvider(), store }));
+    const events = await collect(runTurnCore(input(), { provider: createStubProvider(), store }));
     const types = events.map((e) => e.type);
 
     // 走完整核心循环:开局快照 → 文本 → 增量 → options → 结束,无错误。
@@ -55,7 +55,7 @@ describe('createFakeProvider — 一轮确定性创作', () => {
   });
 
   it('completeLogline 返回固定非空 logline(欢迎页骰子离线可用)', async () => {
-    const logline = await createFakeProvider().completeLogline({ system: 's', prompt: 'p' });
+    const logline = await createStubProvider().completeLogline({ system: 's', prompt: 'p' });
     expect(logline.trim().length).toBeGreaterThan(0);
   });
 });

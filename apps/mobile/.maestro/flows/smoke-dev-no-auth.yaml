@@ -1,8 +1,8 @@
-# [offline] DEV_NO_AUTH 门控:打包带 EXPO_PUBLIC_DEV_NO_AUTH=1 时,启动跳过登录页直达欢迎页。
+# [frontend-only] DEV_NO_AUTH 门控:打包带 EXPO_PUBLIC_DEV_NO_AUTH=1 时,启动跳过登录页直达欢迎页。
 # 不起 agent;纯验证门控与欢迎页首屏渲染。
 appId: com.incipel.app
 tags:
-  - offline
+  - frontend-only
 ---
 - launchApp:
     clearState: true

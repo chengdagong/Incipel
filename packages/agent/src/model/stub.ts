@@ -1,8 +1,8 @@
-// 确定性 fake provider(仅本地 / E2E 用,prod 永不设 MODEL_PROVIDER=fake)。
+// 确定性 stub provider(仅本地 / E2E 用,prod 永不设 MODEL_PROVIDER=stub)。
 //
 // 目的:让 Maestro 的「创作主路径」E2E 离线、可重复地跑——不花 token、不靠网络、每次产出一致。
-// 工厂 createModelProvider() 在 MODEL_PROVIDER=fake 时返回它;与 anthropic/openrouter 走同一条
-// 核心循环(run.ts 的 runTurnCore),只是把「真实模型流」换成一段写死的脚本。
+// 工厂 createModelProvider() 在 MODEL_PROVIDER=stub 时返回它;与 anthropic/openrouter 走同一条
+// 核心循环(run.ts 的 runTurnCore),只是把「真实模型流」换成一段写死的脚本(给罐头答案=stub)。
 //
 // 与真实路径对齐的两点:
 // 1) 文本与 tool-call 交错产出,形状与 ai-sdk-runtime 完全一致(见 model/provider.ts 的 StreamChunk)。
@@ -24,12 +24,12 @@ const SCRIPTED_TEXT = ['我先把这个开头立起来——', '给你标题、�
 // [toolCallId, toolName, 原始参数];原始参数会先过 input.tools[name] 的 schema 校验。
 const SCRIPTED_TOOLS: ReadonlyArray<readonly [string, string, unknown]> = [
   [
-    'fake-meta',
+    'stub-meta',
     'set_meta',
     { title: '深夜来电', logline: '一个钟点工每晚接到十年前自己的来电。' },
   ],
   [
-    'fake-char',
+    'stub-char',
     'add_character',
     {
       name: '林夏',
@@ -40,10 +40,10 @@ const SCRIPTED_TOOLS: ReadonlyArray<readonly [string, string, unknown]> = [
       ],
     },
   ],
-  ['fake-options', 'propose_options', { options: ['先挖她的过去', '让电话那头先开口'] }],
+  ['stub-options', 'propose_options', { options: ['先挖她的过去', '让电话那头先开口'] }],
 ];
 
-export function createFakeProvider(): ModelProvider {
+export function createStubProvider(): ModelProvider {
   return {
     async *streamTurn(input: StreamTurnInput): AsyncIterable<StreamChunk> {
       for (const delta of SCRIPTED_TEXT) {
