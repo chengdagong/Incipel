@@ -79,6 +79,9 @@ export type ScreenplayAgentApi = {
   streamingText: string; // 当前正在流式打字的 assistant 文本(本轮,未结束)
   options: string[]; // 本轮可点选项(CUSTOM name==="options");下一轮开始时清空
   isRunning: boolean;
+  // 本轮已开始、首个 assistant token 未到(「思考中」三点用)。由 run 生命周期维护,
+  // retry 不追加 user 消息时也准确(见 #42 Codex 评审 P3)。
+  thinking: boolean;
   error: string | null;
   sendMessage: (text: string) => Promise<void>;
   // 重试当前这一轮:沿用同一 runId,服务端据此幂等、不重复落库(见 KI-2)。
@@ -106,6 +109,9 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
   const [streamingText, setStreamingText] = useState('');
   const [options, setOptions] = useState<string[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  // 本轮已开始、还没有任何 assistant 文本(等首 token)。不从 messages 推断:retry 不追加 user 消息,
+  // 仅凭「末条是否用户消息」会误判,故由 run 生命周期事件直接维护(见 #42 Codex 评审 P3)。
+  const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // 一「逻辑轮」的 runId:重试沿用同一个,作 save_turn 的幂等键(见 KI-2)。完成后清空。
@@ -123,6 +129,7 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
     const subscriber: AgentSubscriber = {
       onRunStartedEvent: () => {
         setIsRunning(true);
+        setThinking(true); // 本轮开始,等首个 assistant token
         setError(null);
         setStreamingText('');
         setOptions([]); // 新一轮清空上一轮的瞬时选项
@@ -130,6 +137,7 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
       // 流式文本:SDK 给出累计 buffer,直接用作当前打字气泡内容。
       onTextMessageContentEvent: ({ textMessageBuffer, event }) => {
         setStreamingText(textMessageBuffer + event.delta);
+        setThinking(false); // 首 token 已到,退出「思考中」(后续为同值 no-op)
       },
       onTextMessageEndEvent: () => {
         // 文本落定为一条 assistant 消息后,清空流式缓冲并同步消息列表。
@@ -151,11 +159,13 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
       },
       onRunFinishedEvent: () => {
         setIsRunning(false);
+        setThinking(false);
         pendingRunIdRef.current = null; // 本轮已落库,runId 使命结束
         syncFromAgent();
       },
       onRunErrorEvent: ({ event }) => {
         setIsRunning(false);
+        setThinking(false);
         setError(event.message ?? '运行出错');
       },
       // SDK 主动通知的消息/状态变更(兜住非事件路径的更新)。
@@ -177,6 +187,7 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
       await agent.runAgent({ runId }, undefined);
     } catch (e) {
       setIsRunning(false);
+      setThinking(false);
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
@@ -207,5 +218,5 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
     await runWith(runId);
   }, [runWith]);
 
-  return { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry };
+  return { messages, screenplay, streamingText, options, isRunning, thinking, error, sendMessage, retry };
 }

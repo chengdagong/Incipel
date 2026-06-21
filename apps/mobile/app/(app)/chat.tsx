@@ -62,7 +62,7 @@ export default function ChatScreen() {
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
 
-  const { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry } =
+  const { messages, screenplay, streamingText, options, isRunning, thinking, error, sendMessage, retry } =
     useScreenplayAgent(threadId);
 
   // 「作品」入口可带 view=doc 直接进文档视图。
@@ -136,8 +136,6 @@ export default function ChatScreen() {
   // 末条助手消息「正在本轮流式中」(尚未定稿):正在打字(streamingText 有内容),或还没首 token(消息为空)。
   // 定稿后(streamingText 清空且消息已有内容)不再成立,消息照常显示——避免文本结束到 RUN_FINISHED 之间短暂消失。
   const trailingAssistantStreaming = isRunning && lastIsAssistant && (!!streamingText || lastMsgText === '');
-  // 思考点:本轮已开始、还没有可显示的助手文本(等首 token)。
-  const waitingForFirstToken = isRunning && !streamingText && !(lastIsAssistant && lastMsgText !== '');
 
   return (
     <PortraitProvider>
@@ -170,8 +168,9 @@ export default function ChatScreen() {
           );
         })}
 
-        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。 */}
-        {waitingForFirstToken && <ThinkingDots />}
+        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。
+            thinking 由 hook 按 run 生命周期维护:retry 不追加 user 消息时也准确(见 #42 P3)。 */}
+        {thinking && <ThinkingDots />}
 
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
