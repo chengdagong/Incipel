@@ -86,6 +86,15 @@ echo "▸ Metro 端口 : $EXPO_PORT"
 echo "▸ Agent 端口 : $AGENT_PORT"
 echo "▸ 模拟器     : $IOS_SIMULATOR_NAME ($UDID)"
 
+# ── 已知限制(见 ADR-0007 / issue #36)──────────────────────────────────────────
+# 本 runner 走 dev-client + Metro:flow 的 clearState 会清掉 dev-client 记住的 Metro 地址 → 应用落到
+# launcher;重载 bundle 还会弹开发者菜单盖住界面。两者都让 Maestro 到不了欢迎页 → 多半跑不出全通过。
+# 要稳定通过,用 apps/mobile/.maestro/README.md 的「实测配方」(release 包)。runner 改 release 在 #36。
+echo ""
+echo "⚠ 本 runner 走 dev-client + Metro:flow 的 clearState 会让应用回不到欢迎页(详见 ADR-0007),"
+echo "  多半跑不出全通过。要稳定通过请用 README「实测配方」的 release 流程;runner 改 release 见 #36。"
+echo ""
+
 xcrun simctl boot "$UDID" 2>/dev/null || true  # 已开机则忽略
 open -a Simulator >/dev/null 2>&1 || true
 
