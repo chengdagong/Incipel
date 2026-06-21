@@ -1,35 +1,40 @@
 // 设置页(issue #13):账号区(匿名/已登录两态)+ 通用 → 界面语言下拉 + 登出。
 // 视觉按原型 SETTINGS SCREEN 还原。多语言只切界面文案,不影响 AI 回复语言(见 i18n.tsx)。
 //
-// 账号/登录本身在另一 worktree(issue #8/#9/#10)做:本页只实现「框架 + 语言切换 + 两态展示」,
-// 「登录 ›」「登出」先留占位。v1 只有匿名会话,故默认匿名态。
+// 账号态读自 useAuth():有会话且非匿名 = 已登录(Apple,issue #10),显示身份 + 登出;
+// 匿名会话(先随便逛逛)仍视为「未登录」,提示去登录。匿名→正式账号的升级(linkIdentity)
+// 是设置里的单独后续流程(ADR-0005),此处「登录 ›」暂占位。
 
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../../src/auth';
 import { LANGS, useI18n } from '../../src/i18n';
-import { defaultTheme } from '../../src/theme';
+import { signOut } from '../../src/supabase';
+import { defaultTheme, palette } from '../../src/theme';
 
-// 原型 SETTINGS 专用配色(literal,逐项对原型取色)。
+// 设置页各处用色统一引自通用 palette(过去这里是逐项对原型取色的字面色表,已归并)。
+// back / 副标题 / 标签 / 行值原先是 #9A958C / #A39E94 等浅灰(对比 ~2.x:1),现走 palette.textSecondary;
+// 登出按钮的文字与描边走语义色 palette.danger / dangerBorder。
 const S = {
-  divider: '#F0EDE7',
-  back: '#9A958C',
-  title: '#2A2825',
-  avatarAnonBg: '#EDE8E0',
-  avatarAnonText: '#A39E94',
-  primary: '#2A2825',
-  sub: '#A39E94',
-  sectionLabel: '#A39E94',
-  cardBorder: '#E8E3D9',
-  rowText: '#2A2825',
-  rowValue: '#9A958C',
-  caret: '#C2BDB3',
-  dropDivider: '#F2EFE9',
-  langText: '#3A352F',
-  globe: '#7C776E',
-  signOutBorder: '#ECDAD2',
-  signOutText: '#C0654A',
+  divider: palette.divider,
+  back: palette.textSecondary,
+  title: palette.textPrimary,
+  avatarAnonBg: palette.mutedBg,
+  avatarAnonText: palette.textSecondary,
+  primary: palette.textPrimary,
+  sub: palette.textSecondary,
+  sectionLabel: palette.textSecondary,
+  cardBorder: palette.borderAlt,
+  rowText: palette.textPrimary,
+  rowValue: palette.textSecondary,
+  caret: palette.textSecondary,
+  dropDivider: palette.divider,
+  langText: palette.textPrimaryAlt,
+  globe: palette.textSecondary,
+  signOutBorder: palette.dangerBorder,
+  signOutText: palette.danger,
 } as const;
 
 export default function SettingsScreen() {
@@ -37,13 +42,41 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { t, lang, setLang } = useI18n();
   const { accent } = defaultTheme;
+  const { session } = useAuth();
 
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
-  // v1 只有匿名会话(登录在另一 worktree)。账号绑定后这里改为读真实身份。
-  const isSignedIn = false;
-  const accountInitial = (t('guestName').charAt(0) || '你').toUpperCase();
+  const user = session?.user ?? null;
+  // 已登录 = 有会话且非匿名(Apple 登录);匿名会话仍视为「未登录」,提示去登录。
+  const isSignedIn = !!user && !user.is_anonymous;
+  // 已登录优先显示邮箱(Apple 可能给私密转发地址),没有则「Apple 用户」。
+  const accountName = isSignedIn ? user?.email || t('appleUser') : t('notSignedIn');
+  const accountSub = isSignedIn ? (user?.email ? t('appleUser') : '') : t('anonSub');
+  const accountInitial = (
+    isSignedIn ? accountName.charAt(0) : t('guestName').charAt(0) || '你'
+  ).toUpperCase();
   const currentLangName = LANGS.find((l) => l.code === lang)?.name ?? '';
+
+  function confirmSignOut() {
+    Alert.alert(t('signOutConfirm'), t('signOutConfirmSub'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('signOut'), style: 'destructive', onPress: doSignOut },
+    ]);
+  }
+
+  async function doSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+      // 成功后 session→null,(app) 门控把人送回登录页;此处不手动导航(与登录一致)。
+    } catch (e) {
+      // 不静默、不编造(system-design §11):失败留页、复位按钮,可重试。
+      console.warn('[settings] 登出失败:', e);
+      setSigningOut(false);
+    }
+  }
 
   function back() {
     if (router.canGoBack()) router.back();
@@ -62,12 +95,24 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-        {/* 账号区:匿名态(整行可点 → 登录入口,占位)。已登录态见下方注释。 */}
-        {isSignedIn ? null : (
+        {/* 账号区:已登录(Apple)显示身份;匿名态整行可点 → 登录入口(升级流程暂占位)。 */}
+        {isSignedIn ? (
+          <View style={styles.accountRow}>
+            <View style={[styles.avatar, { backgroundColor: accent }]}>
+              <Text style={[styles.avatarText, { color: '#fff' }]}>{accountInitial}</Text>
+            </View>
+            <View style={styles.accountMain}>
+              <Text style={styles.accountName} numberOfLines={1}>
+                {accountName}
+              </Text>
+              {accountSub ? <Text style={styles.accountSub}>{accountSub}</Text> : null}
+            </View>
+          </View>
+        ) : (
           <Pressable
             style={styles.accountRow}
             onPress={() => {
-              // 登录入口属另一 worktree(#8/#9/#10),此处先占位。
+              // 匿名→正式账号的升级(linkIdentity)是设置里的单独后续流程(ADR-0005),暂占位。
             }}
             accessibilityRole="button"
           >
@@ -121,10 +166,19 @@ export default function SettingsScreen() {
         </View>
         <Text style={styles.langDesc}>{t('langDesc')}</Text>
 
-        {/* 登出(仅已登录态;v1 匿名态不显示。登出动作复用 #8/#9/#10)。 */}
+        {/* 登出(仅已登录态)。二次确认后清会话,(app) 门控自动回登录页。 */}
         {isSignedIn && (
-          <Pressable style={styles.signOut} accessibilityRole="button">
-            <Text style={styles.signOutText}>{t('signOut')}</Text>
+          <Pressable
+            style={styles.signOut}
+            onPress={confirmSignOut}
+            disabled={signingOut}
+            accessibilityRole="button"
+          >
+            {signingOut ? (
+              <ActivityIndicator color={S.signOutText} />
+            ) : (
+              <Text style={styles.signOutText}>{t('signOut')}</Text>
+            )}
           </Pressable>
         )}
       </ScrollView>

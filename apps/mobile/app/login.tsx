@@ -159,7 +159,7 @@ export default function LoginScreen() {
         </Pressable>
 
         {/* 瞬时提示 / 错误:互斥地占一行,避免布局跳动。 */}
-        <Text style={[styles.hint, { color: error ? accent : palette.textSecondary }]}>
+        <Text style={[styles.hint, { color: error ? palette.danger : palette.textSecondary }]}>
           {error ?? notice ?? ' '}
         </Text>
 
@@ -177,7 +177,7 @@ export default function LoginScreen() {
           )}
         </Pressable>
 
-        <Text style={[styles.terms, { color: palette.textSecondaryAlt }]}>
+        <Text style={[styles.terms, { color: palette.textSecondary }]}>
           继续即表示同意
           <Text style={styles.termsLink} onPress={() => Linking.openURL(TERMS_URL)}>
             服务条款

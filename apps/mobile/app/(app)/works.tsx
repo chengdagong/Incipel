@@ -94,7 +94,7 @@ export default function WorksScreen() {
 
   return (
     <ScrollView style={{ backgroundColor: palette.pageBg }} contentContainerStyle={styles.list}>
-      <Text style={[styles.intro, { color: palette.textSecondaryAlt }]}>{t('worksIntro')}</Text>
+      <Text style={[styles.intro, { color: palette.textSecondary }]}>{t('worksIntro')}</Text>
       {rows.map((r) => {
         const screenplay = r.documents?.state;
         const logline = screenplay?.meta.logline ?? '';
@@ -115,7 +115,7 @@ export default function WorksScreen() {
               </Text>
             )}
             <View style={styles.cardFooter}>
-              <Text style={[styles.meta, { color: palette.textSecondaryAlt }]}>{timeAgo(r.updated_at, t)}</Text>
+              <Text style={[styles.meta, { color: palette.textSecondary }]}>{timeAgo(r.updated_at, t)}</Text>
               <Text style={[styles.openWork, { color: defaultTheme.accent }]}>{t('openDocWork')}</Text>
             </View>
           </Pressable>

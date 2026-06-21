@@ -101,7 +101,7 @@ export default function WelcomeScreen() {
           onFocus={() => setIdeaFocused(true)}
           onBlur={() => setIdeaFocused(false)}
           placeholder={t('ideaPlaceholder')}
-          placeholderTextColor={palette.textSecondaryAlt}
+          placeholderTextColor={palette.placeholder}
           multiline
         />
         <Pressable
@@ -110,6 +110,7 @@ export default function WelcomeScreen() {
           disabled={rolling}
           accessibilityRole="button"
           accessibilityLabel={t('diceTitle')}
+          hitSlop={10}
         >
           {rolling ? (
             <ActivityIndicator color={defaultTheme.accent} />
@@ -119,7 +120,7 @@ export default function WelcomeScreen() {
         </Pressable>
       </View>
 
-      {!!rollError && <Text style={[styles.rollError, { color: defaultTheme.accent }]}>{rollError}</Text>}
+      {!!rollError && <Text style={[styles.rollError, { color: palette.danger }]}>{rollError}</Text>}
 
       <Text style={[styles.suggestHint, { color: palette.textSecondary }]}>{t('suggestHint')}</Text>
       <View style={styles.chips}>
@@ -137,7 +138,7 @@ export default function WelcomeScreen() {
       <Pressable
         style={[
           styles.startBtn,
-          { backgroundColor: idea.trim() ? defaultTheme.accent : palette.textSecondaryAlt },
+          { backgroundColor: idea.trim() ? defaultTheme.accent : palette.disabledFill },
         ]}
         onPress={start}
         disabled={!idea.trim()}

@@ -42,7 +42,7 @@ export function PortraitThumb({ character }: { character: Character }) {
           onPress={open}
           accessibilityRole="button"
           accessibilityLabel={t('regenTitle')}
-          hitSlop={6}
+          hitSlop={12}
         >
           <Text style={[styles.regenIcon, { color: accent }]}>↻</Text>
         </Pressable>

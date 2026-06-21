@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   charName: { fontSize: 15, fontWeight: '600' },
   charRole: { fontSize: 12, marginTop: 1 },
   attrList: { marginTop: 6 },
-  attrRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 5, paddingHorizontal: 8, borderRadius: 8 },
+  attrRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8 },
   attrRowPressed: { backgroundColor: '#F4EFE7' },
   attrLabel: { width: 42, fontSize: 13, lineHeight: 21 },
   attrValue: { flex: 1, fontSize: 13, lineHeight: 21 },

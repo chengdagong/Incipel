@@ -26,3 +26,7 @@ supabase/.temp/
 
 # codex 评审关卡的本地记录(按分支生成)
 .codex-review/
+
+# agent 工具生成的镜像副本(与已入库的 .claude/ + CLAUDE.md 重复,按机器生成)
+.agents/
+.codex/

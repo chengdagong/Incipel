@@ -17,32 +17,34 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Character, type CharacterAttr, type Screenplay } from '@incipel/shared';
-import { defaultTheme, type Theme } from '../theme';
+import { defaultTheme, palette, type Theme } from '../theme';
 import { useT } from '../i18n';
 import { PortraitThumb } from './PortraitThumb';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
 
-// 原型 doc 面板专用配色(literal,逐像素对齐)。
+// doc 面板各处用色统一引自通用 palette(过去这里是逐像素对齐原型的字面色表,已归并)。
+// eyebrow / collapse / 角色定位 / 滑动提示 / 分场 slug 原先是 #B3AEA4 / #9A958C / #A39E94 等浅灰
+//(对比 ~2.x:1),现统一走 palette.textSecondary;正文走 textBody,待沉淀提示走 placeholder。
 const DOC = {
-  sheetBg: '#FBFAF7',
-  eyebrow: '#B3AEA4',
-  collapse: '#9A958C',
-  title: '#2A2825',
-  logline: '#7C776E',
-  pending: '#C2BDB3',
-  body: '#54504A',
-  charName: '#2A2825',
-  charRole: '#A39E94',
-  charNote: '#3A352F',
-  swipeHint: '#B6B0A6',
-  outline: '#6E6960',
-  sceneSlug: '#A39E94',
-  sceneBorder: '#EDEAE3',
-  dashed: '#DBD5CB',
-  divider: '#F0EDE7',
-  noteBg: '#F5F2EC',
-  noteText: '#9A958C',
+  sheetBg: palette.cardBg,
+  eyebrow: palette.textSecondary,
+  collapse: palette.textSecondary,
+  title: palette.textPrimary,
+  logline: palette.textSecondary,
+  pending: palette.placeholder,
+  body: palette.textBody,
+  charName: palette.textPrimary,
+  charRole: palette.textSecondary,
+  charNote: palette.textPrimaryAlt,
+  swipeHint: palette.textSecondary,
+  outline: palette.textSecondary,
+  sceneSlug: palette.textSecondary,
+  sceneBorder: palette.borderAlt,
+  dashed: palette.border,
+  divider: palette.divider,
+  noteBg: palette.noteBg,
+  noteText: palette.textSecondary,
 } as const;
 
 type Props = {
@@ -261,7 +263,7 @@ const styles = StyleSheet.create({
   pending: { fontSize: 13, color: DOC.pending, marginBottom: 26 },
 
   sectionLabel: { fontSize: 11, letterSpacing: 1, fontWeight: '600', marginBottom: 12 },
-  charCount: { color: '#C2BDB3', fontWeight: '400' },
+  charCount: { color: palette.placeholder, fontWeight: '400' },
 
   worldBlock: { marginBottom: 28, gap: 14 },
   worldSection: { gap: 4 },
@@ -282,15 +284,15 @@ const styles = StyleSheet.create({
   charName: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 16, fontWeight: '600', color: DOC.charName },
   charRole: { fontSize: 12, color: DOC.charRole, marginBottom: 3 },
   attrList: { marginTop: 4 },
-  attrRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 8 },
-  attrRowPressed: { backgroundColor: '#F6F1E9' },
+  attrRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8 },
+  attrRowPressed: { backgroundColor: palette.pressedBg },
   attrLabel: { width: 44, fontSize: 13, lineHeight: 22, color: DOC.charRole },
   attrValue: { flex: 1, fontSize: 13, lineHeight: 22, color: DOC.charNote },
   charAction: { fontSize: 12.5, fontWeight: '600', marginTop: 6 },
 
   outlineBlock: { marginBottom: 28, gap: 11 },
   outlineItem: { fontSize: 13, color: DOC.outline, lineHeight: 21 },
-  outlineAct: { color: '#2A2825', fontWeight: '700' },
+  outlineAct: { color: palette.textPrimary, fontWeight: '700' },
 
   sceneBlock: { marginBottom: 24, gap: 18 },
   scene: { borderLeftWidth: 2, borderLeftColor: DOC.sceneBorder, paddingLeft: 14 },
