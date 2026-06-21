@@ -1,35 +1,58 @@
 #!/usr/bin/env bash
-# 在「本 worktree 专属」的 iOS 模拟器 + 端口上跑 Maestro E2E。
+# 在「本 worktree 专属」的 iOS 模拟器上,以 release 包(JS 内嵌)为运行目标跑 Maestro E2E。
 #
-#   bash scripts/e2e-ios.sh                # 默认跑 frontend-only,stub-agent 两层(免 Supabase)
-#   bash scripts/e2e-ios.sh frontend-only        # 只跑无后端的纯 UI 流
-#   bash scripts/e2e-ios.sh stub-agent           # 只跑 stub agent 创作主路径
-#   bash scripts/e2e-ios.sh supabase       # 跑需真实匿名登录 + Supabase 的流(需先 supabase start)
+#   bash scripts/e2e-ios.sh                       # 默认跑 frontend-only,stub-agent 两层(免 Supabase)
+#   bash scripts/e2e-ios.sh frontend-only         # 只跑无后端的纯 UI 流
+#   bash scripts/e2e-ios.sh stub-agent            # 只跑 stub agent 创作主路径
+#   bash scripts/e2e-ios.sh supabase              # 跑需真实匿名登录 + 本地 Supabase 的流(需先 supabase start)
+#   bash scripts/e2e-ios.sh frontend-only --no-build  # 复用已装的包,只重跑 Maestro(改 flow 时省一次构建)
 #
 # 三层按后端依赖切(详见 apps/mobile/.maestro/README.md):
 #   frontend-only   仅 app(DEV_NO_AUTH bundle),不起 agent
 #   stub-agent      app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1)
-#   supabase  app(真实匿名登录,不设 DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub + 真 SupabaseStore)
+#   supabase        app(真实匿名登录,不设 DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub + 真 SupabaseStore)
 #
-# 端口 / 模拟器由 scripts/lib/worktree-dev-env.sh 分配,定向逻辑镜像 scripts/dev-ios.sh
-# (按 UDID 用 simctl openurl 把「那台」模拟器指到本 worktree 的 Metro 端口,避免打错设备/旧 bundle)。
+# 为什么跑 release 包、不跑 dev-client(见 ADR-0007):dev-client 加载 bundle 会弹开发者菜单模态盖住
+# 界面、clearState 会清掉它记的 Metro 地址落到 launcher——两处摩擦让 Maestro 到不了欢迎页。release
+# 二进制 JS 内嵌、不连 Metro,clearState 求每次干净起步才成立,是 Maestro E2E 的标准目标。
 #
-# 前置(本脚本不代办):
-#   - 已装 maestro(curl -fsSL "https://get.maestro.mobile.dev" | bash)
-#   - dev build 已装到本 worktree 模拟器:先跑过一次 `pnpm dev:ios --dev-client`(它会建模拟器 + expo run:ios)
+# EXPO_PUBLIC_DEV_NO_AUTH 是 bundle 期烘进二进制的,所以两组 bundle 不能同跑:frontend-only+stub-agent
+# 开它、supabase 关它并填真 anon key。切层要重新构建(本脚本默认每次构建;--no-build 仅在同一层复跑时用)。
+#
+# 端口 / 模拟器名由 scripts/lib/worktree-dev-env.sh 按 worktree 分配,互不冲突。
+#
+# 前置(本脚本会尽量代办,缺时给出提示):
+#   - 已装 maestro(curl -fsSL "https://get.maestro.mobile.dev" | bash)与 JDK 17+
+#   - 完整 Xcode(用于 xcodebuild / simctl)与 CocoaPods(brew install cocoapods)
+#   - 首次会自动 `expo prebuild` 生成 ios/ 原生工程并 `pod install`(之后复用,ios/ 已被 gitignore)
 #   - supabase 层另需:`supabase start`,且 packages/agent/.env 填好 SUPABASE_URL / SERVICE_ROLE_KEY /
 #     JWT_SECRET,apps/mobile/.env 填好真实 EXPO_PUBLIC_SUPABASE_ANON_KEY。
 set -euo pipefail
 
-TIERS="${1:-frontend-only,stub-agent}"
+# ── 解析参数:第一个非 --flag 当作层(tags);--no-build 跳过构建+安装、直接复用已装包重跑 ──
+TIERS=""
+NO_BUILD=0
+for arg in "$@"; do
+  case "$arg" in
+    --no-build) NO_BUILD=1 ;;
+    -*) echo "✗ 未知参数:$arg"; exit 1 ;;
+    *) [ -z "$TIERS" ] && TIERS="$arg" ;;
+  esac
+done
+TIERS="${TIERS:-frontend-only,stub-agent}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/worktree-dev-env.sh
 . "$SCRIPT_DIR/lib/worktree-dev-env.sh"  # → REPO_ROOT / EXPO_PORT / AGENT_PORT / IOS_SIMULATOR_NAME；
                                          #   写好 apps/mobile/.env 的 EXPO_PUBLIC_AGENT_URL；导出 set_env_var()
 
-MOBILE_ENV="$REPO_ROOT/apps/mobile/.env"
-APP_SCHEME="${APP_SCHEME:-incipel}"
+MOBILE_DIR="$REPO_ROOT/apps/mobile"
+MOBILE_ENV="$MOBILE_DIR/.env"
+AGENT_ENV="$REPO_ROOT/packages/agent/.env"
+IOS_DIR="$MOBILE_DIR/ios"
+DERIVED="$IOS_DIR/build-release"
+APP_BUNDLE_ID="${APP_BUNDLE_ID:-com.incipel.app}"
+IOS_DEVICE_TYPE="${IOS_DEVICE_TYPE:-iPhone 16 Pro}"
 
 # supabase 层要真实会话(DEV_NO_AUTH 必须留空);frontend-only/stub-agent 层要 DEV_NO_AUTH=1。两者 bundle 不同,不能同跑。
 if printf '%s' "$TIERS" | grep -q 'supabase' && printf '%s' "$TIERS" | grep -qE 'frontend-only|stub-agent'; then
@@ -38,83 +61,115 @@ if printf '%s' "$TIERS" | grep -q 'supabase' && printf '%s' "$TIERS" | grep -qE 
   exit 1
 fi
 
-# 定位 maestro 与 java,让 pnpm e2e:ios 不依赖交互式 shell 的 PATH(非交互 shell 不读 ~/.zshrc)。
-if ! command -v maestro >/dev/null 2>&1 && [ -x "$HOME/.maestro/bin/maestro" ]; then
-  export PATH="$HOME/.maestro/bin:$PATH"
+# ── 工具链定位(非交互 shell 不读 ~/.zshrc,这里自行接好 PATH / DEVELOPER_DIR)──
+# node:Release 的 bundling 阶段(Xcode「Bundle React Native code and images」)会调 node。
+for nd in "$HOME/.local/bin" /opt/homebrew/bin /usr/local/bin; do
+  [ -x "$nd/node" ] && case ":$PATH:" in *":$nd:"*) ;; *) PATH="$nd:$PATH" ;; esac
+done
+# CocoaPods(brew 装的)与 maestro 也补进 PATH。
+for bd in /opt/homebrew/bin "$HOME/.maestro/bin"; do
+  [ -d "$bd" ] && case ":$PATH:" in *":$bd:"*) ;; *) PATH="$bd:$PATH" ;; esac
+done
+export PATH
+
+# DEVELOPER_DIR 指向完整 Xcode(xcodebuild + simctl 都需要;xcode-select 可能指向 CommandLineTools)。
+if ! xcodebuild -version >/dev/null 2>&1 || ! xcrun simctl help >/dev/null 2>&1; then
+  for d in /Applications/Xcode.app/Contents/Developer /Applications/Xcode-beta.app/Contents/Developer; do
+    if [ -d "$d" ]; then export DEVELOPER_DIR="$d"; break; fi
+  done
 fi
-# Maestro 是 JVM 程序,需 JDK。注意:macOS 自带 /usr/bin/java 是「桩」——无真实 JDK 时它仍在
-# PATH 上(command -v java 为真)但 `java -version` 退非零,故这里用「java -version 是否真能跑」判断。
+xcrun simctl help >/dev/null 2>&1 || { echo "✗ 找不到 simctl。请装 Xcode 并:sudo xcode-select -s /Applications/Xcode.app"; exit 1; }
+xcodebuild -version >/dev/null 2>&1 || { echo "✗ 找不到 xcodebuild(需完整 Xcode)。"; exit 1; }
+
+# Maestro 是 JVM 程序,需 JDK。/usr/bin/java 是桩(无真实 JDK 时 `java -version` 退非零),故用「能否真跑」判断。
 if [ -z "${JAVA_HOME:-}" ] && ! java -version >/dev/null 2>&1; then
   for j in /opt/homebrew/opt/openjdk@21 /opt/homebrew/opt/openjdk@17 /opt/homebrew/opt/openjdk /usr/local/opt/openjdk; do
     if [ -x "$j/bin/java" ]; then export JAVA_HOME="$j"; export PATH="$j/bin:$PATH"; break; fi
   done
 fi
-command -v maestro >/dev/null 2>&1 || {
-  echo "✗ 未找到 maestro。安装:curl -fsSL \"https://get.maestro.mobile.dev\" | bash"
-  exit 1
-}
-# 最终校验:JAVA_HOME 指向可用 JDK(maestro 启动器优先用它),或 PATH 上有能跑的 java。
+command -v maestro >/dev/null 2>&1 || { echo "✗ 未找到 maestro。安装:curl -fsSL \"https://get.maestro.mobile.dev\" | bash"; exit 1; }
 if { [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; } || java -version >/dev/null 2>&1; then :; else
-  echo "✗ 未找到可用的 Java(Maestro 需 JDK 17+)。装:brew install openjdk@21"
-  exit 1
+  echo "✗ 未找到可用的 Java(Maestro 需 JDK 17+)。装:brew install openjdk@21"; exit 1
 fi
 
-# ── simctl 可用性(镜像 dev-ios.sh:xcode-select 指向 CommandLineTools 时回退到完整 Xcode)──
-if ! xcrun simctl help >/dev/null 2>&1; then
-  for d in /Applications/Xcode.app/Contents/Developer /Applications/Xcode-beta.app/Contents/Developer; do
-    if [ -d "$d" ] && DEVELOPER_DIR="$d" xcrun simctl help >/dev/null 2>&1; then export DEVELOPER_DIR="$d"; break; fi
-  done
-fi
-xcrun simctl help >/dev/null 2>&1 || {
-  echo "✗ 找不到 iOS 模拟器工具 simctl。请装 Xcode 并:sudo xcode-select -s /Applications/Xcode.app"
-  exit 1
-}
-
-udid_for_name() {
-  xcrun simctl list devices 2>/dev/null | grep -F "$1 (" | grep -oE '[0-9A-Fa-f-]{36}' | head -1
-}
+# ── 找/建本 worktree 专属模拟器(镜像 dev-ios.sh:机型不可用时自动回退)──
+udid_for_name() { xcrun simctl list devices 2>/dev/null | grep -F "$1 (" | grep -oE '[0-9A-Fa-f-]{36}' | head -1; }
 UDID="$(udid_for_name "$IOS_SIMULATOR_NAME" || true)"
 if [ -z "$UDID" ]; then
-  echo "✗ 找不到本 worktree 模拟器「$IOS_SIMULATOR_NAME」。"
-  echo "  先跑一次 'pnpm dev:ios --dev-client' 建模拟器并装好 dev build,再回来跑本脚本。"
-  exit 1
+  echo "▸ 模拟器「$IOS_SIMULATOR_NAME」不存在,正在创建(机型: $IOS_DEVICE_TYPE)…"
+  UDID="$(xcrun simctl create "$IOS_SIMULATOR_NAME" "$IOS_DEVICE_TYPE" 2>/dev/null || true)"
+  if [ -z "$UDID" ]; then
+    alt="$(xcrun simctl list devicetypes 2>/dev/null | grep -oE 'com\.apple\.CoreSimulator\.SimDeviceType\.iPhone[^ )]*' | tail -1)"
+    [ -n "$alt" ] && { echo "  机型 \"$IOS_DEVICE_TYPE\" 不可用,改用 $alt"; UDID="$(xcrun simctl create "$IOS_SIMULATOR_NAME" "$alt" 2>/dev/null || true)"; }
+  fi
+  [ -z "$UDID" ] && { echo "✗ 创建模拟器失败。可设 IOS_DEVICE_TYPE 后重试。"; exit 1; }
 fi
 
 echo "▸ worktree   : $REPO_ROOT"
 echo "▸ 层 (tags)  : $TIERS"
-echo "▸ Metro 端口 : $EXPO_PORT"
 echo "▸ Agent 端口 : $AGENT_PORT"
 echo "▸ 模拟器     : $IOS_SIMULATOR_NAME ($UDID)"
-
-# ── 已知限制(见 ADR-0007 / issue #36)──────────────────────────────────────────
-# 本 runner 走 dev-client + Metro:flow 的 clearState 会清掉 dev-client 记住的 Metro 地址 → 应用落到
-# launcher;重载 bundle 还会弹开发者菜单盖住界面。两者都让 Maestro 到不了欢迎页 → 多半跑不出全通过。
-# 要稳定通过,用 apps/mobile/.maestro/README.md 的「实测配方」(release 包)。runner 改 release 在 #36。
-echo ""
-echo "⚠ 本 runner 走 dev-client + Metro:flow 的 clearState 会让应用回不到欢迎页(详见 ADR-0007),"
-echo "  多半跑不出全通过。要稳定通过请用 README「实测配方」的 release 流程;runner 改 release 见 #36。"
-echo ""
 
 xcrun simctl boot "$UDID" 2>/dev/null || true  # 已开机则忽略
 open -a Simulator >/dev/null 2>&1 || true
 
-# ── 清理与 .env 还原(EXPO_PUBLIC_DEV_NO_AUTH 是 bundle 期开关,跑前临时改、跑后还原)──
+# ── 清理与 .env 还原(EXPO_PUBLIC_DEV_NO_AUTH 是 bundle 期开关,构建前临时按层改、退出时还原)──
 ORIG_DEV_NO_AUTH="$(grep -E '^EXPO_PUBLIC_DEV_NO_AUTH=' "$MOBILE_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
 AGENT_PID=""
-METRO_PID=""
 cleanup() {
-  [ -n "$METRO_PID" ] && kill "$METRO_PID" 2>/dev/null || true
   [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
-  # 还原 .env 的 DEV_NO_AUTH 到跑前的值(set_env_var 由 worktree-dev-env.sh 提供)。
   set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "$ORIG_DEV_NO_AUTH" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
-# ── 按层设置 app 端 DEV_NO_AUTH(必须在起 Metro 前写好,EXPO_PUBLIC_* 在 bundle 期读取)──
+# ── 按层确定 bundle 期开关 ──
 case "$TIERS" in
-  *supabase*) set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "" >/dev/null 2>&1 || true ;;
-  *)          set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "1" >/dev/null 2>&1 || true ;;
+  *supabase*) WANT_DEV_NO_AUTH="" ;;
+  *)          WANT_DEV_NO_AUTH="1" ;;
 esac
+
+# supabase 层前置检查:真实 anon key 与 agent 的 Supabase 配置必须就位(本脚本不代填密钥)。
+if [ -z "$WANT_DEV_NO_AUTH" ]; then
+  anon="$(grep -E '^EXPO_PUBLIC_SUPABASE_ANON_KEY=' "$MOBILE_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
+  [ -z "$anon" ] && { echo "✗ supabase 层需在 apps/mobile/.env 填真实 EXPO_PUBLIC_SUPABASE_ANON_KEY(supabase status -o env 取)。"; exit 1; }
+  for k in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY SUPABASE_JWT_SECRET; do
+    v="$(grep -E "^$k=" "$AGENT_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
+    [ -z "$v" ] && { echo "✗ supabase 层需在 packages/agent/.env 填 $k(supabase status -o env 取)。"; exit 1; }
+  done
+fi
+
+# ── 构建并安装 release 包(除非 --no-build)──
+if [ "$NO_BUILD" = 0 ]; then
+  set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "$WANT_DEV_NO_AUTH" >/dev/null 2>&1 || true
+
+  # 首次:生成 ios/ 原生工程(--no-install 跳过包管理,随后单独 pod install),再 pod install。
+  if ! ls "$IOS_DIR"/*.xcworkspace >/dev/null 2>&1; then
+    echo "▸ 生成 iOS 原生工程(expo prebuild,首次较慢)…"
+    ( cd "$MOBILE_DIR" && npx expo prebuild --platform ios --no-install )
+    echo "▸ pod install…"
+    ( cd "$IOS_DIR" && LANG=en_US.UTF-8 pod install )
+  fi
+
+  WS="$(ls -d "$IOS_DIR"/*.xcworkspace 2>/dev/null | head -1)"
+  [ -z "$WS" ] && { echo "✗ prebuild 后仍未找到 ios/*.xcworkspace"; exit 1; }
+  SCHEME="$(basename "$WS" .xcworkspace)"
+
+  # 复用 derivedDataPath 时先删旧 main.jsbundle:否则 Xcode 认 output 最新会跳过 bundling,把旧 .env 的开关烘进去。
+  [ -d "$DERIVED" ] && find "$DERIVED" -name 'main.jsbundle' -delete 2>/dev/null || true
+
+  echo "▸ 构建 Release 包(scheme=$SCHEME,JS 内嵌,EXPO_PUBLIC_DEV_NO_AUTH=${WANT_DEV_NO_AUTH:-<空>})…"
+  ( cd "$MOBILE_DIR" && xcodebuild -workspace "$WS" -scheme "$SCHEME" \
+      -configuration Release -sdk iphonesimulator -destination "id=$UDID" \
+      -derivedDataPath "$DERIVED" CODE_SIGN_IDENTITY="-" )
+
+  APP_PRODUCT="$(find "$DERIVED/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' 2>/dev/null | head -1)"
+  [ -z "$APP_PRODUCT" ] && { echo "✗ 未找到构建产物 *.app"; exit 1; }
+  echo "▸ 安装到模拟器:$(basename "$APP_PRODUCT")"
+  xcrun simctl install "$UDID" "$APP_PRODUCT"
+else
+  echo "▸ --no-build:跳过构建/安装,复用已装的 release 包。"
+  echo "  注意:请确保已装包的 bundle 期开关与本层一致(切层需去掉 --no-build 重建)。"
+fi
 
 # ── 起 stub agent(stub-agent / supabase 层需要;frontend-only 不起)──
 need_agent=0
@@ -134,7 +189,6 @@ if [ "$need_agent" = 1 ]; then
       AGENT_PID=$!
       ;;
   esac
-  # 等 /health 就绪
   for _ in $(seq 1 60); do
     curl -sf "http://localhost:$AGENT_PORT/health" >/dev/null 2>&1 && break
     sleep 1
@@ -143,23 +197,6 @@ if [ "$need_agent" = 1 ]; then
     || { echo "✗ agent 未在 http://localhost:$AGENT_PORT 就绪"; exit 1; }
 fi
 
-# ── 起 Metro(dev-client),并把本 worktree 模拟器定向到这个端口的 bundle ──
-echo "▸ 启动 Metro(dev-client,端口 $EXPO_PORT)…"
-( cd "$REPO_ROOT/apps/mobile" && exec npx expo start --port "$EXPO_PORT" --dev-client ) &
-METRO_PID=$!
-for _ in $(seq 1 90); do
-  curl -sf "http://127.0.0.1:$EXPO_PORT/status" >/dev/null 2>&1 && break
-  sleep 1
-done
-curl -sf "http://127.0.0.1:$EXPO_PORT/status" >/dev/null 2>&1 \
-  || { echo "✗ Metro 未在 127.0.0.1:$EXPO_PORT 就绪"; exit 1; }
-
-# 用 UDID 显式把「那台」模拟器指到本 worktree 的 dev-client bundle(镜像 dev-ios.sh)。
-DC_URL="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$EXPO_PORT"
-xcrun simctl openurl "$UDID" "$DC_URL" >/dev/null 2>&1 \
-  || echo "ℹ 自动 openurl 失败,可在 Metro 菜单按 shift+i 选「$IOS_SIMULATOR_NAME」。"
-sleep 3  # 给 JS bundle 一点加载时间(各 flow 的 launchApp 还会再等)
-
-# ── 跑 Maestro,锁定到本 worktree 的 UDID,按层 tag 过滤 ──
+# ── 跑 Maestro(release 不需 Metro;锁定到本 worktree 的 UDID,按层 tag 过滤)──
 echo "▸ 跑 Maestro(--device $UDID, tags: $TIERS)…"
-maestro test --device "$UDID" --include-tags "$TIERS" "$REPO_ROOT/apps/mobile/.maestro/"
+maestro test --device "$UDID" --include-tags "$TIERS" "$MOBILE_DIR/.maestro/"

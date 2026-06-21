@@ -50,4 +50,5 @@ pnpm e2e:ios supabase    # 需真实匿名登录 + 本地 Supabase 的流
 ```
 
 E2E 套件分三层(frontend-only / stub-agent / supabase),用确定性 stub provider 离线覆盖创作主路径;
-跑前请先用 `pnpm dev:ios --dev-client` 把 dev build 装到本 worktree 的模拟器上。
+以 release 包(JS 内嵌)为运行目标,`pnpm e2e:ios` 会按层出包、装到本 worktree 的模拟器、起 stub
+agent 再跑(首次自动 `expo prebuild` + `pod install`)。合并前的人工关卡见 [CONTRIBUTING.md](CONTRIBUTING.md)。
