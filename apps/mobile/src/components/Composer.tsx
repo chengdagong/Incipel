@@ -76,7 +76,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
           value={text}
           onChangeText={setText}
           placeholder={hasChips ? t('composerPlaceholderChips') : t('composerPlaceholder')}
-          placeholderTextColor={palette.textSecondaryAlt}
+          placeholderTextColor={palette.placeholder}
           multiline
           // 回车发送(系统设计:回车发送)。
           onSubmitEditing={submit}
@@ -85,13 +85,15 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         />
       </View>
       <Pressable
-        style={[styles.send, { backgroundColor: canSend ? palette.sendBg : palette.textSecondaryAlt }]}
+        style={[styles.send, { backgroundColor: canSend ? palette.sendBg : palette.disabledFill }]}
         onPress={submit}
         disabled={!canSend}
         accessibilityRole="button"
         accessibilityLabel="发送"
       >
-        <Text style={styles.sendArrow}>↑</Text>
+        {/* 启用态:深色箭头压在浅桃底上(白箭头在 #E7C6AF 上只有 ~1.6:1,几乎不可见)。
+            禁用态:维持低对比的浅色箭头,读作「不可用」。 */}
+        <Text style={[styles.sendArrow, { color: canSend ? palette.textPrimary : '#fff' }]}>↑</Text>
       </Pressable>
     </View>
   );

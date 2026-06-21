@@ -25,7 +25,10 @@ export type Screenplay = {
   scenes: Scene[]; // 扁平,不挂在某一幕下
 };
 
-export const ACCENT_OPTIONS = ['#C2724E', '#5B7B6F', '#6B7280', '#8A6FA8'] as const;
+// 默认主色 #C2724E(亮陶土)白字 CTA 仅 ~3.6:1、作小字链接仅 ~3.2:1,均不达 WCAG AA;
+// 压深一档到 #A8552E:白字 ~5.2:1、奶底上作文字 ~4.7:1,两项都过 AA,色相仍是同族陶土。
+// 其余三色为备选(主题切换 UI 暂未上),作白字 CTA 大多已达标;待色板选择器上线时一并复核。
+export const ACCENT_OPTIONS = ['#A8552E', '#5B7B6F', '#6B7280', '#8A6FA8'] as const;
 export type Accent = (typeof ACCENT_OPTIONS)[number];
 
 export function emptyScreenplay(accent: string = ACCENT_OPTIONS[0]): Screenplay {

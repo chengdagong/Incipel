@@ -12,27 +12,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/auth';
 import { LANGS, useI18n } from '../../src/i18n';
 import { signOut } from '../../src/supabase';
-import { defaultTheme } from '../../src/theme';
+import { defaultTheme, palette } from '../../src/theme';
 
-// 原型 SETTINGS 专用配色(literal,逐项对原型取色)。
+// 设置页各处用色统一引自通用 palette(过去这里是逐项对原型取色的字面色表,已归并)。
+// back / 副标题 / 标签 / 行值原先是 #9A958C / #A39E94 等浅灰(对比 ~2.x:1),现走 palette.textSecondary;
+// 登出按钮的文字与描边走语义色 palette.danger / dangerBorder。
 const S = {
-  divider: '#F0EDE7',
-  back: '#9A958C',
-  title: '#2A2825',
-  avatarAnonBg: '#EDE8E0',
-  avatarAnonText: '#A39E94',
-  primary: '#2A2825',
-  sub: '#A39E94',
-  sectionLabel: '#A39E94',
-  cardBorder: '#E8E3D9',
-  rowText: '#2A2825',
-  rowValue: '#9A958C',
-  caret: '#C2BDB3',
-  dropDivider: '#F2EFE9',
-  langText: '#3A352F',
-  globe: '#7C776E',
-  signOutBorder: '#ECDAD2',
-  signOutText: '#C0654A',
+  divider: palette.divider,
+  back: palette.textSecondary,
+  title: palette.textPrimary,
+  avatarAnonBg: palette.mutedBg,
+  avatarAnonText: palette.textSecondary,
+  primary: palette.textPrimary,
+  sub: palette.textSecondary,
+  sectionLabel: palette.textSecondary,
+  cardBorder: palette.borderAlt,
+  rowText: palette.textPrimary,
+  rowValue: palette.textSecondary,
+  caret: palette.textSecondary,
+  dropDivider: palette.divider,
+  langText: palette.textPrimaryAlt,
+  globe: palette.textSecondary,
+  signOutBorder: palette.dangerBorder,
+  signOutText: palette.danger,
 } as const;
 
 export default function SettingsScreen() {
