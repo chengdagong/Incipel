@@ -43,7 +43,8 @@ export interface ModelProvider {
   completeLogline(input: CompleteLoglineInput): Promise<string>;
 }
 
-export type ProviderName = 'anthropic' | 'openrouter';
+// 'fake' 仅供本地 / E2E:产出写死的确定性回合,不调任何真实模型(见 model/fake.ts)。prod 永不设。
+export type ProviderName = 'anthropic' | 'openrouter' | 'fake';
 
 // 工厂:按 env MODEL_PROVIDER 选 provider。只在 tool-use 可靠的 provider 间切换。
 export async function createModelProvider(): Promise<ModelProvider> {
@@ -56,6 +57,11 @@ export async function createModelProvider(): Promise<ModelProvider> {
     case 'openrouter': {
       const { createOpenRouterProvider } = await import('./openrouter');
       return createOpenRouterProvider();
+    }
+    case 'fake': {
+      // 确定性 fake:离线跑 E2E 创作主路径用,不接任何真实模型。
+      const { createFakeProvider } = await import('./fake');
+      return createFakeProvider();
     }
     default:
       // 未知 provider 一律拒绝:绝不静默退回弱模型或文本解析路径。

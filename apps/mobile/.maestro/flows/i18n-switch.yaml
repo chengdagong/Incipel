@@ -1,0 +1,18 @@
+# [offline] 多语言切换(纯客户端,AsyncStorage):设置里从简体中文切到 English,断言界面文案变英文。
+# 不依赖任何后端;同时验证「切语言只改界面、不报错」。
+appId: com.incipel.app
+tags:
+  - offline
+---
+- runFlow: ../subflows/enter-welcome.yaml
+# 进设置:菜单唤出抽屉 → 抽屉头像(accessibilityLabel「设置」)
+- tapOn: "菜单"
+- tapOn: "设置"
+- extendedWaitUntil:
+    visible: ".*界面语言.*"
+    timeout: 20000
+# 展开语言下拉,选 English
+- tapOn: ".*界面语言.*"
+- tapOn: ".*English.*"
+# 界面文案应整体变英文:语言行标题变为 ".*Interface language.*"
+- assertVisible: ".*Interface language.*"

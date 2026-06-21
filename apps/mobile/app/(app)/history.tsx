@@ -102,7 +102,7 @@ export default function HistoryScreen() {
           key={r.id}
           style={[styles.item, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
         >
-          <Pressable style={styles.itemMain} onPress={() => resume(r.id)}>
+          <Pressable style={styles.itemMain} onPress={() => resume(r.id)} testID={`history-row-${r.id}`}>
             <Text style={[styles.itemTitle, { color: palette.textPrimary }]} numberOfLines={1}>
               {r.starred ? '★ ' : ''}
               {r.title || '未命名作品'}
@@ -111,7 +111,7 @@ export default function HistoryScreen() {
               {new Date(r.updated_at).toLocaleString()}
             </Text>
           </Pressable>
-          <Pressable onPress={() => remove(r.id)} accessibilityRole="button">
+          <Pressable onPress={() => remove(r.id)} accessibilityRole="button" testID={`history-delete-${r.id}`}>
             <Text style={[styles.delete, { color: palette.textSecondary }]}>删除</Text>
           </Pressable>
         </View>

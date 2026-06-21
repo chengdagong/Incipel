@@ -1,0 +1,27 @@
+# [supabase] 星标(需真实 Supabase 会话):跑一轮落进数据库 → 抽屉「最近」出现该会话 → 点星标 → 变实心。
+# 验证客户端直连 Supabase 的会话读取与 starred 写回(DrawerProvider 乐观更新)。
+appId: com.incipel.app
+tags:
+  - supabase
+---
+- runFlow: ../subflows/enter-welcome-anon.yaml
+- runFlow: ../subflows/run-one-turn.yaml
+# 这一轮已把会话写进 Supabase。从对话屏返回欢迎页,开抽屉看列表。
+- tapOn: "返回"
+- extendedWaitUntil:
+    visible: ".*开始创作.*"
+    timeout: 20000
+- tapOn: "菜单"
+# 「最近」区出现该会话(抽屉标题回落 documents.state.meta.title = 深夜来电)
+- extendedWaitUntil:
+    visible: ".*深夜来电.*"
+    timeout: 20000
+# 星标按钮有显式 accessibilityLabel(收藏/取消收藏),会**覆盖** ★/☆ 字形——Maestro 看到的是标签,
+# 不是字形。未收藏时标签是「收藏」。点它的星标(单会话,testID 前缀正则不歧义)。
+- assertVisible: "收藏"
+- tapOn:
+    id: "session-star-.*"
+# 收藏后该行星标标签变「取消收藏」(乐观更新即时翻转)
+- extendedWaitUntil:
+    visible: "取消收藏"
+    timeout: 20000

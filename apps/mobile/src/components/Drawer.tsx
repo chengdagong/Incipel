@@ -167,6 +167,7 @@ export function DrawerOverlay({
                   {starred.map((s) => (
                     <SessionRow
                       key={s.id}
+                      id={s.id}
                       title={s.title || t('untitled')}
                       starred
                       accent={theme.accent}
@@ -183,6 +184,7 @@ export function DrawerOverlay({
                   {recent.map((s) => (
                     <SessionRow
                       key={s.id}
+                      id={s.id}
                       title={s.title || t('untitled')}
                       subtitle={timeAgo(s.updatedAt, t)}
                       accent={theme.accent}
@@ -237,6 +239,7 @@ function NavRow({
 }
 
 function SessionRow({
+  id,
   title,
   subtitle,
   starred,
@@ -245,6 +248,8 @@ function SessionRow({
   onOpen,
   onToggleStar,
 }: {
+  // 会话 id:仅用于 E2E testID(同列表多行,标题可能重复/不唯一,按 id 精确定位)。
+  id: string;
   title: string;
   subtitle?: string;
   starred?: boolean;
@@ -259,6 +264,7 @@ function SessionRow({
         style={({ pressed }) => [styles.sessionMain, pressed && { backgroundColor: DRAWER.navPressed }]}
         onPress={onOpen}
         accessibilityRole="button"
+        testID={`session-row-${id}`}
       >
         <Text style={styles.sessionTitle} numberOfLines={1}>
           {title}
@@ -271,6 +277,7 @@ function SessionRow({
         accessibilityRole="button"
         accessibilityLabel={starred ? t('unstarTitle') : t('starTitle')}
         hitSlop={6}
+        testID={`session-star-${id}`}
       >
         {starred ? (
           <Text style={[styles.starGlyph, { color: accent }]}>★</Text>

@@ -1,0 +1,16 @@
+# [offline] 欢迎页纯 UI:控件在位 + 建议 chip 回填灵感框。
+# 刻意不点骰子(/logline)、不进对话屏(/run)——这两者要后端,留给 fake 层。
+appId: com.incipel.app
+tags:
+  - offline
+---
+- runFlow: ../subflows/enter-welcome.yaml
+# 关键控件在位
+- assertVisible: "没头绪？试试这些方向"
+- assertVisible: "一段无法言说的关系"
+- assertVisible: ".*开始创作.*"
+# 连点两个方向 chip:idea 被拼成「A（B）」。带全角括号的拼接串只可能在输入框里,
+# 不是任何 chip 的标签 —— 以此证明 chip 确实回填了输入框(setIdea)。
+- tapOn: "一段无法言说的关系"
+- tapOn: "一个荒诞的设定"
+- assertVisible: ".*（一个荒诞的设定）.*"

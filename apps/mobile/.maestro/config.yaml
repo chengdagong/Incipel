@@ -1,0 +1,15 @@
+# Maestro workspace 配置。
+#
+# flows/    可独立运行的流程,本集合按 glob 收集。
+# subflows/ 被 runFlow 复用的片段,不在集合内、不会被独立选中。
+#
+# 流程按后端依赖分三层,用 tag 过滤(详见 README.md):
+#   offline   仅 app(DEV_NO_AUTH bundle),不起 agent
+#   fake      app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=fake STORE=memory DEV_NO_AUTH=1)
+#   supabase  app(真实匿名登录)+ agent(MODEL_PROVIDER=fake + 真 SupabaseStore)
+#
+# 日常套件(免 Supabase):
+#   maestro test --include-tags offline,fake apps/mobile/.maestro/
+# 一般经 scripts/e2e-ios.sh 跑,它会按层接好端口 / 模拟器 / agent。
+flows:
+  - "flows/*.yaml"

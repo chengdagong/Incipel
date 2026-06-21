@@ -128,6 +128,8 @@ export function PortraitSheet() {
               style={styles.genBtn}
               onPress={() => sheetChar && generate(sheetChar.id, style)}
               accessibilityRole="button"
+              // E2E:弹窗内「生成」与标题「生成「…」的肖像」文案相撞,用 testID 精确点生成按钮。
+              testID="portrait-generate"
             >
               <Text style={styles.genStar}>★</Text>
               <Text style={styles.genText}>{t('generate')}</Text>
