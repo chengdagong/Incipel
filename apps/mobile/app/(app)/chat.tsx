@@ -167,7 +167,7 @@ export default function ChatScreen() {
 
         {!!error && (
           <View style={styles.errorRow}>
-            <Text style={[styles.error, { color: defaultTheme.accent }]}>出错了:{error}</Text>
+            <Text style={[styles.error, { color: palette.danger }]}>出错了:{error}</Text>
             {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复落库(见 KI-2)。
                 务必走 retry 而非重新 sendMessage——后者会生成新 runId、绕开幂等。 */}
             <Pressable
@@ -177,7 +177,7 @@ export default function ChatScreen() {
               accessibilityRole="button"
               accessibilityLabel="重试本轮"
             >
-              <Text style={[styles.retry, { color: defaultTheme.accent }]}>重试</Text>
+              <Text style={[styles.retry, { color: palette.danger }]}>重试</Text>
             </Pressable>
           </View>
         )}
@@ -224,7 +224,7 @@ function Header({
   return (
     <View style={[styles.header, { paddingTop: insets.top, borderColor: palette.border }]}>
       <View style={styles.headerInner}>
-        <Pressable onPress={onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="返回">
+        <Pressable onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }} accessibilityRole="button" accessibilityLabel="返回">
           <Text style={[styles.backChevron, { color: palette.textSecondary }]}>‹</Text>
         </Pressable>
 
@@ -238,6 +238,8 @@ function Header({
           onPress={onToggleDoc}
           style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
           accessibilityRole="button"
+          accessibilityLabel={t('docBtn')}
+          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
         >
           <View
             style={[styles.docDot, { backgroundColor: docOpen ? defaultTheme.accent : palette.dot }]}

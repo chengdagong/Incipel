@@ -16,7 +16,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { defaultTheme, type Theme } from '../theme';
+import { defaultTheme, palette, type Theme } from '../theme';
 import { useT, type I18nApi } from '../i18n';
 import { PRODUCT_NAME } from '../config';
 
@@ -28,22 +28,24 @@ export type DrawerSession = {
   updatedAt: string; // ISO
 };
 
-// 原型 drawer 专用配色(literal,逐像素对齐原型,不进通用 palette)。
+// drawer 各处用色统一引自通用 palette(过去这里是逐像素对齐原型的字面色表,已归并)。
+// 次要文字 / 时间 / 计数 / 空态原先是 #A39E94 / #B3AEA4 / #9A958C 一类浅灰(对比 ~2.x:1),
+// 现统一走 palette.textSecondary(≈ 5.6:1)。
 const DRAWER = {
-  panelBg: '#FCFBF8',
-  backdrop: 'rgba(40,36,32,0.32)',
-  brand: '#2A2825',
-  avatarBg: '#2A2825',
-  navText: '#2A2825',
-  navIcon: '#3A352F',
-  navPressed: '#F1EDE6',
-  sectionLabel: '#A39E94',
-  itemTitle: '#2A2825',
-  itemTime: '#B3AEA4',
-  count: '#B3AEA4',
-  starOutline: '#9A958C',
-  emptyText: '#B3AEA4',
-  floatBg: '#2A2825',
+  panelBg: palette.panelBg,
+  backdrop: palette.scrim,
+  brand: palette.textPrimary,
+  avatarBg: palette.avatarBg,
+  navText: palette.textPrimary,
+  navIcon: palette.textPrimaryAlt,
+  navPressed: palette.pressedBg,
+  sectionLabel: palette.textSecondary,
+  itemTitle: palette.textPrimary,
+  itemTime: palette.textSecondary,
+  count: palette.textSecondary,
+  starOutline: palette.textSecondary,
+  emptyText: palette.textSecondary,
+  floatBg: palette.avatarBg,
 } as const;
 
 type Props = {
@@ -292,7 +294,7 @@ export function MenuButton({
 }) {
   const t = useT();
   const circle = variant === 'circle';
-  const barColor = circle ? '#56524B' : '#9A958C';
+  const barColor = circle ? '#56524B' : palette.textSecondary;
   return (
     <Pressable
       onPress={onPress}

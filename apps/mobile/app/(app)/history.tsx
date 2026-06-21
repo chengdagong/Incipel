@@ -2,7 +2,7 @@
 // 列表直接用 supabase-js 查 sessions(RLS 按 user_id 隔离,见 §8)。
 
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useT } from '../../src/i18n';
 import { supabase } from '../../src/supabase';
@@ -66,6 +66,14 @@ export default function HistoryScreen() {
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
+  // 删除是破坏性且不可恢复的:先二次确认(与设置页登出一致),用户确认后再删。
+  function confirmRemove(id: string) {
+    Alert.alert(t('deleteConfirm'), t('deleteConfirmSub'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('deleteWork'), style: 'destructive', onPress: () => void remove(id) },
+    ]);
+  }
+
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
@@ -105,14 +113,20 @@ export default function HistoryScreen() {
           <Pressable style={styles.itemMain} onPress={() => resume(r.id)}>
             <Text style={[styles.itemTitle, { color: palette.textPrimary }]} numberOfLines={1}>
               {r.starred ? '★ ' : ''}
-              {r.title || '未命名作品'}
+              {r.title || t('untitled')}
             </Text>
-            <Text style={[styles.itemMeta, { color: palette.textSecondaryAlt }]}>
+            <Text style={[styles.itemMeta, { color: palette.textSecondary }]}>
               {new Date(r.updated_at).toLocaleString()}
             </Text>
           </Pressable>
-          <Pressable onPress={() => remove(r.id)} accessibilityRole="button">
-            <Text style={[styles.delete, { color: palette.textSecondary }]}>删除</Text>
+          <Pressable
+            onPress={() => confirmRemove(r.id)}
+            accessibilityRole="button"
+            accessibilityLabel={t('deleteWork')}
+            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+            style={styles.deleteBtn}
+          >
+            <Text style={[styles.delete, { color: palette.textSecondary }]}>{t('deleteWork')}</Text>
           </Pressable>
         </View>
       ))}
@@ -139,5 +153,6 @@ const styles = StyleSheet.create({
   itemMain: { flex: 1, gap: 4 },
   itemTitle: { fontSize: 16, fontWeight: '600', fontFamily: defaultTheme.fonts.serifTitle },
   itemMeta: { fontSize: 12 },
+  deleteBtn: { paddingVertical: 10, paddingHorizontal: 6 },
   delete: { fontSize: 13, fontWeight: '600' },
 });
