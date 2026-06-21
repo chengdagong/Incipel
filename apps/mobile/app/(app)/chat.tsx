@@ -176,6 +176,7 @@ export default function ChatScreen() {
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="重试本轮"
+              testID="error-retry"
             >
               <Text style={[styles.retry, { color: palette.danger }]}>重试</Text>
             </Pressable>
@@ -224,7 +225,7 @@ function Header({
   return (
     <View style={[styles.header, { paddingTop: insets.top, borderColor: palette.border }]}>
       <View style={styles.headerInner}>
-        <Pressable onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }} accessibilityRole="button" accessibilityLabel="返回">
+        <Pressable onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }} accessibilityRole="button" accessibilityLabel="返回" testID="chat-back">
           <Text style={[styles.backChevron, { color: palette.textSecondary }]}>‹</Text>
         </Pressable>
 
@@ -239,6 +240,7 @@ function Header({
           style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
           accessibilityRole="button"
           accessibilityLabel={t('docBtn')}
+          testID="chat-doc"
           hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
         >
           <View

@@ -110,6 +110,7 @@ export default function WelcomeScreen() {
           disabled={rolling}
           accessibilityRole="button"
           accessibilityLabel={t('diceTitle')}
+          testID="welcome-dice"
           hitSlop={10}
         >
           {rolling ? (
@@ -124,9 +125,10 @@ export default function WelcomeScreen() {
 
       <Text style={[styles.suggestHint, { color: palette.textSecondary }]}>{t('suggestHint')}</Text>
       <View style={styles.chips}>
-        {DIRECTION_CHIPS.map((c) => (
+        {DIRECTION_CHIPS.map((c, i) => (
           <Pressable
             key={c}
+            testID={`welcome-chip-${i}`}
             style={[styles.chip, { borderColor: palette.border, backgroundColor: palette.cardBg }]}
             onPress={() => setIdea((prev) => (prev ? `${prev}（${c}）` : c))}
           >
@@ -143,6 +145,7 @@ export default function WelcomeScreen() {
         onPress={start}
         disabled={!idea.trim()}
         accessibilityRole="button"
+        testID="welcome-start"
       >
         <Text style={styles.startLabel}>{t('startBtn')}</Text>
       </Pressable>

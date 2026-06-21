@@ -5,14 +5,19 @@ tags:
   - frontend-only
 ---
 - runFlow: ../subflows/enter-welcome.yaml
-# 进设置:菜单唤出抽屉 → 抽屉头像(accessibilityLabel「设置」)
-- tapOn: "菜单"
-- tapOn: "设置"
+# 进设置:菜单唤出抽屉 → 抽屉头像(设置入口)
+- tapOn:
+    id: "menu-button"
+- tapOn:
+    id: "drawer-settings"
 - extendedWaitUntil:
-    visible: ".*界面语言.*"
+    visible:
+      id: "settings-lang-row"
     timeout: 20000
-# 展开语言下拉,选 English
-- tapOn: ".*界面语言.*"
-- tapOn: ".*English.*"
-# 界面文案应整体变英文:语言行标题变为 ".*Interface language.*"
+# 展开语言下拉,选 English(语言项 testID 按 code:settings-lang-en)
+- tapOn:
+    id: "settings-lang-row"
+- tapOn:
+    id: "settings-lang-en"
+# 界面文案应整体变英文:语言行标题变为「Interface language」(内容断言,证明切换生效)
 - assertVisible: ".*Interface language.*"

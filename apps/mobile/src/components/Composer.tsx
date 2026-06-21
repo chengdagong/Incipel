@@ -90,6 +90,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
         disabled={!canSend}
         accessibilityRole="button"
         accessibilityLabel="发送"
+        testID="composer-send"
       >
         {/* 启用态:深色箭头压在浅桃底上(白箭头在 #E7C6AF 上只有 ~1.6:1,几乎不可见)。
             禁用态:维持低对比的浅色箭头,读作「不可用」。 */}

@@ -7,7 +7,9 @@ tags:
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: ".*开始创作.*"
+    visible:
+      id: "welcome-start"
     timeout: 60000
 # 登录入口不应出现——门已被 DEV_NO_AUTH 放行
-- assertNotVisible: "先随便逛逛"
+- assertNotVisible:
+    id: "login-anon"

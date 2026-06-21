@@ -104,42 +104,53 @@ flows/
   history-resume.yaml      [supabase] 一轮落进数据库 → 历史页出现 → 续写回对话屏
 ```
 
-## 选择器约定
+## 选择器约定(点 testID,断言才用文案)
 
-默认界面语言是简体中文(`zh`)。Maestro 按**可见中文文案**与已有 `accessibilityLabel`
-(`菜单` / `发送` / `返回` / `关闭抽屉` / `设置` / `重新生成`)选元素。
+按 ADR-0007(Q7):flow **要『点』的控件一律给 testID**,与文案 / 语言脱开;**文案只留给「断言内容」**
+(出现「林夏」、切完出现「Interface language」、抽屉出现「深夜来电」)。app 尚早、文案在动、又多语言,
+拿文案当点击目标注定常断。断言内容默认按简体中文(`zh`)文案;切到英文后断言英文串。
 
-只在「重复出现 / 纯文案无法区分」处加了少量 `testID`:
+各点击目标的 testID(都在对应组件上):
 
-| testID | 位置 | 为什么 |
+| testID | 控件 | 组件 |
 |---|---|---|
-| `char-portrait-gen-<人物id>` | `PortraitThumb`「生成肖像」 | 同屏多人物时文案相同 |
-| `char-chat-<人物id>` | `InlineCard`「聊聊 TA →」 | 同屏多人物时文案相同 |
-| `session-row-<会话id>` / `session-star-<会话id>` | `Drawer` 会话行 / 星标 | 每会话一行,标题可能不唯一 |
-| `work-card-<作品id>` | `works.tsx` 作品卡 | 每行可点区域文案相同 |
-| `history-row-<会话id>` / `history-delete-<会话id>` | `history.tsx` 续写行 / 删除 | 每行文案相同 |
-| `portrait-generate` | `PortraitSheet`「生成」按钮 | 与弹窗标题「生成「…」的肖像」文案相撞 |
+| `welcome-start` | 开始创作 | `app/(app)/index.tsx` |
+| `welcome-chip-<i>` | 建议方向 chip(0/1/2) | `app/(app)/index.tsx` |
+| `welcome-dice` | 🎲 随机灵感 | `app/(app)/index.tsx` |
+| `menu-button` | 汉堡菜单(唤出抽屉) | `src/components/Drawer.tsx` |
+| `drawer-new` / `drawer-new-float` | 新建创作(NavRow / 悬浮按钮) | `src/components/Drawer.tsx` |
+| `drawer-sessions` | 会话(进历史) | `src/components/Drawer.tsx` |
+| `drawer-settings` | 设置(抽屉头像) | `src/components/Drawer.tsx` |
+| `drawer-backdrop` | 关闭抽屉(遮罩) | `src/components/Drawer.tsx` |
+| `settings-back` | 返回 | `app/(app)/settings.tsx` |
+| `settings-lang-row` | 界面语言行(展开下拉) | `app/(app)/settings.tsx` |
+| `settings-lang-<code>` | 语言项(`zh`/`en`/`ja`/`zhHant`) | `app/(app)/settings.tsx` |
+| `chat-back` | 返回 | `app/(app)/chat.tsx` |
+| `chat-doc` | 文档(开关 DocPanel) | `app/(app)/chat.tsx` |
+| `composer-send` | 发送 | `src/components/Composer.tsx` |
+| `error-retry` | 出错重试本轮 | `app/(app)/chat.tsx` |
+| `login-anon` | 先随便逛逛(匿名登录) | `app/login.tsx` |
+| `char-portrait-gen-<人物id>` | 生成肖像 | `src/components/PortraitThumb.tsx` |
+| `char-chat-<人物id>` | 聊聊 TA → | `src/components/InlineCard.tsx` |
+| `portrait-style-<风格>` / `portrait-generate` | 风格 chip / 生成(Modal 内,见下) | `src/components/PortraitSheet.tsx` |
+| `session-row-<会话id>` / `session-star-<会话id>` | 抽屉会话行 / 星标 | `src/components/Drawer.tsx` |
+| `work-card-<作品id>` | 作品卡 | `app/(app)/works.tsx` |
+| `history-row-<会话id>` / `history-delete-<会话id>` | 历史续写行 / 删除 | `app/(app)/history.tsx` |
 
-会话 / 人物 id 由服务端生成、跑前不可知,故流程里用 `id: "session-star-.*"` 这类**前缀正则**
+服务端生成的 id(会话 / 人物 / 作品)跑前不可知,flow 里用 `id: "session-star-.*"` 这类**前缀正则**
 (单条数据下不歧义)。
 
-> **两条 2.6.1 实测得来的硬规矩,加锚点前必看:**
+> **仍要留意的 Maestro 2.6.1 匹配规矩(只影响『文案』断言;点击已走 testID,不受这些坑):**
 >
-> 1. **文本匹配是「整串锚定」正则,不是 contains**:选择器作正则去**整串匹配**元素文本。所以
->    「开始创作 →」用裸 `开始创作` 命不中(只是子串),要 `.*开始创作.*`;`8082` 命不中
->    「http://…:8082」,要 `.*8082.*`。
-> 2. **多子 Pressable 的文本会被合并成一个 accessibility 元素**:RN 的可点元素(`accessible` 默认 true)
->    把子节点文本拼成一串。所以语言行(`界面语言`+`简体中文`+`▾`)、`会话` NavRow(带计数徽标)、
->    选项行(`▸`+文案)、人物卡底部(点+`已存入剧本草稿`+`打开文档全文`)、抽屉会话行(标题+时间)
->    里的**单条**文案都命不中裸文案,要 `.*…*`。
->
-> 合起来的判断法:**元素(含它在可点容器里合并进来的兄弟文本)的完整文本恰好等于你的串吗?** 等于
-> 才用裸文案(如独立 Text `主管编剧`/`林夏`、显式 `accessibilityLabel` `菜单`/`设置`/`返回`、单子
-> Pressable 的 chip `一段无法言说的关系`);只要是其中一段,就 `.*…*`。重复/服务端 id 的控件用
-> `testID` 前缀正则(`session-star-.*`)。
->
-> **RN `<Modal>` 的内部控件 Maestro 取不到**:PortraitSheet 是 Modal,标题(Text)能露出来,但里面的
-> 风格 chip / 生成按钮(连 testID、坐标点都)取不到。故 `portrait-generate` 只验证「弹窗能打开」。
+> 1. **文本匹配是「整串锚定」正则,不是 contains**:断言「开始创作 →」用裸 `开始创作` 命不中,要
+>    `.*开始创作.*`;断言全角括号拼接串要 `.*（一个荒诞的设定）.*`。
+> 2. **多子 Pressable 的文本会被合并成一个元素**:卡片底部(`已存入剧本草稿`+`打开文档全文`)、抽屉
+>    会话行(标题+时间)里的**单条**文案命不中裸文案,要 `.*…*`;独立 Text(`主管编剧`/`林夏`/`钟点工`)
+>    才可裸文案。
+> 3. **显式 `accessibilityLabel` 覆盖子 Text 字形**:星标按钮看到的是标签 `收藏`/`取消收藏`(它同时
+>    编码收藏状态),不是 ★/☆ 字形——故星标「状态」仍用标签断言。
+> 4. **RN `<Modal>` 的内部控件 Maestro 取不到**:PortraitSheet 是 Modal,标题(Text)能露出来,但里面的
+>    风格 chip / 生成按钮即便加了 testID 也取不到。故 `portrait-generate` 只验证「弹窗能打开」。
 
 ## 已知边界
 

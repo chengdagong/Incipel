@@ -4,7 +4,8 @@ appId: com.incipel.app
 ---
 - launchApp:
     clearState: true
-# 等 JS bundle 加载完、欢迎页出现(「开始创作」按钮恒在)
+# 等 JS bundle 加载完、欢迎页出现(开始创作按钮 testID 恒在,与文案/语言脱开)
 - extendedWaitUntil:
-    visible: ".*开始创作.*"
+    visible:
+      id: "welcome-start"
     timeout: 60000

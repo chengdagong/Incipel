@@ -11,9 +11,10 @@ tags:
 ---
 - runFlow: ../subflows/enter-welcome.yaml
 - runFlow: ../subflows/run-one-turn.yaml
-# 人物卡上「生成肖像」(空态缩略块,＋ 与文案合并)→ 打开底部生成弹窗
-- tapOn: ".*生成肖像.*"
-# 弹窗标题「生成「林夏」的肖像」——用松正则避开全角「」匹配坑
+# 人物卡上「生成肖像」(testID 前缀正则:人物 id 服务端生成,单人物下不歧义)→ 打开底部生成弹窗
+- tapOn:
+    id: "char-portrait-gen-.*"
+# 弹窗标题「生成「林夏」的肖像」——用松正则避开全角「」匹配坑(内容断言)
 - extendedWaitUntil:
     visible: ".*林夏.*肖像.*"
     timeout: 20000

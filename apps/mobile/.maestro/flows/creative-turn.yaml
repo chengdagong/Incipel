@@ -5,9 +5,11 @@ tags:
   - stub-agent
 ---
 - runFlow: ../subflows/enter-welcome.yaml
-- tapOn: "一段无法言说的关系"
-- tapOn: ".*开始创作.*"
-# 助手流式回复(助手名「主管编剧」)
+- tapOn:
+    id: "welcome-chip-0"
+- tapOn:
+    id: "welcome-start"
+# 助手流式回复(助手名「主管编剧」=内容断言)
 - extendedWaitUntil:
     visible: "主管编剧"
     timeout: 40000

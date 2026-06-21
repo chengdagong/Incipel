@@ -7,17 +7,20 @@ tags:
 - runFlow: ../subflows/enter-welcome-anon.yaml
 - runFlow: ../subflows/run-one-turn.yaml
 # 这一轮已把会话写进 Supabase。从对话屏返回欢迎页,开抽屉看列表。
-- tapOn: "返回"
+- tapOn:
+    id: "chat-back"
 - extendedWaitUntil:
-    visible: ".*开始创作.*"
+    visible:
+      id: "welcome-start"
     timeout: 20000
-- tapOn: "菜单"
-# 「最近」区出现该会话(抽屉标题回落 documents.state.meta.title = 深夜来电)
+- tapOn:
+    id: "menu-button"
+# 「最近」区出现该会话(抽屉标题回落 documents.state.meta.title = 深夜来电,内容断言)
 - extendedWaitUntil:
     visible: ".*深夜来电.*"
     timeout: 20000
-# 星标按钮有显式 accessibilityLabel(收藏/取消收藏),会**覆盖** ★/☆ 字形——Maestro 看到的是标签,
-# 不是字形。未收藏时标签是「收藏」。点它的星标(单会话,testID 前缀正则不歧义)。
+# 星标按钮的 accessibilityLabel(收藏/取消收藏)编码的是「是否已收藏」的状态,且会覆盖 ★/☆ 字形;
+# 故星标「状态」用标签断言(内容/状态断言),「点击」用 testID 前缀正则(单会话不歧义)。
 - assertVisible: "收藏"
 - tapOn:
     id: "session-star-.*"
