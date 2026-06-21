@@ -1,13 +1,15 @@
-# 复用片段:从欢迎页跑出 fake 的一轮,停在对话屏。
-# 前置:已在欢迎页(先 runFlow enter-welcome 或 enter-welcome-anon);agent 跑 MODEL_PROVIDER=fake。
-# 作用:点建议 chip 填灵感 → 开始创作 → 等 fake 写死的一轮产出(助手名 + 人物「林夏」)。
+# 复用片段:从欢迎页跑出 stub 的一轮,停在对话屏。
+# 前置:已在欢迎页(先 runFlow enter-welcome 或 enter-welcome-anon);agent 跑 MODEL_PROVIDER=stub。
+# 作用:点建议 chip 填灵感 → 开始创作 → 等 stub 写死的一轮产出(助手名 + 人物「林夏」)。
 #       supabase 层下,这一轮同时把会话写进 Supabase(SupabaseStore),供抽屉/历史读回。
 appId: com.incipel.app
 ---
-# 点建议 chip 直接把灵感填进输入框(setIdea),免去键盘输入的脆弱
-- tapOn: "一段无法言说的关系"
-- tapOn: ".*开始创作.*"
-# fake 一轮的流式产出:助手名先出现,人物卡里出现写死的「林夏」
+# 点第一个建议 chip 把灵感填进输入框(setIdea),免去键盘输入的脆弱;按 testID 点,与文案脱开
+- tapOn:
+    id: "welcome-chip-0"
+- tapOn:
+    id: "welcome-start"
+# stub 一轮的流式产出:助手名先出现,人物卡里出现写死的「林夏」(均为内容断言)
 - extendedWaitUntil:
     visible: "主管编剧"
     timeout: 40000

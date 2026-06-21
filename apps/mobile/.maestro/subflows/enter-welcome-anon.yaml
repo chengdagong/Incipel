@@ -4,11 +4,15 @@ appId: com.incipel.app
 ---
 - launchApp:
     clearState: true
+# 登录页:「先随便逛逛」匿名登录入口(testID login-anon)
 - extendedWaitUntil:
-    visible: "先随便逛逛"
+    visible:
+      id: "login-anon"
     timeout: 60000
-- tapOn: "先随便逛逛"
+- tapOn:
+    id: "login-anon"
 # 匿名登录成功 → 会话门控放行 → 欢迎页
 - extendedWaitUntil:
-    visible: ".*开始创作.*"
+    visible:
+      id: "welcome-start"
     timeout: 30000

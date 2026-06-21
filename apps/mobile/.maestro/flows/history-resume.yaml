@@ -9,21 +9,26 @@ tags:
 ---
 - runFlow: ../subflows/enter-welcome-anon.yaml
 - runFlow: ../subflows/run-one-turn.yaml
-- tapOn: "返回"
+- tapOn:
+    id: "chat-back"
 - extendedWaitUntil:
-    visible: ".*开始创作.*"
+    visible:
+      id: "welcome-start"
     timeout: 20000
-# 经抽屉「会话」进历史页(NavRow「会话」带计数徽标、被合并,用 .* 正则)
-- tapOn: "菜单"
-- tapOn: ".*会话.*"
+# 经抽屉「会话」进历史页(按 testID 点,免去 NavRow 计数徽标合并文案的脆弱)
+- tapOn:
+    id: "menu-button"
+- tapOn:
+    id: "drawer-sessions"
 # 历史列表加载出该会话行(testID 前缀,标题无关)
 - extendedWaitUntil:
     visible:
       id: "history-row-.*"
     timeout: 20000
-# 点该行续写 → 回到对话屏(文档按钮恒在)
+# 点该行续写 → 回到对话屏(文档按钮 testID 恒在)
 - tapOn:
     id: "history-row-.*"
 - extendedWaitUntil:
-    visible: ".*文档.*"
+    visible:
+      id: "chat-doc"
     timeout: 20000

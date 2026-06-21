@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import { EventType } from '@incipel/shared';
 import { runTurnCore } from '../src/run';
 import { MemoryStore } from '../src/dev/memory-store';
-import { fakeProvider } from './helpers/fake-provider';
+import { stubProvider } from './helpers/stub-provider';
 
 async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
   for await (const _ of gen) {
@@ -24,7 +24,7 @@ describe('KI-2 落库幂等', () => {
   it('同一 runId 重发,只落库一次', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
-    const provider = fakeProvider(SUCCESS as never);
+    const provider = stubProvider(SUCCESS as never);
 
     await drain(runTurnCore({ threadId: 't', runId: 'same', userId: 'u', userMessage: 'm', newConnection: true }, { provider, store }));
     await drain(runTurnCore({ threadId: 't', runId: 'same', userId: 'u', userMessage: 'm', newConnection: true }, { provider, store }));
@@ -35,7 +35,7 @@ describe('KI-2 落库幂等', () => {
   it('不同 runId 各自落库', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
-    const provider = fakeProvider(SUCCESS as never);
+    const provider = stubProvider(SUCCESS as never);
 
     await drain(runTurnCore({ threadId: 't', runId: 'r1', userId: 'u', userMessage: 'm', newConnection: true }, { provider, store }));
     await drain(runTurnCore({ threadId: 't', runId: 'r2', userId: 'u', userMessage: 'm', newConnection: true }, { provider, store }));
@@ -48,7 +48,7 @@ describe('KI-2 落库幂等', () => {
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
 
     // 先正常跑一轮 r5 并落库:写一个人物 + 一句总结。
-    const okProvider = fakeProvider([
+    const okProvider = stubProvider([
       [
         { type: 'tool-call', call: { toolCallId: 'a', toolName: 'add_character', args: { name: '阿七', note: '' } } },
         { type: 'text', delta: '立了阿七。' },
@@ -95,7 +95,7 @@ describe('KI-2 落库幂等', () => {
   it('重放也带回本轮 options(CUSTOM)与 newConnection=false 时补发 STATE_SNAPSHOT', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
-    const okProvider = fakeProvider([
+    const okProvider = stubProvider([
       [
         { type: 'text', delta: '你想往哪走?' },
         { type: 'tool-call', call: { toolCallId: '1', toolName: 'propose_options', args: { options: ['悬疑', '温情'] } } },

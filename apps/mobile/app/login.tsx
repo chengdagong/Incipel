@@ -169,6 +169,7 @@ export default function LoginScreen() {
           disabled={busy}
           accessibilityRole="button"
           accessibilityLabel="先随便逛逛"
+          testID="login-anon"
         >
           {busy ? (
             <ActivityIndicator color={accent} />

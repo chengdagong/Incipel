@@ -109,6 +109,7 @@ export function PortraitSheet() {
                         : { backgroundColor: P.chipOffBg },
                     ]}
                     accessibilityRole="button"
+                    testID={`portrait-style-${o.key}`}
                   >
                     <Text style={[styles.styleChipText, { color: selected ? '#fff' : P.chipOffText }]}>
                       {t(o.tkey)}
