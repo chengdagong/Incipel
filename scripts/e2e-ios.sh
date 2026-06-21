@@ -51,7 +51,6 @@ MOBILE_ENV="$MOBILE_DIR/.env"
 AGENT_ENV="$REPO_ROOT/packages/agent/.env"
 IOS_DIR="$MOBILE_DIR/ios"
 DERIVED="$IOS_DIR/build-release"
-APP_BUNDLE_ID="${APP_BUNDLE_ID:-com.incipel.app}"
 IOS_DEVICE_TYPE="${IOS_DEVICE_TYPE:-iPhone 16 Pro}"
 
 # supabase 层要真实会话(DEV_NO_AUTH 必须留空);frontend-only/stub-agent 层要 DEV_NO_AUTH=1。两者 bundle 不同,不能同跑。
@@ -116,8 +115,21 @@ open -a Simulator >/dev/null 2>&1 || true
 # ── 清理与 .env 还原(EXPO_PUBLIC_DEV_NO_AUTH 是 bundle 期开关,构建前临时按层改、退出时还原)──
 ORIG_DEV_NO_AUTH="$(grep -E '^EXPO_PUBLIC_DEV_NO_AUTH=' "$MOBILE_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
 AGENT_PID=""
+# 按端口收尾 agent:tsx 等会另起子进程,kill 父 PID 未必带走真正监听端口的那个;按端口杀最可靠。
+free_port() { # $1 = port
+  local pids
+  pids="$(lsof -ti tcp:"$1" 2>/dev/null || true)"
+  [ -z "$pids" ] && return 0
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null || true
+  sleep 1
+  pids="$(lsof -ti tcp:"$1" 2>/dev/null || true)"
+  # shellcheck disable=SC2086
+  [ -n "$pids" ] && kill -9 $pids 2>/dev/null || true
+}
 cleanup() {
   [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
+  free_port "$AGENT_PORT"
   set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "$ORIG_DEV_NO_AUTH" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -175,17 +187,22 @@ fi
 need_agent=0
 case "$TIERS" in *stub-agent*|*supabase*) need_agent=1 ;; esac
 if [ "$need_agent" = 1 ]; then
+  # 先清掉本端口上可能残留的上一轮 agent:tsx 子进程不随父 kill 退出,旧实例若仍答 /health,
+  # 本轮会误用「配置不对」的它(如上一层的内存 store 当本层的 SupabaseStore 用)——见 #36 验证踩坑。
+  free_port "$AGENT_PORT"
   echo "▸ 启动 stub agent(MODEL_PROVIDER=stub)…"
+  # 直接跑 tsx(非 watch),cwd=packages/agent 让 agent 的 dotenv/config 读到本包 .env(supabase 层的
+  # SUPABASE_URL / SERVICE_ROLE_KEY / JWT_SECRET 在那里);env 显式传的键优先于 .env。
   case "$TIERS" in
     *supabase*)
       # 真实持久化 + 真实鉴权:显式清掉 STORE / DEV_NO_AUTH,避免 .env 残留把它退回内存/免鉴权。
-      ( cd "$REPO_ROOT" && env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE= DEV_NO_AUTH= \
-          pnpm --filter @incipel/agent dev ) &
+      ( cd "$REPO_ROOT/packages/agent" && exec env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE= DEV_NO_AUTH= \
+          node_modules/.bin/tsx src/index.ts ) &
       AGENT_PID=$!
       ;;
     *)
-      ( cd "$REPO_ROOT" && env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1 \
-          pnpm --filter @incipel/agent dev ) &
+      ( cd "$REPO_ROOT/packages/agent" && exec env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1 \
+          node_modules/.bin/tsx src/index.ts ) &
       AGENT_PID=$!
       ;;
   esac
