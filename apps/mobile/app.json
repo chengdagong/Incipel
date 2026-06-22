@@ -25,6 +25,12 @@
     "plugins": [
       "expo-router",
       "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.REPLACE_WITH_IOS_REVERSED_CLIENT_ID"
+        }
+      ],
       "expo-font"
     ],
     "experiments": {

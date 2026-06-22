@@ -2,6 +2,7 @@
 
 > Status: accepted ·
 > 在「认证何时进场」这一点上取代 [system-design](../system-design.md) §13 / §15 / §16 的原定方向(匿名优先、邮箱与第三方推迟到 v1.1)。
+> 2026-06-22 更新:Google 已由 [ADR-0008](0008-google-sign-in-native-id-token.md) 纳入 v1,实现方式为 native Google Sign-In + Supabase `signInWithIdToken`;邮箱仍暂不接。
 
 系统设计原本定的是**匿名优先、零摩擦入门**:启动即匿名登录、直接进创作页,邮箱与第三方绑定推迟到 v1.1。高保真设计稿引入了一张**登录页作为入口**(Apple / Google / 邮箱 / 先随便逛逛),把认证提到了进门第一屏。本 ADR 记录这次有意的反转:**采用部分认证进 v1**——登录页成为无会话时的入口,但只接其中一部分真逻辑。
 
@@ -23,11 +24,11 @@
 
 - **(甲)守住匿名优先,登录页只摆样子** —— Apple/Google/邮箱全标「即将开放」,只有匿名真接。符合原决策、工作量最小,但跨设备续写在 v1 仍无法成立,等于设计稿的登录页白画。
 - **(乙)登录页即硬门,四个入口 v1 全做实** —— 最贴合设计稿,但把邮箱(OTP / 密码 / 找回)整套牵进 v1,且彻底放弃零摩擦,代价过大。
-- **(丙)折中:认证进 v1,只接 Apple + 匿名** —— **采用**。第三方价值在 iOS 上先成立,匿名仍是一次点击,邮箱与 Google 留到 Apple 跑通后增量补。
+- **(丙)折中:认证进 v1,只接 Apple + 匿名** —— **采用**。第三方价值在 iOS 上先成立,匿名仍是一次点击,邮箱与 Google 原定留到 Apple 可用后再补;2026-06-22 Google 已由 ADR-0008 改为 v1 接入。
 
 ## 后果
 
 - **取代** system-design §13(「匿名登录 + 事后可选升级」那条权衡)、§15(v1 范围)、§16(账号默认匿名)在认证入场时机上的表述;那几处已指向本 ADR。
-- Apple Sign-In 真跑通需前置配置:`app.json` 加 `expo-apple-authentication` 插件(已就位)、Apple Developer 给 App ID 开 Sign in with Apple capability、Supabase 后台开 Apple provider 并在 Client IDs 登记 Bundle ID。配齐前 Apple 按钮在 UI 上可见但点了走不通。逐条配法见交付说明 [`docs/apple-sign-in-setup.md`](../apple-sign-in-setup.md)(原生 iOS 路径不需要 Service ID / `.p8` key,那是日后 web / Android OAuth 才用到的)。
+- Apple Sign-In 可用需前置配置:`app.json` 加 `expo-apple-authentication` 插件(已就位)、Apple Developer 给 App ID 开 Sign in with Apple capability、Supabase 后台开 Apple provider 并在 Client IDs 登记 Bundle ID。配齐前 Apple 按钮在 UI 上可见,但点击后无法换到会话。逐条配法见交付说明 [`docs/apple-sign-in-setup.md`](../apple-sign-in-setup.md)(原生 iOS 路径不需要 Service ID / `.p8` key,那是日后 web / Android OAuth 才用到的)。
 - 底部「服务条款 / 隐私政策」v1 先指占位地址;**App Store 上架强制要有真实隐私政策 URL**,是上架前必补项。
-- Android 在 Google 落地前实际只有匿名可用——本版接受这一不对称。
+- Android 在 ADR-0008 前实际只有匿名可用;Google 进入 v1 后,该不对称已成为历史背景。

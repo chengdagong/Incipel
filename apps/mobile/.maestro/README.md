@@ -100,7 +100,7 @@ flows/
   smoke-dev-no-auth.yaml   [frontend-only] DEV_NO_AUTH 跳登录直达欢迎页
   welcome-controls.yaml    [frontend-only] 欢迎页控件 + 建议 chip 回填输入(不触后端)
   i18n-switch.yaml         [frontend-only] 设置里切 English,断言界面变英文
-  creative-turn.yaml       [stub-agent]    创作主路径:一轮的流式回复 + 人物卡 + 文档沉淀 + 选项
+  creative-turn.yaml       [stub-agent]    创作主路径:一轮的流式回复 + 人物卡 + 文档更新 + 选项
   portrait-generate.yaml   [stub-agent]    人物卡 → 生成肖像 → 选风格 → 生成 → 绘制中 → 完成
   drawer-nav.yaml          [stub-agent]    抽屉唤出 / 导航 / 遮罩关闭(空列表)
   error-retry.yaml         [stub-agent]    暗号触发 stub 抛错 → 出错了 + 重试本轮 → 重试再跑仍报错
@@ -135,6 +135,7 @@ flows/
 | `chat-doc` | 文档(开关 DocPanel) | `app/(app)/chat.tsx` |
 | `composer-send` | 发送 | `src/components/Composer.tsx` |
 | `error-retry` | 出错重试本轮 | `app/(app)/chat.tsx` |
+| `login-google` | 通过 Google 登录 | `app/login.tsx` |
 | `login-anon` | 先随便逛逛(匿名登录) | `app/login.tsx` |
 | `char-portrait-gen-<人物id>` | 生成肖像 | `src/components/PortraitThumb.tsx` |
 | `char-chat-<人物id>` | 聊聊 TA → | `src/components/InlineCard.tsx` |
@@ -167,6 +168,8 @@ flows/
   `pnpm --filter @incipel/agent smoke`(真实 provider + key,多题材逐条断言结构不变量,发版前 / 夜间手动跑);
   以及录真实一轮当 fixture 经 stub 确定性回放(`packages/agent/test/fixtures/real-turns.ts` +
   `fixture-replay.test.ts`),压 apply / save 这条客户端依赖的数据契约在「更乱的产出」前不崩、不丢内容。
+- Google 真实授权依赖 Google 账号、native build 与后台配置,不放进 Maestro 自动化;Maestro 只检查
+  登录页 Google 按钮可见且匿名入口仍能进入。
 - 本地 Supabase 栈多 worktree 共用:`supabase` 层会写测试会话(RLS 限定在该匿名用户),
   别与其它 worktree 同时跑写数据库的测试;本套件不跑 `supabase db reset`。
 

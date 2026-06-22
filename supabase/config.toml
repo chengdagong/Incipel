@@ -82,9 +82,13 @@ enabled = true
 client_id = "com.incipel.app"
 secret = "local-native-id-token-flow-needs-no-secret"
 
-# Google 暂不接(v1 仅 Apple + 匿名,见 ADR-0004)。
+# Google 登录:原生 Google Sign-In → signInWithIdToken / native linkIdentity。
+# 本地开发需把 client_id 换成真实 Web client id;secret 本地可用非空占位,
+# 远端 Supabase Dashboard 需填写真实 Google client secret。
 [auth.external.google]
-enabled = false
+enabled = true
+client_id = "REPLACE_WITH_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com"
+secret = "local-native-id-token-flow-needs-provider-secret"
 
 [edge_runtime]
 enabled = true

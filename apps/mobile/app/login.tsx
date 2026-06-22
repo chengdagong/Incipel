@@ -1,7 +1,7 @@
 // 登录页(ADR-0005:v1 入口)。设计图还原。
-// - 真接:Apple(仅 iOS)、先随便逛逛(匿名)。
-// - 暂不接:Google、用邮箱继续 —— 灰显,点了提示「即将开放」,不放点了报错的死按钮。
-// - Apple 仅在 iOS 渲染;Android / web 以匿名为真入口(ADR-0005「平台」)。
+// - 真接:Apple(仅 iOS)、Google(iOS / Android)、先随便逛逛(匿名)。
+// - 暂不接:用邮箱继续 —— 灰显,点了提示「即将开放」,不放点了报错的死按钮。
+// - Apple 仅在 iOS 渲染;Google 与匿名是 Android 真入口。
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -17,6 +17,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DEV_NO_AUTH, useAuth } from '../src/auth';
+import { GoogleAuthError, signInWithGoogle } from '../src/google-auth';
 import { signInAnonymously, signInWithApple } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
 
@@ -78,6 +79,31 @@ export default function LoginScreen() {
     }
   }
 
+  function googleMessage(e: unknown): string | null {
+    if (!(e instanceof GoogleAuthError)) return 'Google 登录失败,请稍后重试。';
+    if (e.silent) return null;
+    if (e.kind === 'configuration') return 'Google 登录配置未完成,请稍后再试。';
+    return e.message;
+  }
+
+  // Google 登录。代码路径与 Apple 分开:Google native SDK → Supabase signInWithIdToken。
+  async function loginWithGoogle() {
+    if (busy) return;
+    setNotice(null);
+    setBusy(true);
+    setError(null);
+    try {
+      await signInWithGoogle();
+    } catch (e) {
+      const message = googleMessage(e);
+      if (message) {
+        console.warn('[login] Google 登录失败:', e);
+        setError(message);
+      }
+      setBusy(false);
+    }
+  }
+
   // 「先随便逛逛」= 匿名登录。成功不手动跳转:session 经 onAuthStateChange 更新,上面的 Redirect 接手。
   async function browseAnonymously() {
     if (busy) return;
@@ -130,13 +156,13 @@ export default function LoginScreen() {
           style={[
             styles.btn,
             styles.outlineBtn,
-            styles.deferred,
             { borderColor: palette.border, backgroundColor: palette.cardBg },
           ]}
-          onPress={() => comingSoon('Google 登录')}
+          onPress={loginWithGoogle}
+          disabled={busy}
           accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
-          accessibilityLabel="通过 Google 登录,即将开放"
+          accessibilityLabel="通过 Google 登录"
+          testID="login-google"
         >
           <Text style={[styles.btnIcon, styles.googleG]}>G</Text>
           <Text style={[styles.btnLabel, { color: palette.textPrimary }]}>通过 Google 登录</Text>

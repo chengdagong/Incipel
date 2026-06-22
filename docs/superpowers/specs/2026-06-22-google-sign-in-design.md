@@ -37,7 +37,7 @@
 supabase.auth.signInWithIdToken({
   provider: 'google',
   token: idToken,
-  nonce: rawNonce,
+  access_token: accessToken,
 });
 ```
 
@@ -51,9 +51,9 @@ supabase.auth.linkIdentity({
 });
 ```
 
-实现前必须确认所选 Google native package 的当前稳定版本与 nonce 支持情况。新增依赖时不得凭记忆写版本号,需要用 `npm view` 或官方资料确认当前 stable 版本。如果所选 package 不能在 iOS / Android 的目标路径中满足 `idToken` 和 nonce 要求,实现计划需要回到设计评审,不能静默省略 nonce。
+实现时已确认 `@react-native-google-signin/google-signin@16.1.2` 是当时的当前 stable 版本。该 package 的 Original API 能返回 `idToken`,并可通过 `getTokens()` 返回 `accessToken`,但不提供 Google sign-in nonce 参数。Supabase `signInWithIdToken` 只有在 ID token 含 nonce claim 时才要求提交 nonce;Google 路径不传 nonce,Apple 路径保留现有 nonce 校验。
 
-绑定路径还必须确认 Google native package 能返回 `accessToken`,因为 native `linkIdentity` 需要 `idToken` 与 `accessToken` 一起交给 Supabase。若目标 package 在当前配置下拿不到 `accessToken`,实现计划也需要回到设计评审。
+Google 登录与绑定都会尽量取得 `accessToken`,因为 Google `idToken` 可能包含 `at_hash`,Supabase 可用 `access_token` 校验该 claim。
 
 ## Architecture
 
@@ -74,12 +74,12 @@ Apple 与 Google 保持独立模块:
 
 - 不写 `signInWithProvider(provider)`。
 - 不把 Apple 和 Google 放进同一个 provider switch。
-- 不让 Google 复用 Apple 的 nonce / credential 处理函数。
+- 不让 Google 复用 Apple 的 credential 处理函数。
 - 不把 Google 登录写进 agent 或服务端业务代码。
 
 建议文件边界:
 
-- `apps/mobile/src/google-auth.ts`:Google native Sign-In 配置、nonce、`signInWithGoogle`、`linkGoogleIdentity`、Google 错误分类。
+- `apps/mobile/src/google-auth.ts`:Google native Sign-In 配置、`signInWithGoogle`、`linkGoogleIdentity`、Google 错误分类。
 - `apps/mobile/src/supabase.ts`:保留 Supabase client 与 Apple 现有 helper;若迁出 Apple helper,也应迁到 `apple-auth.ts`,不与 Google 混写。
 - `apps/mobile/app/login.tsx`:保留 `loginWithApple()`,新增 `loginWithGoogle()`。
 - `apps/mobile/app/(app)/settings.tsx`:账号显示改为 provider-aware,匿名用户入口调用 `linkGoogleIdentity()`。
@@ -92,7 +92,7 @@ Apple 与 Google 保持独立模块:
 2. `loginWithGoogle()` 调用 Google 模块的 `signInWithGoogle()`。
 3. Google 模块检查配置,Android 先检查 Google Play Services。
 4. Google native Sign-In 返回 `idToken`;如果这是匿名绑定前的预检查,还必须确认同一路径可返回 `accessToken`。
-5. Google 模块调用 Supabase `signInWithIdToken({ provider: 'google', token: idToken, nonce: rawNonce })`。
+5. Google 模块调用 Supabase `signInWithIdToken({ provider: 'google', token: idToken, access_token: accessToken })`。如果没有拿到 `accessToken`,仍可先尝试只提交 `idToken`;若 Supabase 因 `at_hash` 校验失败返回错误,按 Google 登录失败处理。
 6. Supabase 返回 session。
 7. 现有 `onAuthStateChange` 推送 session。
 8. 登录页通过现有 `Redirect` 进入创作页。
