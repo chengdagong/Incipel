@@ -17,7 +17,8 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DEV_NO_AUTH, useAuth } from '../src/auth';
-import { GoogleAuthError, signInWithGoogle } from '../src/google-auth';
+import { googleAuthMessageKey, signInWithGoogle } from '../src/google-auth';
+import { useI18n } from '../src/i18n';
 import { signInAnonymously, signInWithApple } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
 
@@ -28,6 +29,7 @@ const PRIVACY_URL = 'https://incipel.app/privacy';
 
 export default function LoginScreen() {
   const { session } = useAuth();
+  const { t } = useI18n();
   const { palette, accent } = defaultTheme;
   const insets = useSafeAreaInsets();
 
@@ -80,11 +82,8 @@ export default function LoginScreen() {
   }
 
   function googleMessage(e: unknown): string | null {
-    if (!(e instanceof GoogleAuthError)) return 'Google 登录失败,请稍后重试。';
-    if (e.silent) return null;
-    if (e.kind === 'configuration') return 'Google 登录配置未完成,请稍后再试。';
-    if (e.kind === 'account_conflict') return '该 Google 账号暂不能用于登录,请换一个 Google 账号,或稍后重试。';
-    return e.message;
+    const key = googleAuthMessageKey(e, 'login');
+    return key ? t(key) : null;
   }
 
   // Google 登录。代码路径与 Apple 分开:Google native SDK → Supabase signInWithIdToken。

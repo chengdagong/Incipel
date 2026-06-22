@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import {
   GoogleAuthError,
+  googleAuthMessageKey,
   getGoogleProviderLabel,
   linkGoogleIdentity,
   nativeGoogleAdapter,
@@ -69,7 +70,7 @@ describe('signInWithGoogle', () => {
 
     expect(result.user.id).toBe('user-1');
     expect(google.signIn).toHaveBeenCalledWith();
-    expect(google.requestAccessToken).toHaveBeenCalledWith(['email', 'profile', 'openid']);
+    expect(google.requestAccessToken).toHaveBeenCalledWith();
     expect(supabaseAuth.signInWithIdToken).toHaveBeenCalledWith({
       provider: 'google',
       token: 'google-id-token',
@@ -162,7 +163,7 @@ describe('linkGoogleIdentity', () => {
     });
 
     expect(google.signIn).toHaveBeenCalledWith();
-    expect(google.requestAccessToken).toHaveBeenCalledWith(['email', 'profile', 'openid']);
+    expect(google.requestAccessToken).toHaveBeenCalledWith();
     expect(supabaseAuth.linkIdentity).toHaveBeenCalledWith({
       provider: 'google',
       token: 'google-id-token',
@@ -217,29 +218,29 @@ describe('linkGoogleIdentity', () => {
 });
 
 describe('getGoogleProviderLabel', () => {
-  it('prefers identities over app_metadata provider', async () => {
+  it('uses app_metadata provider without loading identities', async () => {
+    const getUserIdentities = vi.fn(async () => ({
+      data: { identities: [{ provider: 'google' }] },
+      error: null,
+    }));
+
     const label = await getGoogleProviderLabel({
-      auth: auth({
-        getUserIdentities: vi.fn(async () => ({
-          data: { identities: [{ provider: 'google' }] },
-          error: null,
-        })),
-      }),
+      auth: auth({ getUserIdentities }),
       appMetadataProvider: 'apple',
     });
 
-    expect(label).toBe('google');
+    expect(label).toBe('apple');
+    expect(getUserIdentities).not.toHaveBeenCalled();
   });
 
-  it('falls back to app_metadata provider when identities cannot be loaded', async () => {
+  it('uses identities when app_metadata provider is unavailable', async () => {
     const label = await getGoogleProviderLabel({
       auth: auth({
         getUserIdentities: vi.fn(async () => ({
-          data: null,
-          error: { message: 'offline' },
+          data: { identities: [{ provider: 'apple' }] },
+          error: null,
         })),
       }),
-      appMetadataProvider: 'apple',
     });
 
     expect(label).toBe('apple');
@@ -248,9 +249,30 @@ describe('getGoogleProviderLabel', () => {
 
 describe('GoogleAuthError', () => {
   it('preserves error kind for UI mapping', () => {
-    const err = new GoogleAuthError('play_services_unavailable', '设备暂不能使用 Google 登录');
+    const err = new GoogleAuthError('play_services_unavailable');
     expect(err.kind).toBe('play_services_unavailable');
     expect(err.silent).toBe(false);
+  });
+});
+
+describe('googleAuthMessageKey', () => {
+  it('maps silent Google errors to no message key', () => {
+    const err = new GoogleAuthError('cancelled', undefined, true);
+    expect(googleAuthMessageKey(err, 'login')).toBeNull();
+  });
+
+  it('maps Google error kinds to shared i18n keys', () => {
+    expect(googleAuthMessageKey(new GoogleAuthError('configuration'), 'login')).toBe('googleConfigMissing');
+    expect(googleAuthMessageKey(new GoogleAuthError('play_services_unavailable'), 'link')).toBe(
+      'googlePlayServicesMissing',
+    );
+    expect(googleAuthMessageKey(new Error('network'), 'login')).toBe('googleFailed');
+  });
+
+  it('uses context-specific account conflict keys', () => {
+    const err = new GoogleAuthError('account_conflict');
+    expect(googleAuthMessageKey(err, 'login')).toBe('googleLoginConflict');
+    expect(googleAuthMessageKey(err, 'link')).toBe('googleUsed');
   });
 });
 
@@ -271,7 +293,7 @@ describe('nativeGoogleAdapter', () => {
     googleModule.GoogleSignin.getTokens.mockRejectedValueOnce(failure);
 
     try {
-      await expect(nativeGoogleAdapter.requestAccessToken(['email'])).resolves.toEqual({
+      await expect(nativeGoogleAdapter.requestAccessToken()).resolves.toEqual({
         type: 'failed',
         error: failure,
       });

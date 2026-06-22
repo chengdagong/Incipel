@@ -9,7 +9,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/auth';
-import { GoogleAuthError, getGoogleProviderLabel, linkGoogleIdentity } from '../../src/google-auth';
+import { getGoogleProviderLabel, googleAuthMessageKey, linkGoogleIdentity } from '../../src/google-auth';
 import { LANGS, useI18n } from '../../src/i18n';
 import { signOut } from '../../src/supabase';
 import { defaultTheme, palette } from '../../src/theme';
@@ -104,12 +104,8 @@ export default function SettingsScreen() {
   }
 
   function googleMessage(e: unknown): string | null {
-    if (!(e instanceof GoogleAuthError)) return t('googleFailed');
-    if (e.silent) return null;
-    if (e.kind === 'account_conflict') return t('googleUsed');
-    if (e.kind === 'play_services_unavailable') return t('googlePlayServicesMissing');
-    if (e.kind === 'configuration') return t('googleConfigMissing');
-    return t('googleFailed');
+    const key = googleAuthMessageKey(e, 'link');
+    return key ? t(key) : null;
   }
 
   async function bindGoogle() {
@@ -147,7 +143,7 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-        {/* 账号区:已登录(Apple)显示身份;匿名态整行可点 → 登录入口(升级流程暂占位)。 */}
+        {/* 账号区:正式账号按 provider 显示;匿名账号可在此绑定 Google。 */}
         {isSignedIn ? (
           <View style={styles.accountRow}>
             <View style={[styles.avatar, { backgroundColor: accent }]}>

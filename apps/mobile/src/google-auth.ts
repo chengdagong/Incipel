@@ -11,14 +11,21 @@ export type GoogleAuthErrorKind =
 export class GoogleAuthError extends Error {
   constructor(
     public readonly kind: GoogleAuthErrorKind,
-    message: string,
     public readonly cause?: unknown,
     public readonly silent = false,
   ) {
-    super(message);
+    super(kind);
     this.name = 'GoogleAuthError';
   }
 }
+
+export type GoogleAuthUiContext = 'login' | 'link';
+export type GoogleAuthMessageKey =
+  | 'googleFailed'
+  | 'googleConfigMissing'
+  | 'googlePlayServicesMissing'
+  | 'googleLoginConflict'
+  | 'googleUsed';
 
 type GoogleTokenResult = { type: 'success'; idToken: string | null } | { type: 'cancelled' };
 export type GoogleAccessTokenResult =
@@ -29,12 +36,11 @@ export type GoogleAccessTokenResult =
 export type GoogleNativeAdapter = {
   ensureConfigured(): Promise<void>;
   signIn(): Promise<GoogleTokenResult>;
-  requestAccessToken(scopes: string[]): Promise<GoogleAccessTokenResult>;
+  requestAccessToken(): Promise<GoogleAccessTokenResult>;
   classifyError(error: unknown): GoogleAuthError | null | Promise<GoogleAuthError | null>;
 };
 
 type AuthErrorLike = { message?: string; code?: string; status?: number; name?: string } | null;
-type SupabaseAuthContext = 'signIn' | 'link';
 
 export type GoogleSupabaseAuth = {
   signInWithIdToken(input: {
@@ -84,7 +90,7 @@ async function platformOS(): Promise<string> {
 export const nativeGoogleAdapter: GoogleNativeAdapter = {
   async ensureConfigured() {
     if (!WEB_CLIENT_ID) {
-      throw new GoogleAuthError('configuration', 'Google 登录配置未完成,请稍后再试。');
+      throw new GoogleAuthError('configuration');
     }
     const { GoogleSignin } = await googleSignInModule();
     if (!configured) {
@@ -126,17 +132,13 @@ export const nativeGoogleAdapter: GoogleNativeAdapter = {
     if (!code) return null;
     const { statusCodes } = await googleSignInModule();
     if (code === statusCodes.SIGN_IN_CANCELLED) {
-      return new GoogleAuthError('cancelled', '用户取消 Google 登录', error, true);
+      return new GoogleAuthError('cancelled', error, true);
     }
     if (code === statusCodes.IN_PROGRESS) {
-      return new GoogleAuthError('in_progress', 'Google 登录正在进行', error, true);
+      return new GoogleAuthError('in_progress', error, true);
     }
     if (code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-      return new GoogleAuthError(
-        'play_services_unavailable',
-        '当前设备暂不能使用 Google 登录,请更新 Google Play 服务或使用其他入口。',
-        error,
-      );
+      return new GoogleAuthError('play_services_unavailable', error);
     }
     return null;
   },
@@ -154,63 +156,55 @@ async function authDeps(input?: GoogleAuthDeps): Promise<{ google: GoogleNativeA
   };
 }
 
-function accountConflictError(context: SupabaseAuthContext, cause: unknown): GoogleAuthError {
-  const message =
-    context === 'signIn'
-      ? '该 Google 账号暂不能用于登录,请换一个 Google 账号,或稍后重试。'
-      : '该 Google 账号已经绑定到一个账号。请换一个 Google 账号,或退出当前匿名会话后再登录。';
-  return new GoogleAuthError('account_conflict', message, cause);
+function accountConflictError(cause: unknown): GoogleAuthError {
+  return new GoogleAuthError('account_conflict', cause);
 }
 
-function classifySupabaseError(error: AuthErrorLike, context: SupabaseAuthContext): GoogleAuthError {
+function classifySupabaseError(error: AuthErrorLike): GoogleAuthError {
   const code = typeof error?.code === 'string' ? error.code : null;
   if (code) {
     if (code === 'identity_already_exists') {
-      return accountConflictError(context, error);
+      return accountConflictError(error);
     }
     if (CONFIGURATION_ERROR_CODES.has(code)) {
-      return new GoogleAuthError('configuration', 'Google 登录配置未完成,请稍后再试。', error);
+      return new GoogleAuthError('configuration', error);
     }
-    return new GoogleAuthError('unknown', 'Google 登录失败,请稍后重试。', error);
+    return new GoogleAuthError('unknown', error);
   }
 
   const message = error?.message ?? '';
   if (/already.*linked|already.*registered|already.*exists|different user/i.test(message)) {
-    return accountConflictError(context, error);
+    return accountConflictError(error);
   }
   if (CONFIGURATION_MESSAGE_PATTERN.test(message)) {
-    return new GoogleAuthError('configuration', 'Google 登录配置未完成,请稍后再试。', error);
+    return new GoogleAuthError('configuration', error);
   }
-  return new GoogleAuthError('unknown', 'Google 登录失败,请稍后重试。', error);
+  return new GoogleAuthError('unknown', error);
 }
 
 async function getGoogleIdToken(google: GoogleNativeAdapter): Promise<string> {
   await google.ensureConfigured();
   const result = await google.signIn();
   if (result.type === 'cancelled') {
-    throw new GoogleAuthError('cancelled', '用户取消 Google 登录', undefined, true);
+    throw new GoogleAuthError('cancelled', undefined, true);
   }
   if (!result.idToken) {
-    throw new GoogleAuthError('configuration', 'Google 登录失败,请稍后重试。');
+    throw new GoogleAuthError('configuration');
   }
   return result.idToken;
 }
 
 async function getGoogleAccessToken(google: GoogleNativeAdapter): Promise<string> {
-  const result = await google.requestAccessToken(GOOGLE_SCOPES);
+  const result = await google.requestAccessToken();
   if (result.type === 'success') return result.accessToken;
-  throw new GoogleAuthError(
-    'unknown',
-    'Google 登录失败,请稍后重试。',
-    result.type === 'failed' ? result.error : undefined,
-  );
+  throw new GoogleAuthError('unknown', result.type === 'failed' ? result.error : undefined);
 }
 
 async function wrapGoogleError(google: GoogleNativeAdapter, error: unknown): Promise<never> {
   if (error instanceof GoogleAuthError) throw error;
   const classified = await google.classifyError(error);
   if (classified) throw classified;
-  throw new GoogleAuthError('unknown', 'Google 登录失败,请稍后重试。', error);
+  throw new GoogleAuthError('unknown', error);
 }
 
 export async function signInWithGoogle(input?: GoogleAuthDeps): Promise<Session> {
@@ -224,7 +218,7 @@ export async function signInWithGoogle(input?: GoogleAuthDeps): Promise<Session>
       access_token: accessToken,
     });
     if (error || !data?.session) {
-      throw classifySupabaseError(error, 'signIn');
+      throw classifySupabaseError(error);
     }
     return data.session;
   } catch (e) {
@@ -243,7 +237,7 @@ export async function linkGoogleIdentity(input?: GoogleAuthDeps): Promise<void> 
       access_token: accessToken,
     });
     if (error) {
-      throw classifySupabaseError(error, 'link');
+      throw classifySupabaseError(error);
     }
   } catch (e) {
     return wrapGoogleError(google, e);
@@ -254,15 +248,30 @@ export async function getGoogleProviderLabel(input?: {
   auth?: Pick<GoogleSupabaseAuth, 'getUserIdentities'>;
   appMetadataProvider?: unknown;
 }): Promise<'google' | 'apple' | 'signed-in'> {
-  const auth = input?.auth ?? (await defaultSupabaseAuth());
   const appMetadataProvider = typeof input?.appMetadataProvider === 'string' ? input.appMetadataProvider : null;
+  if (appMetadataProvider === 'google') return 'google';
+  if (appMetadataProvider === 'apple') return 'apple';
+
+  const auth = input?.auth ?? (await defaultSupabaseAuth());
   const { data, error } = await auth.getUserIdentities();
   if (!error && data?.identities) {
     const providers = data.identities.map((identity) => identity.provider);
     if (providers.includes('google')) return 'google';
     if (providers.includes('apple')) return 'apple';
   }
-  if (appMetadataProvider === 'google') return 'google';
-  if (appMetadataProvider === 'apple') return 'apple';
   return 'signed-in';
+}
+
+export function googleAuthMessageKey(
+  error: unknown,
+  context: GoogleAuthUiContext,
+): GoogleAuthMessageKey | null {
+  if (!(error instanceof GoogleAuthError)) return 'googleFailed';
+  if (error.silent) return null;
+  if (error.kind === 'configuration') return 'googleConfigMissing';
+  if (error.kind === 'play_services_unavailable') return 'googlePlayServicesMissing';
+  if (error.kind === 'account_conflict') {
+    return context === 'login' ? 'googleLoginConflict' : 'googleUsed';
+  }
+  return 'googleFailed';
 }

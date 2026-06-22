@@ -23,7 +23,7 @@ max_rows = 1000
 port = 54522
 # `db diff` 用的影子库端口。
 shadow_port = 54520
-# 与生产对齐的大版本号。
+# 与生产一致的大版本号。
 major_version = 15
 
 [db.pooler]
@@ -72,7 +72,7 @@ enable_signup = true
 # 本地开发免去邮箱确认,加快联调。
 enable_confirmations = false
 
-# Apple 登录(iOS 原生 Sign in with Apple → signInWithIdToken,见 ADR-0004)。
+# Apple 登录(iOS 原生 Sign in with Apple → signInWithIdToken,见 ADR-0005)。
 # client_id 必须等于 app 的 bundle id:GoTrue 据此校验 Apple identity token 的 aud,
 # 不匹配会报「Bad ID token」。原生 id-token 流只校验 token、不走 OAuth code 交换,
 # 故本地不需要真正的 secret —— 这里给个非空占位,仅为让 supabase start 通过校验;
