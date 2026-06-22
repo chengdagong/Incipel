@@ -91,4 +91,11 @@ describe('makeAiSdkProvider.completeLogline — 累加 textStream', () => {
     const out = await provider.completeLogline({ system: 's', prompt: 'p' });
     expect(out).toBe('一句话');
   });
+
+  it('temperature 透传给 streamText', async () => {
+    const { makeAiSdkProvider } = await import('../src/model/ai-sdk-runtime');
+    const provider = makeAiSdkProvider(() => ({}) as any);
+    await provider.completeLogline({ system: 's', prompt: 'p', temperature: 1.1 });
+    expect(h.lastArgs.temperature).toBe(1.1);
+  });
 });

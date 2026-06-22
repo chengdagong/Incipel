@@ -35,6 +35,7 @@ export type StreamTurnInput = {
 export type CompleteLoglineInput = {
   system: string;
   prompt: string;
+  temperature?: number;
 };
 
 export interface ModelProvider {

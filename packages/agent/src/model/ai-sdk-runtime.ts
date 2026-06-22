@@ -87,6 +87,7 @@ export function makeAiSdkProvider(resolve: ModelResolver): ModelProvider {
         model,
         system: input.system,
         prompt: input.prompt,
+        temperature: input.temperature,
       });
       let text = '';
       for await (const delta of result.textStream) {

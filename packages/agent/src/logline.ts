@@ -21,6 +21,6 @@ export async function generateLogline(input: LoglineInput): Promise<LoglineResul
   void input;
   const provider = await createModelProvider();
   const { system, prompt } = buildLoglinePrompt();
-  const logline = await provider.completeLogline({ system, prompt });
+  const logline = await provider.completeLogline({ system, prompt, temperature: 1.1 });
   return { logline: logline.trim() };
 }
