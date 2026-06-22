@@ -7,7 +7,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "bash scripts/dev-ios-target.test.sh && pnpm -r test",
     "test:db": "supabase db reset && supabase test db",
     "mobile:start": "pnpm --filter @incipel/mobile start",
     "dev:ios": "bash scripts/dev-ios.sh",
