@@ -82,9 +82,10 @@ describe('buildPrompt', () => {
 });
 
 describe('buildLoglinePrompt', () => {
-  it('有灵感 → prompt 引用该灵感', () => {
+  it('即使传入已有输入,也生成全新 logline', () => {
     const { prompt } = buildLoglinePrompt('一个怕黑的灯塔看守人');
-    expect(prompt).toContain('一个怕黑的灯塔看守人');
+    expect(prompt).toContain('随机生成一句全新的 logline');
+    expect(prompt).not.toContain('一个怕黑的灯塔看守人');
   });
 
   it('无灵感 → 随机生成措辞', () => {

@@ -35,7 +35,7 @@ import { env } from './env.ts';
 const DEV_USER_ID = 'dev-user';
 
 const LoglineBody = z.object({
-  // 可选:有灵感则据此偏置,空输入(没头绪时点骰子)则随机生成一句全新 logline。
+  // 兼容旧客户端字段;服务端不把它发给模型,骰子始终生成全新 logline。
   idea: z.string().optional(),
 });
 
@@ -233,15 +233,14 @@ export function createApp(basePath = ''): Hono {
     if (rawBody === null) {
       return c.json({ error: `请求体过大(上限 ${MAX_BODY_BYTES} 字节)` }, 413);
     }
-    let body;
     try {
-      body = LoglineBody.parse(JSON.parse(rawBody));
+      LoglineBody.parse(JSON.parse(rawBody));
     } catch (err) {
       return c.json({ error: `请求体不合法: ${(err as Error).message}` }, 400);
     }
 
     try {
-      const result = await generateLogline({ idea: body.idea });
+      const result = await generateLogline({});
       return c.json(result);
     } catch (err) {
       return c.json({ error: `生成 logline 失败: ${(err as Error).message}` }, 502);
