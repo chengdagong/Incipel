@@ -83,7 +83,7 @@ export default function WelcomeScreen() {
         <MenuButton variant="circle" onPress={drawer.open} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="always">
         <Text style={[styles.eyebrow, { color: palette.textSecondary }]}>{t('eyebrow')}</Text>
         <Text style={[styles.headline, { color: palette.textPrimary }]}>{t('welcomeTitle')}</Text>
       <Text style={[styles.sub, { color: palette.textSecondary }]}>{t('welcomeSub')}</Text>
@@ -169,9 +169,19 @@ const styles = StyleSheet.create({
   },
   sub: { fontSize: 14.5, lineHeight: 24 },
   suggestHint: { fontSize: 12 },
-  inputBox: { borderWidth: 1.5, borderRadius: 18, paddingTop: 16, paddingBottom: 12, paddingHorizontal: 16 },
-  input: { minHeight: 84, fontSize: 14.5, lineHeight: 24, paddingRight: 34 },
-  dice: { position: 'absolute', right: 12, bottom: 11, width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
+  inputBox: { position: 'relative', borderWidth: 1.5, borderRadius: 18, paddingTop: 16, paddingBottom: 12, paddingHorizontal: 16 },
+  input: { minHeight: 84, fontSize: 14.5, lineHeight: 24, paddingRight: 44 },
+  dice: {
+    position: 'absolute',
+    right: 12,
+    bottom: 11,
+    zIndex: 2,
+    elevation: 2,
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   diceLabel: { fontSize: 18, lineHeight: 20 },
   rollError: { fontSize: 13, marginTop: -8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
