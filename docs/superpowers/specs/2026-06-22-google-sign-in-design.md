@@ -53,7 +53,7 @@ supabase.auth.linkIdentity({
 
 实现时已确认 `@react-native-google-signin/google-signin@16.1.2` 是当时的当前 stable 版本。该 package 的 Original API 能返回 `idToken`,并可通过 `getTokens()` 返回 `accessToken`,但不提供 Google sign-in nonce 参数。Supabase `signInWithIdToken` 只有在 ID token 含 nonce claim 时才要求提交 nonce;Google 路径不传 nonce,Apple 路径保留现有 nonce 校验。
 
-Google 登录与绑定都会尽量取得 `accessToken`,因为 Google `idToken` 可能包含 `at_hash`,Supabase 可用 `access_token` 校验该 claim。
+Google 登录与绑定都会取得 `accessToken`,因为 Google `idToken` 可能包含 `at_hash`,Supabase 可用 `access_token` 校验该 claim。若没有取得 `accessToken`,本次登录或绑定会停止并提示重试。
 
 ## Architecture
 
@@ -92,7 +92,7 @@ Apple 与 Google 保持独立模块:
 2. `loginWithGoogle()` 调用 Google 模块的 `signInWithGoogle()`。
 3. Google 模块检查配置,Android 先检查 Google Play Services。
 4. Google native Sign-In 返回 `idToken`;如果这是匿名绑定前的预检查,还必须确认同一路径可返回 `accessToken`。
-5. Google 模块调用 Supabase `signInWithIdToken({ provider: 'google', token: idToken, access_token: accessToken })`。如果没有拿到 `accessToken`,仍可先尝试只提交 `idToken`;若 Supabase 因 `at_hash` 校验失败返回错误,按 Google 登录失败处理。
+5. Google 模块调用 Supabase `signInWithIdToken({ provider: 'google', token: idToken, access_token: accessToken })`。如果没有取得 `accessToken`,不继续调用 Supabase,按 Google 登录失败处理。
 6. Supabase 返回 session。
 7. 现有 `onAuthStateChange` 推送 session。
 8. 登录页通过现有 `Redirect` 进入创作页。

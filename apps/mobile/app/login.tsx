@@ -83,6 +83,7 @@ export default function LoginScreen() {
     if (!(e instanceof GoogleAuthError)) return 'Google 登录失败,请稍后重试。';
     if (e.silent) return null;
     if (e.kind === 'configuration') return 'Google 登录配置未完成,请稍后再试。';
+    if (e.kind === 'account_conflict') return '该 Google 账号暂不能用于登录,请换一个 Google 账号,或稍后重试。';
     return e.message;
   }
 

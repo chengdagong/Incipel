@@ -51,7 +51,7 @@ Important implementation adjustment discovered during execution:
 
 - `@react-native-google-signin/google-signin@16.1.2` Original API returns `idToken` via `GoogleSignin.signIn()` and `accessToken` via `GoogleSignin.getTokens()`.
 - The Original API does not expose a Google sign-in nonce parameter. Supabase `signInWithIdToken` only requires `nonce` when the ID token contains a nonce claim. Google does not receive a nonce in this implementation; Apple keeps its existing nonce path.
-- Google login and linking both try to submit `access_token` to Supabase because Google `idToken` may contain `at_hash`.
+- Google login and linking both require `access_token` before calling Supabase because Google `idToken` may contain `at_hash`.
 
 ### Task 3: Login And Settings UI
 

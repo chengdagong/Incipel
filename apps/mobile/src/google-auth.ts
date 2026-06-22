@@ -21,15 +21,20 @@ export class GoogleAuthError extends Error {
 }
 
 type GoogleTokenResult = { type: 'success'; idToken: string | null } | { type: 'cancelled' };
+export type GoogleAccessTokenResult =
+  | { type: 'success'; accessToken: string }
+  | { type: 'missing' }
+  | { type: 'failed'; error: unknown };
 
 export type GoogleNativeAdapter = {
   ensureConfigured(): Promise<void>;
   signIn(): Promise<GoogleTokenResult>;
-  requestAccessToken(scopes: string[]): Promise<string | null>;
-  classifyError(error: unknown): GoogleAuthError | null;
+  requestAccessToken(scopes: string[]): Promise<GoogleAccessTokenResult>;
+  classifyError(error: unknown): GoogleAuthError | null | Promise<GoogleAuthError | null>;
 };
 
-type AuthErrorLike = { message?: string } | null;
+type AuthErrorLike = { message?: string; code?: string; status?: number; name?: string } | null;
+type SupabaseAuthContext = 'signIn' | 'link';
 
 export type GoogleSupabaseAuth = {
   signInWithIdToken(input: {
@@ -56,6 +61,14 @@ type GoogleAuthDeps = {
 const GOOGLE_SCOPES = ['email', 'profile', 'openid'];
 const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const CONFIGURATION_ERROR_CODES = new Set([
+  'manual_linking_disabled',
+  'provider_disabled',
+  'oauth_provider_not_supported',
+  'unexpected_audience',
+]);
+const CONFIGURATION_MESSAGE_PATTERN =
+  /manual linking|provider.*disabled|provider.*not.*enabled|oauth provider|unsupported provider|client[_ ]?id|audience/i;
 
 let configured = false;
 
@@ -99,21 +112,26 @@ export const nativeGoogleAdapter: GoogleNativeAdapter = {
     const { GoogleSignin } = await googleSignInModule();
     try {
       const tokens = await GoogleSignin.getTokens();
-      return tokens.accessToken;
+      return tokens.accessToken
+        ? { type: 'success', accessToken: tokens.accessToken }
+        : { type: 'missing' };
     } catch (e) {
-      return null;
+      console.warn('[google-auth] 获取 Google access token 失败:', e);
+      return { type: 'failed', error: e };
     }
   },
 
-  classifyError(error) {
+  async classifyError(error) {
     const code = (error as { code?: string } | null)?.code;
-    if (code === 'SIGN_IN_CANCELLED') {
+    if (!code) return null;
+    const { statusCodes } = await googleSignInModule();
+    if (code === statusCodes.SIGN_IN_CANCELLED) {
       return new GoogleAuthError('cancelled', '用户取消 Google 登录', error, true);
     }
-    if (code === 'IN_PROGRESS') {
+    if (code === statusCodes.IN_PROGRESS) {
       return new GoogleAuthError('in_progress', 'Google 登录正在进行', error, true);
     }
-    if (code === 'PLAY_SERVICES_NOT_AVAILABLE') {
+    if (code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
       return new GoogleAuthError(
         'play_services_unavailable',
         '当前设备暂不能使用 Google 登录,请更新 Google Play 服务或使用其他入口。',
@@ -136,16 +154,31 @@ async function authDeps(input?: GoogleAuthDeps): Promise<{ google: GoogleNativeA
   };
 }
 
-function classifySupabaseError(error: AuthErrorLike): GoogleAuthError {
+function accountConflictError(context: SupabaseAuthContext, cause: unknown): GoogleAuthError {
+  const message =
+    context === 'signIn'
+      ? '该 Google 账号暂不能用于登录,请换一个 Google 账号,或稍后重试。'
+      : '该 Google 账号已经绑定到一个账号。请换一个 Google 账号,或退出当前匿名会话后再登录。';
+  return new GoogleAuthError('account_conflict', message, cause);
+}
+
+function classifySupabaseError(error: AuthErrorLike, context: SupabaseAuthContext): GoogleAuthError {
+  const code = typeof error?.code === 'string' ? error.code : null;
+  if (code) {
+    if (code === 'identity_already_exists') {
+      return accountConflictError(context, error);
+    }
+    if (CONFIGURATION_ERROR_CODES.has(code)) {
+      return new GoogleAuthError('configuration', 'Google 登录配置未完成,请稍后再试。', error);
+    }
+    return new GoogleAuthError('unknown', 'Google 登录失败,请稍后重试。', error);
+  }
+
   const message = error?.message ?? '';
   if (/already.*linked|already.*registered|already.*exists|different user/i.test(message)) {
-    return new GoogleAuthError(
-      'account_conflict',
-      '该 Google 账号已被使用,请换一个 Google 账号,或退出当前匿名会话后再登录。',
-      error,
-    );
+    return accountConflictError(context, error);
   }
-  if (/provider|client|audience|invalid.*token|jwt/i.test(message)) {
+  if (CONFIGURATION_MESSAGE_PATTERN.test(message)) {
     return new GoogleAuthError('configuration', 'Google 登录配置未完成,请稍后再试。', error);
   }
   return new GoogleAuthError('unknown', 'Google 登录失败,请稍后重试。', error);
@@ -163,9 +196,19 @@ async function getGoogleIdToken(google: GoogleNativeAdapter): Promise<string> {
   return result.idToken;
 }
 
-function wrapGoogleError(google: GoogleNativeAdapter, error: unknown): never {
+async function getGoogleAccessToken(google: GoogleNativeAdapter): Promise<string> {
+  const result = await google.requestAccessToken(GOOGLE_SCOPES);
+  if (result.type === 'success') return result.accessToken;
+  throw new GoogleAuthError(
+    'unknown',
+    'Google 登录失败,请稍后重试。',
+    result.type === 'failed' ? result.error : undefined,
+  );
+}
+
+async function wrapGoogleError(google: GoogleNativeAdapter, error: unknown): Promise<never> {
   if (error instanceof GoogleAuthError) throw error;
-  const classified = google.classifyError(error);
+  const classified = await google.classifyError(error);
   if (classified) throw classified;
   throw new GoogleAuthError('unknown', 'Google 登录失败,请稍后重试。', error);
 }
@@ -174,18 +217,18 @@ export async function signInWithGoogle(input?: GoogleAuthDeps): Promise<Session>
   const { google, auth } = await authDeps(input);
   try {
     const idToken = await getGoogleIdToken(google);
-    const accessToken = await google.requestAccessToken(GOOGLE_SCOPES);
+    const accessToken = await getGoogleAccessToken(google);
     const { data, error } = await auth.signInWithIdToken({
       provider: 'google',
       token: idToken,
-      ...(accessToken ? { access_token: accessToken } : {}),
+      access_token: accessToken,
     });
     if (error || !data?.session) {
-      throw classifySupabaseError(error);
+      throw classifySupabaseError(error, 'signIn');
     }
     return data.session;
   } catch (e) {
-    wrapGoogleError(google, e);
+    return wrapGoogleError(google, e);
   }
 }
 
@@ -193,20 +236,17 @@ export async function linkGoogleIdentity(input?: GoogleAuthDeps): Promise<void> 
   const { google, auth } = await authDeps(input);
   try {
     const idToken = await getGoogleIdToken(google);
-    const accessToken = await google.requestAccessToken(GOOGLE_SCOPES);
-    if (!accessToken) {
-      throw new GoogleAuthError('configuration', 'Google 登录失败,请稍后重试。');
-    }
+    const accessToken = await getGoogleAccessToken(google);
     const { error } = await auth.linkIdentity({
       provider: 'google',
       token: idToken,
       access_token: accessToken,
     });
     if (error) {
-      throw classifySupabaseError(error);
+      throw classifySupabaseError(error, 'link');
     }
   } catch (e) {
-    wrapGoogleError(google, e);
+    return wrapGoogleError(google, e);
   }
 }
 

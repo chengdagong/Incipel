@@ -15,7 +15,7 @@ ADR-0005 原定 v1 只做 Apple 与匿名,Google 暂不接。本 ADR 记录 Goog
 
 当前使用的 `@react-native-google-signin/google-signin` Original API 不提供 nonce 参数。Supabase `signInWithIdToken` 只有在 ID token 含 nonce claim 时才要求提交 nonce。本实现不会为 Google 传 nonce;Apple 登录仍保留现有 nonce 校验。
 
-Google `idToken` 可能包含 `at_hash`;因此客户端在 Google 登录和绑定时都会尽量取得 `accessToken`,并把它交给 Supabase 校验。
+Google `idToken` 可能包含 `at_hash`;因此客户端在 Google 登录和绑定时都会取得 `accessToken`,并把它交给 Supabase 校验。若没有取得 `accessToken`,本次登录或绑定会停止并提示重试。
 
 ## 理由
 

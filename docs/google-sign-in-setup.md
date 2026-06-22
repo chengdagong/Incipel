@@ -58,7 +58,7 @@ Apple 与 Google 的代码路径保持分开。Apple 继续使用 `expo-apple-au
 3. Client Secret 填 Google Web OAuth client secret。
 4. 保存后,用 iOS / Android 原生构建验证。
 
-本实现调用的是 `signInWithIdToken({ provider: 'google' })` 和 native `linkIdentity`。Supabase 会校验 Google `idToken`;如果 token 含 `at_hash`,客户端会一并提交 Google `accessToken`。
+本实现调用的是 `signInWithIdToken({ provider: 'google' })` 和 native `linkIdentity`。Supabase 会校验 Google `idToken`;客户端会同时提交 Google `accessToken`。如果没有取得 `accessToken`,本次登录或绑定会停止并提示重试,不会继续调用 Supabase。
 
 ### 3. 本地 Supabase
 
