@@ -6,7 +6,7 @@ import { createModelProvider } from './model/provider.ts';
 import { buildLoglinePrompt } from './prompt.ts';
 
 export type LoglineInput = {
-  // 可选灵感种子;空/缺省时生成一句全新 logline(骰子在空输入时也能用)。
+  // 兼容旧客户端字段;生成时不会参考它。
   idea?: string;
 };
 
@@ -18,9 +18,9 @@ export type LoglineResult = {
 // 上线前在此(或入口中间件)加单用户速率限制——例如以 user_id 为键的滑动窗口计数。
 
 export async function generateLogline(input: LoglineInput): Promise<LoglineResult> {
-  const idea = (input.idea ?? '').trim();
+  void input;
   const provider = await createModelProvider();
-  const { system, prompt } = buildLoglinePrompt(idea);
+  const { system, prompt } = buildLoglinePrompt();
   const logline = await provider.completeLogline({ system, prompt });
   return { logline: logline.trim() };
 }

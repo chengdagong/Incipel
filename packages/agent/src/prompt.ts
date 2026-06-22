@@ -174,10 +174,9 @@ export const LOGLINE_SYSTEM = `你是一位资深编剧。生成**一句**符合
 - 约 25–50 字,一句话,中文;
 - 只输出这句 logline 本身,不要引号、不要解释、不要任何前后缀。`;
 
-export function buildLoglinePrompt(idea?: string): { system: string; prompt: string } {
-  const seed = (idea ?? '').trim();
+export function buildLoglinePrompt(_idea?: string): { system: string; prompt: string } {
   return {
     system: LOGLINE_SYSTEM,
-    prompt: seed ? `请参考这个灵感方向:${seed}` : '随机生成一句全新的 logline,题材不限。',
+    prompt: '随机生成一句全新的 logline,题材不限。',
   };
 }

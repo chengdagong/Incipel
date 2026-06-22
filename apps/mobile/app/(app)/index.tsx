@@ -52,7 +52,7 @@ export default function WelcomeScreen() {
       const res = await fetch(loglineEndpoint(), {
         method: 'POST',
         headers: await authHeaders(),
-        body: JSON.stringify({ idea: idea.trim() }),
+        body: JSON.stringify({}),
       });
       // 非 2xx(后端 401/404/502 等)也会带 JSON,这里先判状态,避免把错误体当正常结果静默吞掉。
       if (!res.ok) throw new Error(`服务返回 ${res.status}`);
@@ -83,7 +83,7 @@ export default function WelcomeScreen() {
         <MenuButton variant="circle" onPress={drawer.open} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <Text style={[styles.eyebrow, { color: palette.textSecondary }]}>{t('eyebrow')}</Text>
         <Text style={[styles.headline, { color: palette.textPrimary }]}>{t('welcomeTitle')}</Text>
       <Text style={[styles.sub, { color: palette.textSecondary }]}>{t('welcomeSub')}</Text>
