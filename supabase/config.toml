@@ -23,7 +23,7 @@ max_rows = 1000
 port = 54522
 # `db diff` 用的影子库端口。
 shadow_port = 54520
-# 与生产对齐的大版本号。
+# 与生产一致的大版本号。
 major_version = 15
 
 [db.pooler]
@@ -72,7 +72,7 @@ enable_signup = true
 # 本地开发免去邮箱确认,加快联调。
 enable_confirmations = false
 
-# Apple 登录(iOS 原生 Sign in with Apple → signInWithIdToken,见 ADR-0004)。
+# Apple 登录(iOS 原生 Sign in with Apple → signInWithIdToken,见 ADR-0005)。
 # client_id 必须等于 app 的 bundle id:GoTrue 据此校验 Apple identity token 的 aud,
 # 不匹配会报「Bad ID token」。原生 id-token 流只校验 token、不走 OAuth code 交换,
 # 故本地不需要真正的 secret —— 这里给个非空占位,仅为让 supabase start 通过校验;
@@ -82,9 +82,16 @@ enabled = true
 client_id = "com.incipel.app"
 secret = "local-native-id-token-flow-needs-no-secret"
 
-# Google 暂不接(v1 仅 Apple + 匿名,见 ADR-0004)。
+# Google 登录:原生 Google Sign-In → signInWithIdToken / native linkIdentity。
+# 本地开发需把 client_id 换成真实 Web client id;secret 本地可用非空占位,
+# 远端 Supabase Dashboard 需填写真实 Google client secret。
+# @react-native-google-signin/google-signin 的 Original API 不提供 nonce 参数,
+# 故本地 Google native ID token 路径需要跳过 nonce 校验。Apple 仍保留 nonce 校验。
 [auth.external.google]
-enabled = false
+enabled = true
+client_id = "585832312756-n6gabhbjgjmigge641pq4e9trr2tabs6.apps.googleusercontent.com,585832312756-btcd7d9c7ihj4djnfv04hftecb6jhjrj.apps.googleusercontent.com"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = true
 
 [edge_runtime]
 enabled = true
