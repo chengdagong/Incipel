@@ -20,12 +20,12 @@
 - **本地 JWT 校验使用项目自有环境变量补齐。** `tools/incipel-dev` 从 `supabase status -o json` 读取本地 API URL、anon key 与 JWT secret,写入:
   - `apps/mobile/.env`: `EXPO_PUBLIC_SUPABASE_URL`、`EXPO_PUBLIC_SUPABASE_ANON_KEY`、`EXPO_PUBLIC_AGENT_URL`;
   - `supabase/.env`: `INCIPEL_SUPABASE_JWT_ISS`、`INCIPEL_SUPABASE_JWT_AUD`、`INCIPEL_SUPABASE_JWT_SECRET`。
-- **`DEV_NO_AUTH` / `STORE=memory` 只保留为显式调试模式。** 它们可用于离线 UI 或单元测试,但不是日常开发默认路径。启用后不应期待数据保存到 Supabase 数据库。
+- **`DEV_NO_AUTH` / `STORE=memory` 只保留为显式调试模式,且不经 dev 脚本提供。** `pnpm dev:*` / `dx up` / `env:sync` 会从 `supabase/.env` **移除**这两项,以强制 dev 走 Supabase backend + anonymous auth(实现见 `tools/incipel-dev` 的 envSync)。要用 memory / 免鉴权,得绕开 dev 脚本——自己 `supabase functions serve agent --env-file <自备文件>`(单元测试则在 vitest 进程内设 env)。启用后不应期待数据保存到 Supabase 数据库。
 
 ## 后果
 
 - 开发时点击「先随便逛逛」会创建本地 Supabase anonymous user,作品和会话历史会进入共用本地数据库。
 - 多个 worktree 共用同一套本地 Supabase 数据库时,匿名用户和会话数据也共享同一个数据层。需要隔离数据时使用 `pnpm e2e:stack up`。
 - `apps/mobile/.env` 里的 anon key 不应再长期停留在占位值;`pnpm dev:*` / `pnpm dx up` / `pnpm env:sync` 会按当前本地栈刷新它。
-- 若只想试界面且不想写入数据库,必须明确设置 `EXPO_PUBLIC_DEV_NO_AUTH=1`、`DEV_NO_AUTH=1`、`STORE=memory`,并知道这种路径不会覆盖匿名登录与数据库保存行为。
+- 若只想试界面且不想写入数据库:客户端设 `EXPO_PUBLIC_DEV_NO_AUTH=1`,agent 侧用一个**自备的** env-file 跑 `supabase functions serve agent --env-file <file>`(内含 `DEV_NO_AUTH=1`、`STORE=memory`)——**不要**走 `pnpm dev:*`,它会把这两项从 `supabase/.env` 删掉(强制 anonymous auth)。这条路径不写数据库,也不等同产品里的匿名登录。
 

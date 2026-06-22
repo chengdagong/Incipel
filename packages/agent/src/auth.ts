@@ -8,7 +8,14 @@
 //   · HS256:旧项目/本地栈用共享 secret 对称签名;作为后备保留。
 // 远端与本地一视同仁:JWKS 的地址由 SUPABASE_URL 推出。
 
-import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
+import {
+  createLocalJWKSet,
+  createRemoteJWKSet,
+  decodeProtectedHeader,
+  jwtVerify,
+  type JWTPayload,
+  type JWTVerifyGetKey,
+} from 'jose';
 import { env } from './env.ts';
 
 export class AuthError extends Error {
@@ -34,14 +41,28 @@ const DEFAULT_AUDIENCE = 'authenticated';
 // 校验 token 的作用范围(issuer / audience),而不只看签名(见 docs/known-issues.md KI-4)。
 // 只校验签名会接受任何用同一密钥材料签出的 token——尤其是 agent 自己持有的 service_role JWT;
 // 钉住 iss/aud 后,只有面向本项目终端用户签发的 token 才放行。
-//   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用
-//     INCIPEL_SUPABASE_JWT_ISS / SUPABASE_JWT_ISS 覆盖。
-//   · audience:默认 'authenticated';可用 INCIPEL_SUPABASE_JWT_AUD / SUPABASE_JWT_AUD 覆盖。
-// INCIPEL_* 覆盖项供本地 `supabase functions serve --env-file` 使用:env-file 不适合写
-// SUPABASE_ 前缀变量,但本地匿名登录需要把浏览器看到的 issuer 传给 edge runtime。
+//   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用 SUPABASE_JWT_ISS 覆盖。
+//   · audience:默认 'authenticated';可用 SUPABASE_JWT_AUD 覆盖。
+//
+// INCIPEL_*(ISS/AUD/SECRET)覆盖项**仅供本地** edge runtime:本地 SUPABASE_URL 与浏览器看到的
+// issuer 不一致,且 env-file 不能写 SUPABASE_ 前缀变量,故用不带前缀的 INCIPEL_* 传本地 issuer /
+// HS256 secret。但「不带 SUPABASE_ 前缀」也意味着它们不受平台「禁设 SUPABASE_ 自定义 secret」的保护——
+// 一旦误入托管生产的 secrets,会点亮 HS256 对称校验旁路(见评审 #1)。因此只有当 SUPABASE_URL 指向
+// 本地(http + loopback/kong)时才采纳 INCIPEL_*;托管生产的 SUPABASE_URL 恒为 https://<ref>.supabase.co
+// 且平台禁止改它,故 INCIPEL_* 即便误入也不会被采纳,生产只走 SUPABASE_URL 推导的 issuer + JWKS。
+const LOCAL_SUPABASE_HOSTS = ['127.0.0.1', 'localhost', '0.0.0.0', 'kong', 'host.docker.internal'];
+function isLocalSupabase(): boolean {
+  const host = /^http:\/\/([^:/]+)/.exec(env('SUPABASE_URL') || '')?.[1];
+  return host !== undefined && LOCAL_SUPABASE_HOSTS.includes(host);
+}
+// 仅在本地 runtime 采纳的 INCIPEL_* 覆盖;非本地一律返回 undefined。
+function localOverride(name: string): string | undefined {
+  return isLocalSupabase() ? env(name) : undefined;
+}
+
 function expectedClaims(): { issuer: string; audience: string } {
-  const audience = env('INCIPEL_SUPABASE_JWT_AUD') || env('SUPABASE_JWT_AUD') || DEFAULT_AUDIENCE;
-  const issOverride = env('INCIPEL_SUPABASE_JWT_ISS') || env('SUPABASE_JWT_ISS');
+  const audience = localOverride('INCIPEL_SUPABASE_JWT_AUD') || env('SUPABASE_JWT_AUD') || DEFAULT_AUDIENCE;
+  const issOverride = localOverride('INCIPEL_SUPABASE_JWT_ISS') || env('SUPABASE_JWT_ISS');
   if (issOverride) return { issuer: issOverride, audience };
   const url = env('SUPABASE_URL');
   if (!url) {
@@ -51,7 +72,7 @@ function expectedClaims(): { issuer: string; audience: string } {
 }
 
 function jwtSecretKey(): Uint8Array {
-  const secret = env('INCIPEL_SUPABASE_JWT_SECRET') || env('SUPABASE_JWT_SECRET');
+  const secret = localOverride('INCIPEL_SUPABASE_JWT_SECRET') || env('SUPABASE_JWT_SECRET');
   if (!secret) {
     throw new AuthError('SUPABASE_JWT_SECRET / INCIPEL_SUPABASE_JWT_SECRET 未配置(HS256 校验需要)');
   }
@@ -60,9 +81,20 @@ function jwtSecretKey(): Uint8Array {
 
 // 远端 JWKS 取公钥;createRemoteJWKSet 自带缓存与按 kid 拉取(密钥轮换时自动重取)。
 // 单例缓存,避免每次请求都新建。
-let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
-function getJwks(): ReturnType<typeof createRemoteJWKSet> {
+let jwks: JWTVerifyGetKey | null = null;
+function getJwks(): JWTVerifyGetKey {
   if (jwks) return jwks;
+  // 平台注入了 JWKS(SUPABASE_JWKS,见 supabase/functions/README)时用本地 key set,免去每个冷启
+  // 实例首个受保护请求都额外打一跳自身 auth 端点(见评审 #4)。解析失败或缺失则回落远端拉取。
+  const raw = env('SUPABASE_JWKS');
+  if (raw) {
+    try {
+      jwks = createLocalJWKSet(JSON.parse(raw));
+      return jwks;
+    } catch {
+      // JWKS 解析失败:落到远端拉取。
+    }
+  }
   const url = env('SUPABASE_URL');
   if (!url) {
     throw new AuthError('SUPABASE_URL 未配置(JWKS 校验需要)');

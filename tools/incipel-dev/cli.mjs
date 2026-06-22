@@ -285,6 +285,9 @@ function envSync(root) {
     }
     agentEnvChanged = true;
   }
+  // dev:* / env:sync 强制 Supabase backend + anonymous auth(见 ADR-0008):始终从 supabase/.env
+  // 移除 DEV_NO_AUTH / STORE,杜绝把 memory / 免鉴权带进日常开发。要 memory-only / 免鉴权调试,
+  // 不要走 dev 脚本——自己 `supabase functions serve --env-file <自备文件>`(unsetEnvVar 会打印移除日志)。
   agentEnvChanged = unsetEnvVar(fnEnv, 'DEV_NO_AUTH') || agentEnvChanged;
   agentEnvChanged = unsetEnvVar(fnEnv, 'STORE') || agentEnvChanged;
   const modelEnv = existsSync(fnEnv) ? syncModelEnvFromPrimary(root, fnEnv) : { copied: false };
@@ -445,6 +448,9 @@ function planIsolatedStack(root) {
     text = text.replace(new RegExp(`(^|\\n)(\\s*${key}\\s*=\\s*)${cur}(\\b)`), `$1$2${next}$3`);
   }
   const apiPort = (tomlInt(canonical, 'api', 'port') ?? 54521) + delta;
+  // [studio] api_url = "http://127.0.0.1:54521" 指向 canonical 的 api 端口,不在 PORT_KEYS、上面的
+  // 端口正则也匹配不到;单独改写到隔离栈的 api 端口,否则隔离栈的 Studio 会连去共用栈、看错数据(评审 #2)。
+  text = text.replace(/(\bapi_url\s*=\s*"http:\/\/127\.0\.0\.1:)(\d+)(")/, `$1${apiPort}$3`);
   return { projectId, delta, apiPort, configText: text };
 }
 function replaceDirSymlink(src, dst) {

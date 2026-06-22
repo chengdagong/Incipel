@@ -1,10 +1,10 @@
 // Agent 运行时的 Hono app(运行时无关)。
 //
 // 这里只有「应用本身」:路由、鉴权、输入校验、SSE 编排。它不 import 任何 Node 专属东西
-// (没有 dotenv、没有 @hono/node-server),因此既能被 Node 入口(src/index.ts)挂上
-// @hono/node-server 起服务,也能被 Supabase Edge Function(supabase/functions/agent,Deno)
-// 用 `Deno.serve(createApp('/agent').fetch)` 原样托管(见 ADR-0002)。环境变量经 env() 读取,
-// 屏蔽 Deno.env 与 process.env 的差异。
+// (没有 dotenv、没有 @hono/node-server),故运行时无关:当前由 Supabase Edge Function
+// (supabase/functions/agent,Deno)用 `Deno.serve(createApp('/agent').fetch)` 托管;Node 入口已删
+// (ADR-0007),真要迁专用主机时,加回一个 ~30 行的 Node 入口 + @hono/node-server 即可。环境变量经
+// env() 读取,屏蔽 Deno.env 与 process.env 的差异。
 //
 // 客户端绝不持有模型密钥;所有模型调用都在这一层。每个受保护端点先校验 Supabase JWT。
 //
@@ -13,8 +13,8 @@
 // 里最后一条 role==='user' 的 content。权威剧本以 DB 为准,不信任 input.state。
 //
 // basePath:Supabase Edge Function 对外路径是 `/functions/v1/<函数名>/…`,网关把请求以
-// `/<函数名>/…` 交给运行时。故 Edge 用 createApp('/agent'),路由前缀对齐;Node 本地直连
-// 用 createApp()(无前缀),与既有 EXPO_PUBLIC_AGENT_URL=http://localhost:<port> 的 /run 路径一致。
+// `/<函数名>/…` 交给运行时。故 Edge 用 createApp('/agent'),路由前缀对齐;无前缀的 createApp()
+// 用于 vitest(app.request('/run'))与将来若重建的 Node 入口。
 
 import type { Message, RunAgentInput } from '@ag-ui/core';
 import { sse } from '@incipel/shared';
@@ -112,6 +112,15 @@ export function createApp(basePath = ''): Hono {
   const DEV_NO_AUTH = env('DEV_NO_AUTH') === '1';
   const memoryStore: Store | null = env('STORE') === 'memory' ? new MemoryStore() : null;
   const getStore = (): Store => memoryStore ?? createStore();
+
+  // DEV_NO_AUTH 用固定的 dev-user,它不是合法的 auth.users UUID;若搭 SupabaseStore(STORE≠memory),
+  // 首轮 create_session_if_missing(uuid) 必失败、只报含糊 500。二者必须成对(见 ADR-0008、评审 #5)。
+  // 日常 dev 应走 anonymous auth(不设 DEV_NO_AUTH);这里仅在误配时给一条明确告警。
+  if (DEV_NO_AUTH && !memoryStore) {
+    console.warn(
+      '[incipel-agent] DEV_NO_AUTH=1 但 STORE≠memory:固定 dev-user 不是合法 UUID,SupabaseStore 建会话会失败。请改走 anonymous auth(不设 DEV_NO_AUTH),或与 STORE=memory 同用(见 ADR-0008)。',
+    );
+  }
 
   const app = basePath ? new Hono().basePath(basePath) : new Hono();
 
