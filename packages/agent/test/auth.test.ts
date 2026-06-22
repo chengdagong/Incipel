@@ -28,8 +28,6 @@ beforeAll(async () => {
   delete process.env.INCIPEL_SUPABASE_JWT_AUD;
   delete process.env.SUPABASE_JWT_ISS;
   delete process.env.SUPABASE_JWT_AUD;
-  // 删 SUPABASE_JWKS:JWKS 路径靠 mock 的 createRemoteJWKSet,避免被注入的本地 JWKS 干扰(评审 #4)。
-  delete process.env.SUPABASE_JWKS;
   const { publicKey, privateKey } = await generateKeyPair('ES256');
   h.publicKey = publicKey;
   esPrivate = privateKey;

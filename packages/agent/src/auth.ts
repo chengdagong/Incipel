@@ -8,14 +8,7 @@
 //   · HS256:旧项目/本地栈用共享 secret 对称签名;作为后备保留。
 // 远端与本地一视同仁:JWKS 的地址由 SUPABASE_URL 推出。
 
-import {
-  createLocalJWKSet,
-  createRemoteJWKSet,
-  decodeProtectedHeader,
-  jwtVerify,
-  type JWTPayload,
-  type JWTVerifyGetKey,
-} from 'jose';
+import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
 import { env } from './env.ts';
 
 export class AuthError extends Error {
@@ -81,20 +74,13 @@ function jwtSecretKey(): Uint8Array {
 
 // 远端 JWKS 取公钥;createRemoteJWKSet 自带缓存与按 kid 拉取(密钥轮换时自动重取)。
 // 单例缓存,避免每次请求都新建。
-let jwks: JWTVerifyGetKey | null = null;
-function getJwks(): JWTVerifyGetKey {
+// 远端 JWKS 取公钥;createRemoteJWKSet 自带缓存,并按 kid 重取——JWT 签名密钥轮换后,运行中的
+// isolate 仍能拉到新 kid 的公钥验新 token。曾试过用平台注入的 SUPABASE_JWKS 走 createLocalJWKSet
+// 省一次冷启动拉取,但静态 key set 在密钥轮换后会把新 kid 的 token 误判 401,得不偿失(见 Codex 复审),
+// 故仍走远端。单例缓存,避免每次请求都新建。
+let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
+function getJwks(): ReturnType<typeof createRemoteJWKSet> {
   if (jwks) return jwks;
-  // 平台注入了 JWKS(SUPABASE_JWKS,见 supabase/functions/README)时用本地 key set,免去每个冷启
-  // 实例首个受保护请求都额外打一跳自身 auth 端点(见评审 #4)。解析失败或缺失则回落远端拉取。
-  const raw = env('SUPABASE_JWKS');
-  if (raw) {
-    try {
-      jwks = createLocalJWKSet(JSON.parse(raw));
-      return jwks;
-    } catch {
-      // JWKS 解析失败:落到远端拉取。
-    }
-  }
   const url = env('SUPABASE_URL');
   if (!url) {
     throw new AuthError('SUPABASE_URL 未配置(JWKS 校验需要)');
