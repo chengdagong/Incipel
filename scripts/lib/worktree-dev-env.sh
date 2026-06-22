@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# 被 scripts/dev-ios.sh / scripts/dev-android.sh / scripts/dev-agent.sh 通过 `source` 引入。
+# 被 scripts/dev-ios.sh / scripts/dev-android.sh 通过 `source` 引入。
 #
-# 职责:确定「本 worktree」的开发隔离参数,持久化到本 worktree 根目录的 .worktree-dev.env
-# (已被 .gitignore 忽略,每个 worktree 各持一份),并据此把 agent 端口与 URL 写进
-# apps/mobile/.env 与 packages/agent/.env 的对应键——只动这两个工具自管的键,绝不碰任何密钥。
-#   - EXPO_PORT          : 本 worktree 的 Metro 端口;8081 起分配
-#   - AGENT_PORT         : 本 worktree 的 agent(Hono)端口;8787 起分配
+# 职责:确定「本 worktree」的开发隔离参数(Metro 端口 / iOS 模拟器名 / Android serial),
+# 持久化到本 worktree 根目录的 .worktree-dev.env(已被 .gitignore 忽略,每个 worktree 各持一份)。
+#   - EXPO_PORT          : Metro 端口,固定 8081(我们总是只跑一个 dev 环境,不再 per-worktree 错开)
 #   - IOS_SIMULATOR_NAME : 本 worktree 专属 iOS 模拟器名;由分支名派生
 #   - ANDROID_SERIAL     : Android 目标 serial;留空交由 dev-android.sh 自动判定
+#
+# 写 apps/mobile/.env 与 supabase/.env、起共用栈、serve agent edge function,统一交给
+# `node tools/incipel-dev/cli.mjs up`(dev:ios / dev:android 会在起 Metro 前调它);本文件不碰 .env。
+# agent 已无 per-worktree 端口(它是共用栈上的 edge function,见 docs/adr/0007)。
 #
 # 兼容 macOS 自带的 bash 3.2,不使用 mapfile/readarray 等 bash 4 特性。
 
@@ -22,49 +24,19 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
-# 2) 端口分配工具
-port_is_listening() {
-  if command -v lsof >/dev/null 2>&1; then
-    lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
-  elif command -v nc >/dev/null 2>&1; then
-    nc -z 127.0.0.1 "$1" >/dev/null 2>&1
-  else
-    return 1
-  fi
-}
+# 1.5) 新 worktree 开箱即跑:apps/mobile 缺 expo(缺它 Metro 起不来、报 ConfigError)就先装一次。
+#      pnpm 用全局内容寻址 store,命中时只是几秒硬链接、不重复下载,故每个 worktree 装一次很轻——
+#      不需要、也无法靠「全局装 expo」省掉(RN/Metro 是项目本地解析,expo 是 app import 的库)。
+#      用 expo 作探针;失败(网络等)会因 set -e 中止,不会带着半套依赖去起 Metro。
+if [ ! -d "$REPO_ROOT/apps/mobile/node_modules/expo" ]; then
+  echo "▸ apps/mobile 缺依赖,先 pnpm install(pnpm store 命中通常几秒)…"
+  ( cd "$REPO_ROOT" && pnpm install )
+fi
 
-# 收集其它 worktree 在各自 .worktree-dev.env 里已声明的某个端口键
-claimed_ports() { # $1 = 键名(EXPO_PORT / AGENT_PORT)
-  git worktree list --porcelain 2>/dev/null \
-    | awk '/^worktree /{print substr($0, 10)}' \
-    | while IFS= read -r wt; do
-        f="$wt/.worktree-dev.env"
-        [ "$f" = "$ENV_FILE" ] && continue
-        [ -f "$f" ] && grep -E "^$1=" "$f" | head -1 | sed "s/^$1=//; s/\"//g"
-      done
-}
-
-allocate_port() { # $1 = 键名, $2 = 起始端口
-  local claimed candidate
-  # 前后各补空格便于用 case 整词匹配;|| true 屏蔽管道在 pipefail 下的非零退出
-  claimed=" $(claimed_ports "$1" | tr '\n' ' ' || true) "
-  candidate="$2"
-  while [ "$candidate" -lt "$(( $2 + 200 ))" ]; do
-    case "$claimed" in
-      *" $candidate "*) candidate=$((candidate + 1)); continue ;;
-    esac
-    if port_is_listening "$candidate"; then
-      candidate=$((candidate + 1))
-      continue
-    fi
-    echo "$candidate"
-    return 0
-  done
-  echo "$2"
-}
-
-if [ -z "${EXPO_PORT:-}" ]; then EXPO_PORT="$(allocate_port EXPO_PORT 8081)"; fi
-if [ -z "${AGENT_PORT:-}" ]; then AGENT_PORT="$(allocate_port AGENT_PORT 8787)"; fi
+# 2) Metro 端口:固定 8081。我们总是只跑一个 dev 环境,不再为每个 worktree 错开端口
+#    (以前从 8081 起逐个避让分配,现已去掉)。这样直接 `expo start`(默认 8081)与本脚本一致。
+#    放在载入 .worktree-dev.env 之后,覆盖旧文件里可能残留的分配值。要临时改端口,改这一行即可。
+EXPO_PORT=8081
 
 # 3) iOS 模拟器名:缺省则由分支名派生(把 / 与非字母数字折成 -)
 if [ -z "${IOS_SIMULATOR_NAME:-}" ]; then
@@ -75,50 +47,13 @@ fi
 
 ANDROID_SERIAL="${ANDROID_SERIAL:-}"
 
-# 4) 写回:持久化首次分配,后续保持稳定
+# 4) 写回:持久化本 worktree 选定的设备项(EXPO_PORT 是常量,不入文件)。
 cat > "$ENV_FILE" <<EOF
 # 本 worktree 的开发隔离配置(由 scripts/lib/worktree-dev-env.sh 自动生成,可手改)。
 # 该文件已被 .gitignore 忽略,每个 worktree 各持一份。说明见 docs/worktree-dev.md。
-EXPO_PORT=$EXPO_PORT
-AGENT_PORT=$AGENT_PORT
 IOS_SIMULATOR_NAME="$IOS_SIMULATOR_NAME"
 # 留空则 dev-android.sh 在仅一台 emulator 在线时自动选用;多台在线时请填 adb serial(如 emulator-5556)。
 ANDROID_SERIAL="$ANDROID_SERIAL"
 EOF
 
-# 5) 把工具自管的键写进 app 的 .env —— 只动这些键,绝不碰任何密钥。
-# set_env_var FILE KEY VALUE:替换已有同名行,或在文件末尾追加;按整行前缀匹配,值含特殊字符也安全。
-set_env_var() {
-  local file="$1" key="$2" val="$3"
-  [ -f "$file" ] || return 1
-  if grep -qE "^${key}=" "$file"; then
-    awk -v k="$key" -v repl="$key=$val" 'index($0, k"=")==1{print repl; next} {print}' "$file" > "$file.tmp" \
-      && mv "$file.tmp" "$file"
-  else
-    printf '%s=%s\n' "$key" "$val" >> "$file"
-  fi
-}
-
-ensure_app_env_files() {
-  local mobile_env="$REPO_ROOT/apps/mobile/.env"
-  local agent_env="$REPO_ROOT/packages/agent/.env"
-
-  # 缺省时从 .env.example 生成(只在不存在时),让密钥槽位显现,由用户填一次
-  if [ ! -f "$mobile_env" ] && [ -f "$REPO_ROOT/apps/mobile/.env.example" ]; then
-    cp "$REPO_ROOT/apps/mobile/.env.example" "$mobile_env"
-    echo "ℹ 已生成 apps/mobile/.env(从 .env.example),请填入 EXPO_PUBLIC_SUPABASE_ANON_KEY。"
-  fi
-  if [ ! -f "$agent_env" ] && [ -f "$REPO_ROOT/packages/agent/.env.example" ]; then
-    cp "$REPO_ROOT/packages/agent/.env.example" "$agent_env"
-    echo "ℹ 已生成 packages/agent/.env(从 .env.example),请填 ANTHROPIC_API_KEY 等密钥;"
-    echo "  仅做 UI/agent 迭代、不需持久化时,可设 STORE=memory、DEV_NO_AUTH=1 完全跳过 Supabase。"
-  fi
-
-  # 本 worktree 自管的路由键:客户端访问 agent 的 URL + agent 监听端口
-  set_env_var "$mobile_env" EXPO_PUBLIC_AGENT_URL "http://localhost:$AGENT_PORT" 2>/dev/null || true
-  set_env_var "$agent_env"  PORT "$AGENT_PORT" 2>/dev/null || true
-}
-
-ensure_app_env_files
-
-export REPO_ROOT ENV_FILE EXPO_PORT AGENT_PORT IOS_SIMULATOR_NAME ANDROID_SERIAL
+export REPO_ROOT ENV_FILE EXPO_PORT IOS_SIMULATOR_NAME ANDROID_SERIAL

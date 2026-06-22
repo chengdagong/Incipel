@@ -60,7 +60,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
       .select('id, title, starred, updated_at, documents(state)')
       .order('updated_at', { ascending: false });
     if (error) {
-      // Supabase 未配置/不可达(本地 dev 走 agent 的 STORE=memory)时,静默给空列表。
+      // Supabase 未配置或不可达时,显示空列表。
       console.warn('[drawer] 查询会话失败:', error.message);
       setSessions([]);
       return;
@@ -69,7 +69,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
       ((data ?? []) as unknown as SessionRow[]).map((r) => ({
         id: r.id,
         // 生成的标题写在 documents.state.meta.title(set_meta/save_turn),sessions.title 多为空;
-        // 故与 works 屏同序兜底,否则有名作品会在抽屉里显示成「未命名」。
+        // 故与 works 屏用同一套取名顺序,否则有名作品会在抽屉里显示成「未命名」。
         title: r.title || r.documents?.state?.meta?.title || '',
         starred: !!r.starred,
         updatedAt: r.updated_at,

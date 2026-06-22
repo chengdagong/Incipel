@@ -23,7 +23,7 @@ import {
   newCharacterId,
   newSceneId,
   newWorldSectionId,
-} from './id';
+} from './id.ts';
 
 export class ApplyError extends Error {
   constructor(message: string) {

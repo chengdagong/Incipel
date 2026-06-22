@@ -1,11 +1,12 @@
-// index.ts 鉴权分支(testing-strategy §3.5):DEV_NO_AUTH 关闭时,坏/缺 Authorization → 401。
+// app.ts 鉴权分支(testing-strategy §3.5):DEV_NO_AUTH 关闭时,坏/缺 Authorization → 401。
 // 单独成文件:本文件不设 DEV_NO_AUTH,使 /run、/logline 走真实 authenticate。
 
 import { describe, it, expect } from 'vitest';
+import { createApp } from '../src/app';
 
-process.env.INCIPEL_RUNTIME = 'edge';
+// createApp() 在构造时读 DEV_NO_AUTH,故先删环境变量再建 app,使本文件走真实鉴权。
 delete process.env.DEV_NO_AUTH;
-const { app } = await import('../src/index');
+const app = createApp();
 
 function runWith(headers: Record<string, string>): Promise<Response> {
   return app.request('/run', {

@@ -22,7 +22,8 @@ import {
   type JsonPatchOp,
   type Screenplay,
 } from '@incipel/shared';
-import type { PromptMessage } from './prompt';
+import type { PromptMessage } from './prompt.ts';
+import { env } from './env.ts';
 
 export type LoadedSession = {
   threadId: string;
@@ -86,8 +87,8 @@ let client: SupabaseClient | null = null;
 // 单例:service role 客户端。不自动持久化会话(服务端无浏览器存储语义)。
 export function getServiceClient(): SupabaseClient {
   if (client) return client;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = env('SUPABASE_URL');
+  const key = env('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !key) {
     throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 未配置');
   }

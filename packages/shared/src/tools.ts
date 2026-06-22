@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import type { Screenplay } from './screenplay';
+// 显式 .ts 扩展名:Supabase 的 edge runtime 在「建模块图」阶段就解析这条 import(即便是
+// type-only,也是先找文件、后擦类型),无扩展名会 boot 失败(见 ADR-0008)。Metro/Babel 仍会
+// 把整行 type import 擦掉、不参与运行时解析;tsc 经 base 的 allowImportingTsExtensions 放行。
+import type { Screenplay } from './screenplay.ts';
 
 // 模型↔剧本的修改契约(docs/adr/0001):
 // - 新建与修改是两个显式动作:add_*(不带 id)/ update_*(必须带 id)。不用 upsert。

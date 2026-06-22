@@ -5,10 +5,11 @@
 // 两种签名都支持,按 token 头部的 alg 分流:
 //   · 非对称(ES256/RS256/EdDSA):Supabase 现默认用 JWT 签名密钥(asymmetric signing
 //     keys),公钥经 JWKS 端点(/auth/v1/.well-known/jwks.json)发布;按 kid 取公钥验签。
-//   · HS256:旧项目用共享 secret(SUPABASE_JWT_SECRET)对称签名;作为后备保留。
+//   · HS256:旧项目/本地栈用共享 secret 对称签名;作为后备保留。
 // 远端与本地一视同仁:JWKS 的地址由 SUPABASE_URL 推出。
 
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
+import { env } from './env.ts';
 
 export class AuthError extends Error {
   constructor(message: string) {
@@ -35,11 +36,28 @@ const DEFAULT_AUDIENCE = 'authenticated';
 // 钉住 iss/aud 后,只有面向本项目终端用户签发的 token 才放行。
 //   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用 SUPABASE_JWT_ISS 覆盖。
 //   · audience:默认 'authenticated';可用 SUPABASE_JWT_AUD 覆盖。
+//
+// INCIPEL_*(ISS/AUD/SECRET)覆盖项**仅供本地** edge runtime:本地 SUPABASE_URL 与浏览器看到的
+// issuer 不一致,且 env-file 不能写 SUPABASE_ 前缀变量,故用不带前缀的 INCIPEL_* 传本地 issuer /
+// HS256 secret。但「不带 SUPABASE_ 前缀」也意味着它们不受平台「禁设 SUPABASE_ 自定义 secret」的保护——
+// 一旦误入托管生产的 secrets,会点亮 HS256 对称校验旁路(见评审 #1)。因此只有当 SUPABASE_URL 指向
+// 本地(http + loopback/kong)时才采纳 INCIPEL_*;托管生产的 SUPABASE_URL 恒为 https://<ref>.supabase.co
+// 且平台禁止改它,故 INCIPEL_* 即便误入也不会被采纳,生产只走 SUPABASE_URL 推导的 issuer + JWKS。
+const LOCAL_SUPABASE_HOSTS = ['127.0.0.1', 'localhost', '0.0.0.0', 'kong', 'host.docker.internal'];
+function isLocalSupabase(): boolean {
+  const host = /^http:\/\/([^:/]+)/.exec(env('SUPABASE_URL') || '')?.[1];
+  return host !== undefined && LOCAL_SUPABASE_HOSTS.includes(host);
+}
+// 仅在本地 runtime 采纳的 INCIPEL_* 覆盖;非本地一律返回 undefined。
+function localOverride(name: string): string | undefined {
+  return isLocalSupabase() ? env(name) : undefined;
+}
+
 function expectedClaims(): { issuer: string; audience: string } {
-  const audience = process.env.SUPABASE_JWT_AUD || DEFAULT_AUDIENCE;
-  const issOverride = process.env.SUPABASE_JWT_ISS;
+  const audience = localOverride('INCIPEL_SUPABASE_JWT_AUD') || env('SUPABASE_JWT_AUD') || DEFAULT_AUDIENCE;
+  const issOverride = localOverride('INCIPEL_SUPABASE_JWT_ISS') || env('SUPABASE_JWT_ISS');
   if (issOverride) return { issuer: issOverride, audience };
-  const url = process.env.SUPABASE_URL;
+  const url = env('SUPABASE_URL');
   if (!url) {
     throw new AuthError('SUPABASE_URL 未配置(校验 JWT issuer 需要)');
   }
@@ -47,19 +65,23 @@ function expectedClaims(): { issuer: string; audience: string } {
 }
 
 function jwtSecretKey(): Uint8Array {
-  const secret = process.env.SUPABASE_JWT_SECRET;
+  const secret = localOverride('INCIPEL_SUPABASE_JWT_SECRET') || env('SUPABASE_JWT_SECRET');
   if (!secret) {
-    throw new AuthError('SUPABASE_JWT_SECRET 未配置(HS256 校验需要)');
+    throw new AuthError('SUPABASE_JWT_SECRET / INCIPEL_SUPABASE_JWT_SECRET 未配置(HS256 校验需要)');
   }
   return new TextEncoder().encode(secret);
 }
 
 // 远端 JWKS 取公钥;createRemoteJWKSet 自带缓存与按 kid 拉取(密钥轮换时自动重取)。
 // 单例缓存,避免每次请求都新建。
+// 远端 JWKS 取公钥;createRemoteJWKSet 自带缓存,并按 kid 重取——JWT 签名密钥轮换后,运行中的
+// isolate 仍能拉到新 kid 的公钥验新 token。曾试过用平台注入的 SUPABASE_JWKS 走 createLocalJWKSet
+// 省一次冷启动拉取,但静态 key set 在密钥轮换后会把新 kid 的 token 误判 401,得不偿失(见 Codex 复审),
+// 故仍走远端。单例缓存,避免每次请求都新建。
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 function getJwks(): ReturnType<typeof createRemoteJWKSet> {
   if (jwks) return jwks;
-  const url = process.env.SUPABASE_URL;
+  const url = env('SUPABASE_URL');
   if (!url) {
     throw new AuthError('SUPABASE_URL 未配置(JWKS 校验需要)');
   }

@@ -23,6 +23,9 @@ let esPrivate: any;
 beforeAll(async () => {
   process.env.SUPABASE_URL = SUPABASE_URL;
   process.env.SUPABASE_JWT_SECRET = SECRET_TEXT;
+  delete process.env.INCIPEL_SUPABASE_JWT_SECRET;
+  delete process.env.INCIPEL_SUPABASE_JWT_ISS;
+  delete process.env.INCIPEL_SUPABASE_JWT_AUD;
   delete process.env.SUPABASE_JWT_ISS;
   delete process.env.SUPABASE_JWT_AUD;
   const { publicKey, privateKey } = await generateKeyPair('ES256');
@@ -68,9 +71,9 @@ describe('verifyJwt — HS256 后备路径', () => {
     const { verifyJwt } = await import('../src/auth');
     expect((await verifyJwt(await mint({ sub: 'user-123', role: 'authenticated' }))).userId).toBe('user-123');
   });
-  it('匿名用户(role=anon)同样放行', async () => {
+  it('anonymous user 同样放行', async () => {
     const { verifyJwt } = await import('../src/auth');
-    expect((await verifyJwt(await mint({ sub: 'anon-1', role: 'anon' }))).userId).toBe('anon-1');
+    expect((await verifyJwt(await mint({ sub: 'anon-1', role: 'authenticated', is_anonymous: true }))).userId).toBe('anon-1');
   });
   it('过期 → 拒绝', async () => {
     const { verifyJwt, AuthError } = await import('../src/auth');
@@ -98,6 +101,49 @@ describe('verifyJwt — issuer / audience(KI-4)', () => {
   it('同密钥签出的 service_role token(iss=supabase、无 aud)被拒', async () => {
     const { verifyJwt, AuthError } = await import('../src/auth');
     await expect(verifyJwt(await mint({ sub: 'service_role', role: 'service_role' }, { iss: 'supabase', aud: null }))).rejects.toBeInstanceOf(AuthError);
+  });
+  it('本地 edge runtime(SUPABASE_URL 指向本地)可用 INCIPEL_* 覆盖 issuer 与 HS256 secret', async () => {
+    const { verifyJwt } = await import('../src/auth');
+    const previousSecret = process.env.SUPABASE_JWT_SECRET;
+    const previousUrl = process.env.SUPABASE_URL;
+    // 围栏要求 SUPABASE_URL 指向本地(http + loopback/kong)才采纳 INCIPEL_*(评审 #1)。
+    process.env.SUPABASE_URL = 'http://127.0.0.1:54521';
+    process.env.INCIPEL_SUPABASE_JWT_SECRET = SECRET_TEXT;
+    process.env.INCIPEL_SUPABASE_JWT_ISS = 'http://127.0.0.1:54521/auth/v1';
+    delete process.env.SUPABASE_JWT_SECRET;
+    try {
+      const token = await mint(
+        { sub: 'local-anon', role: 'authenticated', is_anonymous: true },
+        { iss: 'http://127.0.0.1:54521/auth/v1' },
+      );
+      expect((await verifyJwt(token)).userId).toBe('local-anon');
+    } finally {
+      process.env.SUPABASE_URL = previousUrl as string;
+      if (previousSecret) process.env.SUPABASE_JWT_SECRET = previousSecret;
+      else delete process.env.SUPABASE_JWT_SECRET;
+      delete process.env.INCIPEL_SUPABASE_JWT_SECRET;
+      delete process.env.INCIPEL_SUPABASE_JWT_ISS;
+    }
+  });
+  it('托管生产(SUPABASE_URL 为 https)忽略 INCIPEL_* 覆盖,误入的 secret 不点亮 HS256 旁路', async () => {
+    const { verifyJwt, AuthError } = await import('../src/auth');
+    // SUPABASE_URL 仍是 https://proj.supabase.co(beforeAll 设的);此处即便设了 INCIPEL_*,围栏也不采纳。
+    process.env.INCIPEL_SUPABASE_JWT_SECRET = SECRET_TEXT;
+    process.env.INCIPEL_SUPABASE_JWT_ISS = 'http://127.0.0.1:54521/auth/v1';
+    delete process.env.SUPABASE_JWT_SECRET; // 生产没有 SUPABASE_JWT_SECRET → HS256 应整体关闭
+    try {
+      // 用 INCIPEL_ISS 那个本地 issuer 签的 HS256 token:若围栏失效会被接受;有围栏则因
+      // 既无 HS256 secret(jwtSecretKey 抛错)、issuer 也不匹配而被拒。
+      const token = await mint(
+        { sub: 'forged', role: 'authenticated' },
+        { iss: 'http://127.0.0.1:54521/auth/v1' },
+      );
+      await expect(verifyJwt(token)).rejects.toBeInstanceOf(AuthError);
+    } finally {
+      process.env.SUPABASE_JWT_SECRET = SECRET_TEXT;
+      delete process.env.INCIPEL_SUPABASE_JWT_SECRET;
+      delete process.env.INCIPEL_SUPABASE_JWT_ISS;
+    }
   });
 });
 

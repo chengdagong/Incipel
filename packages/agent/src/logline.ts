@@ -2,8 +2,8 @@
 //(反差身份主角 + 触发事件 + 具体目标 + 明确阻力,25–50 字)。
 // 走独立端点而非 run 编排:不碰剧本、不落库,纯一次性 completion(见 system-design §9、§10)。
 
-import { createModelProvider } from './model/provider';
-import { buildLoglinePrompt } from './prompt';
+import { createModelProvider } from './model/provider.ts';
+import { buildLoglinePrompt } from './prompt.ts';
 
 export type LoglineInput = {
   // 可选灵感种子;空/缺省时生成一句全新 logline(骰子在空输入时也能用)。

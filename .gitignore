@@ -19,6 +19,11 @@ web-build/
 # supabase
 supabase/.branches/
 supabase/.temp/
+# E2E 隔离栈的 workdir(tools/incipel-dev e2e up 生成,按 worktree 一套,跑完即拆)
+.worktree-supabase/
+# Edge Function 的 deno.lock 按本机 Deno 版本生成,可能与 Supabase 部署用的 Deno 版本不一致而
+# 触发 lockfile 完整性报错;依赖版本已由各函数 deno.json 精确锁定,无需入库这份 lock。
+supabase/functions/*/deno.lock
 
 # os / editor
 .DS_Store

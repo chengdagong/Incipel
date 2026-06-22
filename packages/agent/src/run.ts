@@ -24,11 +24,11 @@ import {
   type Screenplay,
 } from '@incipel/shared';
 import { nanoid } from 'nanoid';
-import { applyToolCall } from './apply';
-import { createModelProvider } from './model/provider';
-import type { ModelProvider, StreamChunk } from './model/provider';
-import { buildPrompt } from './prompt';
-import { createStore, type Store } from './store';
+import { applyToolCall } from './apply.ts';
+import { createModelProvider } from './model/provider.ts';
+import type { ModelProvider, StreamChunk } from './model/provider.ts';
+import { buildPrompt } from './prompt.ts';
+import { createStore, type Store } from './store.ts';
 
 export type RunInput = {
   // threadId 即会话标识(等同 session id)。
@@ -48,7 +48,7 @@ export type RunDeps = {
   store?: Store;
 };
 
-// 把一轮编排成一个 BaseEvent 异步序列。调用方(index.ts)逐个 sse() 写进 SSE 响应。
+// 把一轮编排成一个 BaseEvent 异步序列。调用方(app.ts 的 /run handler)逐个 sse() 写进 SSE 响应。
 // provider / store 可注入,便于冒烟脚本用内存 store + 真实 provider 跑同一条核心循环。
 export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGenerator<BaseEvent> {
   const { threadId, runId } = input;

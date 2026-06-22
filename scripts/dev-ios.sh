@@ -46,8 +46,14 @@ udid_for_name() {
 
 echo "▸ worktree     : $REPO_ROOT"
 echo "▸ Metro 端口   : $EXPO_PORT"
-echo "▸ Agent 端口   : $AGENT_PORT"
+echo "▸ Agent        : edge function(共用栈 /functions/v1/agent;本脚本会自动起栈并后台 serve)"
 echo "▸ iOS 模拟器   : $IOS_SIMULATOR_NAME"
+
+# 起共用 Supabase 栈 + 后台 serve agent edge function(已在跑则自动跳过)。
+# 设 INCIPEL_SKIP_AGENT=1 可跳过(例如你在另一个终端用 `pnpm dev:agent` 前台跑 agent)。
+if [ "${INCIPEL_SKIP_AGENT:-0}" != "1" ]; then
+  node "$REPO_ROOT/tools/incipel-dev/cli.mjs" up
+fi
 
 UDID="$(udid_for_name "$IOS_SIMULATOR_NAME" || true)"
 if [ -z "$UDID" ]; then
