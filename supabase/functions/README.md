@@ -70,7 +70,7 @@ supabase functions serve agent --env-file supabase/.env --no-verify-jwt
 
 ```bash
 supabase link --project-ref <project-ref>   # 一次性
-supabase functions deploy agent
+supabase functions deploy agent --use-api
 ```
 
 部署不需要 GitHub remote;但需先 `link` 到远端项目,并已 `supabase secrets set` 好模型密钥。部署后把客户端 `EXPO_PUBLIC_AGENT_URL` 指到 `https://<project-ref>.supabase.co/functions/v1/agent`。

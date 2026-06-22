@@ -16,7 +16,7 @@
     "dev:agent": "node tools/incipel-dev/cli.mjs dev",
     "env:sync": "node tools/incipel-dev/cli.mjs env sync",
     "e2e:stack": "node tools/incipel-dev/cli.mjs e2e",
-    "agent:deploy": "supabase functions deploy agent",
+    "agent:deploy": "supabase functions deploy agent --use-api",
     "db:reset": "supabase db reset"
   }
 }
