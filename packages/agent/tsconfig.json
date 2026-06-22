@@ -2,6 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
+    // 内部相对 import 写显式 .ts 扩展名(为 Supabase Edge Function/Deno 的严格模块解析,见 ADR-0002)。
+    // tsx / vitest / esbuild 都能解析 .ts specifier;此项让 tsc 也放行。
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "paths": {
       "@incipel/shared": ["../shared/src/index.ts"]

@@ -98,5 +98,13 @@ policy = "oneshot"
 # 留在 5452x 段内,避免与默认 8083 或其他本地服务冲突。
 inspector_port = 54525
 
+# agent 运行时(AG-UI / SSE),见 ADR-0002 与 supabase/functions/agent。
+[functions.agent]
+enabled = true
+# 网关层不校验 JWT:鉴权由函数内的 authenticate() 负责(更严,校验 iss/aud/sub),
+# 与「agent 是唯一鉴权处」一致(见 packages/agent/src/auth.ts、system-design §4);
+# 如此 /agent/health 也能不带 token 探活。依赖映射自动取同目录 deno.json。
+verify_jwt = false
+
 [analytics]
 enabled = false

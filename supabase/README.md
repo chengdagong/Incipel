@@ -51,7 +51,7 @@ v1 默认匿名账号(零摩擦入门,事后可选升级,见系统设计 §15/§
 - **本地**:已在 [`config.toml`](./config.toml) 的 `[auth]` 下设 `enable_anonymous_sign_ins = true`,`supabase start` 即生效。
 - **远端**:在 Supabase Dashboard → Authentication → Sign In / Providers → 打开 **Anonymous Sign-ins**。该项不随 `db push` 同步,需在 Dashboard(或项目的 Management API)单独开启。
 
-客户端用 `supabase.auth.signInAnonymously()` 拿到匿名 JWT;之后绑定邮箱/第三方即升级为正式账号,数据不丢。
+客户端用 `supabase.auth.signInAnonymously()` 拿到匿名 JWT;之后绑定邮箱/第三方即升级为正式账号,数据继续归属同一用户。
 
 ## RLS 与归属隔离
 
@@ -94,7 +94,9 @@ agent 运行时(非本目录,放在 `packages/agent`)需要以下变量读写数
 |---|---|
 | `SUPABASE_URL` | 项目 API URL(本地为 `http://127.0.0.1:54521`) |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role 密钥;agent 用它绕过 RLS 落库,**绝不下发到客户端** |
-| `SUPABASE_JWT_SECRET` | 校验客户端 JWT 用(本地由 `supabase start` 打印) |
+| `SUPABASE_JWT_SECRET` | 校验 HS256 客户端 JWT 用;本地开发由 `tools/incipel-dev` 写入 `INCIPEL_SUPABASE_JWT_SECRET`,避免在 env-file 中写 `SUPABASE_` 前缀变量 |
+
+本地 edge runtime 还会读取 `INCIPEL_SUPABASE_JWT_ISS` / `INCIPEL_SUPABASE_JWT_AUD`,用于校验 anonymous auth 产生的 JWT。远端项目通常不需要这些变量。
 
 客户端(`apps/mobile`)只需公开的 `SUPABASE_URL` 与 `anon key`。
 

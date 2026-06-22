@@ -2,8 +2,8 @@
 // 实现 store.ts 的 Store 接口;saveTurn 把本轮结果留在内存里供脚本断言/打印。
 
 import { emptyScreenplay, type Screenplay } from '@incipel/shared';
-import type { PromptMessage } from '../prompt';
-import type { CreateSessionInput, LoadedSession, SaveTurnInput, SavedTurn, Store } from '../store';
+import type { PromptMessage } from '../prompt.ts';
+import type { CreateSessionInput, LoadedSession, SaveTurnInput, SavedTurn, Store } from '../store.ts';
 
 type MemSession = {
   userId: string;
