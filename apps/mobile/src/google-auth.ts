@@ -181,7 +181,7 @@ async function platformOS(): Promise<string> {
 export const nativeGoogleAdapter: GoogleNativeAdapter = {
   async ensureConfigured() {
     if (!WEB_CLIENT_ID) {
-      throw new GoogleAuthError('configuration');
+      throw new GoogleAuthError('configuration', new Error('Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.'));
     }
     await assertGoogleNativeRuntime();
     const { GoogleSignin } = await googleSignInModule();
@@ -285,7 +285,7 @@ async function getGoogleIdToken(google: GoogleNativeAdapter): Promise<string> {
     throw new GoogleAuthError('cancelled', undefined, true);
   }
   if (!result.idToken) {
-    throw new GoogleAuthError('configuration');
+    throw new GoogleAuthError('configuration', new Error('Google Sign-In did not return an idToken.'));
   }
   return result.idToken;
 }

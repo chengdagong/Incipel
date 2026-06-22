@@ -134,11 +134,29 @@ function tomlInt(toml, section, key) {
   }
   return null;
 }
+function tomlString(toml, section, key) {
+  const lines = toml.split('\n');
+  let inSection = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line.startsWith('[')) inSection = line === `[${section}]`;
+    else if (inSection) {
+      const m = line.match(new RegExp(`^${key}\\s*=\\s*"([^"]*)"`));
+      if (m) return m[1];
+    }
+  }
+  return null;
+}
 
 // 共用栈(canonical config.toml)的 API 端口:日常 dev 的 edge URL 用它。
 function canonicalApiPort(root) {
   const toml = readFileSync(join(root, 'supabase', 'config.toml'), 'utf8');
   return tomlInt(toml, 'api', 'port') ?? 54521;
+}
+function googleWebClientId(root) {
+  const toml = readFileSync(join(root, 'supabase', 'config.toml'), 'utf8');
+  const clientId = tomlString(toml, 'auth.external.google', 'client_id');
+  return clientId?.split(',').map((id) => id.trim()).find(Boolean) ?? null;
 }
 function canonicalProjectId(root) {
   const toml = readFileSync(join(root, 'supabase', 'config.toml'), 'utf8');
@@ -189,6 +207,32 @@ function setEnvVarFromFileIfPresent(dst, src, key) {
   const val = getEnvVar(src, key);
   if (!val) return false;
   return setEnvVar(dst, key, val);
+}
+function primaryEnvFile(root, ...segments) {
+  const primaryRoot = primaryWorktreeRoot(root);
+  const file = primaryRoot ? join(primaryRoot, ...segments) : null;
+  return file && existsSync(file) ? file : null;
+}
+
+function syncMobileGoogleEnvFromPrimary(root, mobileEnv) {
+  const primaryMobileEnv = primaryEnvFile(root, 'apps', 'mobile', '.env');
+  if (!primaryMobileEnv) return { changed: false };
+
+  let changed = false;
+  changed = setEnvVarFromFileIfPresent(mobileEnv, primaryMobileEnv, 'EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID') || changed;
+  return { changed };
+}
+
+function syncGoogleProviderSecretFromPrimary(root, fnEnv) {
+  const primaryFnEnv = primaryEnvFile(root, 'supabase', '.env');
+  if (!primaryFnEnv) return { changed: false };
+
+  const changed = setEnvVarFromFileIfPresent(
+    fnEnv,
+    primaryFnEnv,
+    'SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET',
+  );
+  return { changed };
 }
 
 function providerKey(provider) {
@@ -258,6 +302,9 @@ function envSync(root) {
   setEnvVar(mobileEnv, 'EXPO_PUBLIC_SUPABASE_URL', apiUrl);
   if (status?.ANON_KEY) setEnvVar(mobileEnv, 'EXPO_PUBLIC_SUPABASE_ANON_KEY', status.ANON_KEY);
   setEnvVar(mobileEnv, 'EXPO_PUBLIC_AGENT_URL', agentUrl);
+  const googleClientId = googleWebClientId(root);
+  if (googleClientId) setEnvVar(mobileEnv, 'EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', googleClientId);
+  syncMobileGoogleEnvFromPrimary(root, mobileEnv);
   // 日常 dev 走 Supabase anonymous auth:显示登录页,点「先随便逛逛」后取得真实 session。
   setEnvVar(mobileEnv, 'EXPO_PUBLIC_DEV_NO_AUTH', '');
 
@@ -292,6 +339,8 @@ function envSync(root) {
   agentEnvChanged = unsetEnvVar(fnEnv, 'STORE') || agentEnvChanged;
   const modelEnv = existsSync(fnEnv) ? syncModelEnvFromPrimary(root, fnEnv) : { copied: false };
   agentEnvChanged = (modelEnv.changed || false) || agentEnvChanged;
+  const googleProviderSecret = existsSync(fnEnv) ? syncGoogleProviderSecretFromPrimary(root, fnEnv) : { changed: false };
+  agentEnvChanged = (googleProviderSecret.changed || false) || agentEnvChanged;
   if (status?.JWT_SECRET) agentEnvChanged = setEnvVar(fnEnv, 'INCIPEL_SUPABASE_JWT_SECRET', status.JWT_SECRET) || agentEnvChanged;
   agentEnvChanged = setEnvVar(fnEnv, 'INCIPEL_SUPABASE_JWT_ISS', `${apiUrl}/auth/v1`) || agentEnvChanged;
   agentEnvChanged = setEnvVar(fnEnv, 'INCIPEL_SUPABASE_JWT_AUD', 'authenticated') || agentEnvChanged;

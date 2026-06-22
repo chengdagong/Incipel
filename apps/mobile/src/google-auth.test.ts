@@ -131,7 +131,10 @@ describe('signInWithGoogle', () => {
         google,
         auth: auth(),
       }),
-    ).rejects.toMatchObject({ kind: 'configuration' });
+    ).rejects.toMatchObject({
+      kind: 'configuration',
+      cause: expect.objectContaining({ message: 'Google Sign-In did not return an idToken.' }),
+    });
   });
 
   it('does not call Supabase when Google accessToken retrieval fails', async () => {

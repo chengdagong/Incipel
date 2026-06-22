@@ -24,12 +24,32 @@ if [ -f "$ENV_FILE" ]; then
   set +a
 fi
 
-# 1.5) 新 worktree 开箱即跑:apps/mobile 缺 expo(缺它 Metro 起不来、报 ConfigError)就先装一次。
-#      pnpm 用全局内容寻址 store,命中时只是几秒硬链接、不重复下载,故每个 worktree 装一次很轻——
-#      不需要、也无法靠「全局装 expo」省掉(RN/Metro 是项目本地解析,expo 是 app import 的库)。
-#      用 expo 作探针;失败(网络等)会因 set -e 中止,不会带着半套依赖去起 Metro。
-if [ ! -d "$REPO_ROOT/apps/mobile/node_modules/expo" ]; then
-  echo "▸ apps/mobile 缺依赖,先 pnpm install(pnpm store 命中通常几秒)…"
+# 1.5) 新 worktree 直接可运行:apps/mobile 任一直接依赖缺失时,先安装依赖。
+#      Expo 会在读取 app.json 时解析 config plugin;只检查 expo 不足以发现新增 plugin 缺失。
+#      pnpm 使用全局 content-addressable store,命中时通常只是创建硬链接,不会重复下载。
+if ! MISSING_MOBILE_DEPS="$(
+  MOBILE_DIR="$REPO_ROOT/apps/mobile" node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+
+const mobileDir = process.env.MOBILE_DIR;
+const pkg = JSON.parse(fs.readFileSync(path.join(mobileDir, 'package.json'), 'utf8'));
+const deps = {
+  ...(pkg.dependencies || {}),
+  ...(pkg.devDependencies || {}),
+};
+
+const missing = Object.keys(deps).filter((name) => {
+  return !fs.existsSync(path.join(mobileDir, 'node_modules', name));
+});
+
+if (missing.length > 0) {
+  process.stdout.write(missing.slice(0, 5).join(', '));
+  process.exit(1);
+}
+NODE
+)"; then
+  echo "▸ apps/mobile 缺依赖($MISSING_MOBILE_DEPS),先 pnpm install(pnpm store 命中通常几秒)…"
   ( cd "$REPO_ROOT" && pnpm install )
 fi
 

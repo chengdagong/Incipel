@@ -18,9 +18,11 @@
 EXPO_PUBLIC_AGENT_URL=http://127.0.0.1:54521/functions/v1/agent   # agent 是共用栈上的 edge function(见 ADR-0008)
 EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54521
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<本地 Supabase anon key>
+EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<Google Web client id>
+EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<Google iOS client id>
 ```
 
-只放公开的 anon key 与 agent URL,**绝不放模型密钥**(模型只在 agent 端调用)。`pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` 会自动把 `EXPO_PUBLIC_AGENT_URL` 写好。iOS 模拟器与 `localhost` 直通;Android 模拟器经 `dev-android.sh` 的 `adb reverse` 也走 `localhost`;真机则把 `127.0.0.1` 换成本机局域网 IP。
+只放公开的 anon key、agent URL 与 Google client id,**绝不放模型密钥或 Google client secret**(模型只在 agent 端调用,Google client secret 只属于 Supabase provider 配置)。`pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` 会自动把 `EXPO_PUBLIC_AGENT_URL` 写好,从 `supabase/config.toml` 的 `auth.external.google.client_id` 第一项写入 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`,并在主工作区 `apps/mobile/.env` 已填写时复制 `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`。iOS 模拟器与 `localhost` 直通;Android 模拟器经 `dev-android.sh` 的 `adb reverse` 也走 `localhost`;真机则把 `127.0.0.1` 换成本机局域网 IP。
 
 ## 启动
 
