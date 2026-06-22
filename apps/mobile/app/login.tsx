@@ -17,7 +17,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DEV_NO_AUTH, useAuth } from '../src/auth';
-import { googleAuthMessageKey, signInWithGoogle } from '../src/google-auth';
+import { googleAuthLogDetailsForDebug, googleAuthMessageKey, signInWithGoogle } from '../src/google-auth';
 import { useI18n } from '../src/i18n';
 import { signInAnonymously, signInWithApple } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
@@ -97,7 +97,7 @@ export default function LoginScreen() {
     } catch (e) {
       const message = googleMessage(e);
       if (message) {
-        console.warn('[login] Google 登录失败:', e);
+        console.warn('[login] Google 登录失败:', googleAuthLogDetailsForDebug(e));
         setError(message);
       }
       setBusy(false);

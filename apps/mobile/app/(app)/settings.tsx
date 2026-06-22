@@ -9,7 +9,12 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/auth';
-import { getGoogleProviderLabel, googleAuthMessageKey, linkGoogleIdentity } from '../../src/google-auth';
+import {
+  getGoogleProviderLabel,
+  googleAuthLogDetailsForDebug,
+  googleAuthMessageKey,
+  linkGoogleIdentity,
+} from '../../src/google-auth';
 import { LANGS, useI18n } from '../../src/i18n';
 import { signOut } from '../../src/supabase';
 import { defaultTheme, palette } from '../../src/theme';
@@ -118,7 +123,7 @@ export default function SettingsScreen() {
     } catch (e) {
       const message = googleMessage(e);
       if (message) {
-        console.warn('[settings] Google 绑定失败:', e);
+        console.warn('[settings] Google 绑定失败:', googleAuthLogDetailsForDebug(e));
         setAccountError(message);
       }
     } finally {

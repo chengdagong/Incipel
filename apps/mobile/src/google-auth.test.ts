@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import {
   GoogleAuthError,
+  googleAuthLogDetailsForDebug,
   googleAuthMessageKey,
   getGoogleProviderLabel,
   linkGoogleIdentity,
@@ -281,6 +282,30 @@ describe('GoogleAuthError', () => {
     const err = new GoogleAuthError('play_services_unavailable');
     expect(err.kind).toBe('play_services_unavailable');
     expect(err.silent).toBe(false);
+  });
+});
+
+describe('googleAuthLogDetailsForDebug', () => {
+  it('keeps Supabase error details and redacts tokens', () => {
+    const err = new GoogleAuthError('configuration', {
+      name: 'AuthApiError',
+      code: 'validation_failed',
+      status: 400,
+      message: 'Bad ID token eyJaaa.bbb.ccc',
+    });
+
+    expect(googleAuthLogDetailsForDebug(err)).toEqual({
+      name: 'GoogleAuthError',
+      kind: 'configuration',
+      message: 'configuration',
+      silent: false,
+      cause: {
+        name: 'AuthApiError',
+        code: 'validation_failed',
+        status: 400,
+        message: 'Bad ID token <jwt>',
+      },
+    });
   });
 });
 

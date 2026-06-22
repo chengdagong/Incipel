@@ -77,8 +77,66 @@ const CONFIGURATION_MESSAGE_PATTERN =
   /manual linking|provider.*disabled|provider.*not.*enabled|oauth provider|unsupported provider|client[_ ]?id|audience/i;
 const MISSING_NATIVE_GOOGLE_MODULE_PATTERN =
   /RNGoogleSignin|NativeGoogleSignin|TurboModuleRegistry\.getEnforcing/i;
+const TOKEN_PATTERN = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g;
+const GOOGLE_CLIENT_SECRET_PATTERN = /GOCSPX-[A-Za-z0-9_-]+/g;
 
 let configured = false;
+
+type GoogleAuthLogDetails = {
+  name?: string;
+  kind?: GoogleAuthErrorKind;
+  code?: string;
+  status?: number;
+  message?: string;
+  silent?: boolean;
+  cause?: GoogleAuthLogDetails;
+};
+
+function sanitizeLogValue(value: string): string {
+  return value
+    .replace(TOKEN_PATTERN, '<jwt>')
+    .replace(GOOGLE_CLIENT_SECRET_PATTERN, 'GOCSPX-<redacted>');
+}
+
+function stringProp(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const prop = (value as Record<string, unknown>)[key];
+  return typeof prop === 'string' ? sanitizeLogValue(prop) : undefined;
+}
+
+function numberProp(value: unknown, key: string): number | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const prop = (value as Record<string, unknown>)[key];
+  return typeof prop === 'number' ? prop : undefined;
+}
+
+function googleAuthLogDetails(error: unknown, depth = 0): GoogleAuthLogDetails {
+  if (error instanceof GoogleAuthError) {
+    return {
+      name: error.name,
+      kind: error.kind,
+      message: sanitizeLogValue(error.message),
+      silent: error.silent,
+      ...(error.cause && depth < 3 ? { cause: googleAuthLogDetails(error.cause, depth + 1) } : {}),
+    };
+  }
+  if (error && typeof error === 'object') {
+    const cause = (error as { cause?: unknown }).cause;
+    return {
+      name: stringProp(error, 'name'),
+      code: stringProp(error, 'code'),
+      status: numberProp(error, 'status'),
+      message: stringProp(error, 'message'),
+      ...(cause && depth < 3 ? { cause: googleAuthLogDetails(cause, depth + 1) } : {}),
+    };
+  }
+  if (typeof error === 'string') return { message: sanitizeLogValue(error) };
+  return { message: String(error) };
+}
+
+export function googleAuthLogDetailsForDebug(error: unknown): GoogleAuthLogDetails {
+  return googleAuthLogDetails(error);
+}
 
 function missingNativeGoogleModuleCause(error: unknown): unknown | null {
   if (!error || typeof error !== 'object') return null;
