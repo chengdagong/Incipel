@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,9 +9,10 @@ import test from 'node:test';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(here, 'cli.mjs');
 
-function run(bin, args, cwd) {
+function run(bin, args, cwd, options = {}) {
   return spawnSync(bin, args, {
     cwd,
+    env: options.env ?? process.env,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -21,6 +22,37 @@ function mustRun(bin, args, cwd) {
   const res = run(bin, args, cwd);
   assert.equal(res.status, 0, `${bin} ${args.join(' ')}\n${res.stdout}\n${res.stderr}`);
   return res;
+}
+
+async function startHealthServer() {
+  const child = spawn(
+    process.execPath,
+    [
+      '-e',
+      [
+        'const http = require("node:http");',
+        'const server = http.createServer((req, res) => {',
+        '  if (req.url === "/functions/v1/agent/health") {',
+        '    res.writeHead(200, { "Content-Type": "application/json" });',
+        '    res.end("{\\"ok\\":true}");',
+        '    return;',
+        '  }',
+        '  res.writeHead(404);',
+        '  res.end();',
+        '});',
+        'server.listen(0, "127.0.0.1", () => console.log(server.address().port));',
+      ].join('\n'),
+    ],
+    { stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  const port = await new Promise((resolve, reject) => {
+    child.stdout.once('data', (buf) => resolve(Number(String(buf).trim())));
+    child.once('error', reject);
+    child.once('exit', (code) => {
+      if (code !== null && code !== 0) reject(new Error(`health server exited with ${code}`));
+    });
+  });
+  return { child, port };
 }
 
 test('env sync copies Google env from the primary worktree when a child worktree already has env files', () => {
@@ -90,6 +122,98 @@ test('env sync copies Google env from the primary worktree when a child worktree
     assert.match(res.stdout, /set EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=ios-client\.apps\.googleusercontent\.com/);
     assert.match(res.stdout, /set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET=<redacted>/);
   } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('env sync selects openrouter when only an OpenRouter key is configured', () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  try {
+    mkdirSync(path.join(tmp, 'apps', 'mobile'), { recursive: true });
+    mkdirSync(path.join(tmp, 'supabase'), { recursive: true });
+
+    writeFileSync(
+      path.join(tmp, 'supabase', 'config.toml'),
+      ['[api]', 'port = 54521', '', '[auth.external.google]', 'enabled = true', 'client_id = "web-client"', ''].join('\n'),
+    );
+    writeFileSync(path.join(tmp, 'apps', 'mobile', '.env.example'), 'EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54521\n');
+    writeFileSync(path.join(tmp, 'apps', 'mobile', '.env'), 'EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54521\n');
+    writeFileSync(path.join(tmp, 'supabase', '.env'), 'OPENROUTER_API_KEY=sk-test\n');
+
+    mustRun('git', ['init'], tmp);
+    mustRun('git', ['add', 'apps/mobile/.env.example', 'supabase/config.toml'], tmp);
+    mustRun('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'init'], tmp);
+
+    const res = run('node', [cli, 'env', 'sync', '--dry-run'], tmp);
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /set MODEL_PROVIDER=openrouter/);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up dry-run restarts agent when env-file hash is missing despite healthy endpoint', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+
+  try {
+    mkdirSync(path.join(tmp, 'apps', 'mobile'), { recursive: true });
+    mkdirSync(path.join(tmp, 'supabase'), { recursive: true });
+    mkdirSync(path.join(tmp, 'bin'), { recursive: true });
+
+    writeFileSync(path.join(tmp, 'supabase', 'config.toml'), ['project_id = "incipel"', '', '[api]', `port = ${port}`, ''].join('\n'));
+    writeFileSync(
+      path.join(tmp, 'apps', 'mobile', '.env'),
+      [
+        `EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:${port}`,
+        'EXPO_PUBLIC_SUPABASE_ANON_KEY=anon',
+        `EXPO_PUBLIC_AGENT_URL=http://127.0.0.1:${port}/functions/v1/agent`,
+        'EXPO_PUBLIC_DEV_NO_AUTH=',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      path.join(tmp, 'supabase', '.env'),
+      [
+        'MODEL_PROVIDER=openrouter',
+        'OPENROUTER_API_KEY=sk-test',
+        `INCIPEL_SUPABASE_JWT_ISS=http://127.0.0.1:${port}/auth/v1`,
+        'INCIPEL_SUPABASE_JWT_AUD=authenticated',
+        'INCIPEL_SUPABASE_JWT_SECRET=secret',
+        '',
+      ].join('\n'),
+    );
+    writeFileSync(
+      path.join(tmp, 'bin', 'supabase'),
+      [
+        '#!/bin/sh',
+        'if [ "$1" = "status" ]; then',
+        '  if [ "$2" = "-o" ] && [ "$3" = "json" ]; then',
+        `    printf '%s\\n' '{"API_URL":"http://127.0.0.1:${port}","ANON_KEY":"anon","JWT_SECRET":"secret"}'`,
+        '  else',
+        '    printf "%s\\n" "supabase local development setup is running."',
+        '  fi',
+        '  exit 0',
+        'fi',
+        'printf "%s\\n" "unexpected supabase command: $*" >&2',
+        'exit 1',
+        '',
+      ].join('\n'),
+      { mode: 0o755 },
+    );
+
+    mustRun('git', ['init'], tmp);
+
+    const res = run('node', [cli, 'up', '--dry-run'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /agent env-file 内容已变化,重启 agent edge runtime/);
+    assert.match(res.stdout, /\[dry-run\] docker stop supabase_edge_runtime_incipel/);
+    assert.match(res.stdout, /\[dry-run\] detached: supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
+  } finally {
+    health.child.kill();
     rmSync(tmp, { recursive: true, force: true });
   }
 });

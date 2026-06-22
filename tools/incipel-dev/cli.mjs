@@ -67,6 +67,9 @@ function repoRoot() {
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
+function sha1Text(text) {
+  return createHash('sha1').update(text).digest('hex');
+}
 function isSensitiveEnvKey(key) {
   if (key.startsWith('EXPO_PUBLIC_')) return false;
   return key.includes('SECRET') || key.includes('TOKEN') || key.endsWith('_KEY');
@@ -235,6 +238,16 @@ function syncGoogleProviderSecretFromPrimary(root, fnEnv) {
   return { changed };
 }
 
+function syncModelProviderFromConfiguredKey(fnEnv) {
+  if (getEnvVar(fnEnv, 'MODEL_PROVIDER')) return { changed: false };
+
+  const hasOpenRouter = Boolean(getEnvVar(fnEnv, 'OPENROUTER_API_KEY'));
+  const hasAnthropic = Boolean(getEnvVar(fnEnv, 'ANTHROPIC_API_KEY'));
+  if (hasOpenRouter && !hasAnthropic) return { changed: setEnvVar(fnEnv, 'MODEL_PROVIDER', 'openrouter') };
+  if (hasAnthropic && !hasOpenRouter) return { changed: setEnvVar(fnEnv, 'MODEL_PROVIDER', 'anthropic') };
+  return { changed: false };
+}
+
 function providerKey(provider) {
   if (provider === 'openrouter') return 'OPENROUTER_API_KEY';
   if (provider === 'anthropic') return 'ANTHROPIC_API_KEY';
@@ -339,6 +352,8 @@ function envSync(root) {
   agentEnvChanged = unsetEnvVar(fnEnv, 'STORE') || agentEnvChanged;
   const modelEnv = existsSync(fnEnv) ? syncModelEnvFromPrimary(root, fnEnv) : { copied: false };
   agentEnvChanged = (modelEnv.changed || false) || agentEnvChanged;
+  const modelProvider = existsSync(fnEnv) ? syncModelProviderFromConfiguredKey(fnEnv) : { changed: false };
+  agentEnvChanged = (modelProvider.changed || false) || agentEnvChanged;
   const googleProviderSecret = existsSync(fnEnv) ? syncGoogleProviderSecretFromPrimary(root, fnEnv) : { changed: false };
   agentEnvChanged = (googleProviderSecret.changed || false) || agentEnvChanged;
   if (status?.JWT_SECRET) agentEnvChanged = setEnvVar(fnEnv, 'INCIPEL_SUPABASE_JWT_SECRET', status.JWT_SECRET) || agentEnvChanged;
@@ -399,23 +414,54 @@ function stopEdgeRuntime(root) {
   return true;
 }
 
+function stopKnownAgentServe(pidPath) {
+  if (!existsSync(pidPath)) return false;
+  const pid = Number(readFileSync(pidPath, 'utf8').trim());
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  if (DRY) {
+    log(`  [dry-run] kill ${pid}  (${pidPath})`);
+    return true;
+  }
+  try {
+    process.kill(pid, 'SIGTERM');
+    log(`  已停止 agent serve 进程(pid ${pid})`);
+    return true;
+  } catch (err) {
+    if (err?.code !== 'ESRCH') {
+      log(`  注意:agent serve 进程(pid ${pid}) 未停止:${err.message}`);
+      return false;
+    }
+    return false;
+  }
+}
+
 async function ensureAgentServe(root, { restart = false } = {}) {
   const apiPort = canonicalApiPort(root);
+  const token = worktreeHash(root);
+  const logPath = join(tmpdir(), `incipel-agent-serve-${token}.log`);
+  const pidPath = join(tmpdir(), `incipel-agent-serve-${token}.pid`);
+  const envHashPath = join(tmpdir(), `incipel-agent-serve-${token}.env.sha1`);
+  const fnEnv = join(root, 'supabase', '.env');
+  const envHash = existsSync(fnEnv) ? sha1Text(readFileSync(fnEnv, 'utf8')) : '';
+  const prevEnvHash = existsSync(envHashPath) ? readFileSync(envHashPath, 'utf8').trim() : null;
+  const envFileChanged = prevEnvHash !== envHash;
   const healthy = await agentHealthy(apiPort);
   if (healthy && restart) {
     log('  agent env 已更新,重启 agent edge runtime');
     stopEdgeRuntime(root);
+    stopKnownAgentServe(pidPath);
+  } else if (healthy && envFileChanged) {
+    log('  agent env-file 内容已变化,重启 agent edge runtime');
+    stopEdgeRuntime(root);
+    stopKnownAgentServe(pidPath);
   } else if (healthy) {
     log('  agent edge function 已在 serve(/health 正常),跳过');
     return;
   }
-  const token = worktreeHash(root);
-  const logPath = join(tmpdir(), `incipel-agent-serve-${token}.log`);
-  const pidPath = join(tmpdir(), `incipel-agent-serve-${token}.pid`);
   const serveArgs = ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'];
   if (DRY) {
     log(`  [dry-run] detached: supabase ${serveArgs.join(' ')}`);
-    log(`  [dry-run] 日志 ${logPath} / pid ${pidPath}`);
+    log(`  [dry-run] 日志 ${logPath} / pid ${pidPath} / env hash ${envHashPath}`);
     return;
   }
   // detached + unref + stdio 重定向到日志文件:Node 退出后该 serve 仍继续跑。
@@ -439,6 +485,7 @@ async function ensureAgentServe(root, { restart = false } = {}) {
       fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'})——多半是 Deno 解析 / env / 端口问题;看日志:${logPath}`);
     }
     if (await agentHealthy(apiPort)) {
+      writeFileSync(envHashPath, `${envHash}\n`);
       log('  agent 已就绪(/health 正常)');
       return;
     }
