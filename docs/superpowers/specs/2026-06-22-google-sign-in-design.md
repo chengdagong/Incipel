@@ -51,7 +51,7 @@ supabase.auth.linkIdentity({
 });
 ```
 
-实现时已确认 `@react-native-google-signin/google-signin@16.1.2` 是当时的当前 stable 版本。该 package 的 Original API 能返回 `idToken`,并可通过 `getTokens()` 返回 `accessToken`,但不提供 Google sign-in nonce 参数。Supabase `signInWithIdToken` 只有在 ID token 含 nonce claim 时才要求提交 nonce;Google 路径不传 nonce,Apple 路径保留现有 nonce 校验。
+实现时已确认 `@react-native-google-signin/google-signin@16.1.2` 是当时的当前 stable 版本。该 package 的 Original API 能返回 `idToken`,并可通过 `getTokens()` 返回 `accessToken`,但不提供 Google sign-in nonce 参数。因此 Supabase Google provider 需开启 Skip nonce check;Google 路径不传 nonce,Apple 路径保留现有 nonce 校验。
 
 Google 登录与绑定都会取得 `accessToken`,因为 Google `idToken` 可能包含 `at_hash`,Supabase 可用 `access_token` 校验该 claim。若没有取得 `accessToken`,本次登录或绑定会停止并提示重试。
 

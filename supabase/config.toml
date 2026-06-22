@@ -85,11 +85,13 @@ secret = "local-native-id-token-flow-needs-no-secret"
 # Google 登录:原生 Google Sign-In → signInWithIdToken / native linkIdentity。
 # 本地开发需把 client_id 换成真实 Web client id;secret 本地可用非空占位,
 # 远端 Supabase Dashboard 需填写真实 Google client secret。
+# @react-native-google-signin/google-signin 的 Original API 不提供 nonce 参数,
+# 故本地 Google native ID token 路径需要跳过 nonce 校验。Apple 仍保留 nonce 校验。
 [auth.external.google]
 enabled = true
 client_id = "585832312756-n6gabhbjgjmigge641pq4e9trr2tabs6.apps.googleusercontent.com,585832312756-btcd7d9c7ihj4djnfv04hftecb6jhjrj.apps.googleusercontent.com"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
-skip_nonce_check = false
+skip_nonce_check = true
 
 [edge_runtime]
 enabled = true

@@ -54,9 +54,10 @@ Apple 与 Google 的代码路径保持分开。Apple 继续使用 `expo-apple-au
 进入 Supabase Dashboard → Authentication → Sign In / Providers → Google:
 
 1. Enable Google provider。
-2. Client ID 填 Google Web client id。
+2. Client ID 填 Google Web client id;如果同时验证 iOS / Android native ID token,按 Supabase 文档把所有 client id 用逗号拼接,且 Web client id 放第一位。
 3. Client Secret 填 Google Web OAuth client secret。
-4. 保存后,用 iOS / Android 原生构建验证。
+4. 开启 Skip nonce check。`@react-native-google-signin/google-signin` 的 Original API 不提供 nonce 参数;Apple 登录仍保留 nonce 校验。
+5. 保存后,用 iOS / Android 原生构建验证。
 
 本实现调用的是 `signInWithIdToken({ provider: 'google' })` 和 native `linkIdentity`。Supabase 会校验 Google `idToken`;客户端会同时提交 Google `accessToken`。如果没有取得 `accessToken`,本次登录或绑定会停止并提示重试,不会继续调用 Supabase。
 
@@ -67,8 +68,9 @@ Apple 与 Google 的代码路径保持分开。Apple 继续使用 `expo-apple-au
 ```toml
 [auth.external.google]
 enabled = true
-client_id = "<你的 Web client id>"
+client_id = "<你的 Web client id>,<你的 iOS client id>"
 secret = "local-native-id-token-flow-needs-provider-secret"
+skip_nonce_check = true
 ```
 
 本地原生 `idToken` 路径下,`secret` 只需要是非空值;远端 Supabase Dashboard 必须填真实 Google client secret。
