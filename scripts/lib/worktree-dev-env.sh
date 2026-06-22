@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # 被 scripts/dev-ios.sh / scripts/dev-android.sh 通过 `source` 引入。
 #
-# 职责:确定「本 worktree」的开发隔离参数(Metro 端口 / iOS 模拟器名 / Android serial),
+# 职责:确定「本 worktree」的开发隔离参数(Metro 端口 / E2E iOS simulator 名 / Android serial),
 # 持久化到本 worktree 根目录的 .worktree-dev.env(已被 .gitignore 忽略,每个 worktree 各持一份)。
 #   - EXPO_PORT          : Metro 端口,固定 8081(我们总是只跑一个 dev 环境,不再 per-worktree 错开)
-#   - IOS_SIMULATOR_NAME : 本 worktree 专属 iOS 模拟器名;由分支名派生
+#   - IOS_SIMULATOR_NAME : pnpm e2e:ios 使用的本 worktree 专属 iOS simulator 名;由分支名派生
 #   - ANDROID_SERIAL     : Android 目标 serial;留空交由 dev-android.sh 自动判定
 #
 # 写 apps/mobile/.env 与 supabase/.env、起共用栈、serve agent edge function,统一交给
@@ -38,7 +38,7 @@ fi
 #    放在载入 .worktree-dev.env 之后,覆盖旧文件里可能残留的分配值。要临时改端口,改这一行即可。
 EXPO_PORT=8081
 
-# 3) iOS 模拟器名:缺省则由分支名派生(把 / 与非字母数字折成 -)
+# 3) E2E iOS simulator 名:缺省则由分支名派生(把 / 与非字母数字折成 -)
 if [ -z "${IOS_SIMULATOR_NAME:-}" ]; then
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-' | tr -cd '[:alnum:]_-')"
   [ -z "$branch" ] && branch="$(basename "$REPO_ROOT")"

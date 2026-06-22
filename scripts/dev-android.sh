@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在「本 worktree 选定」的 Android 设备/模拟器上,用「本 worktree 专属」的 Metro 端口启动开发。
+# 在「本 worktree 选定」的 Android 设备/模拟器上,用固定 Metro 端口启动开发。
 #
 #   bash scripts/dev-android.sh --go          # Expo Go
 #   bash scripts/dev-android.sh --devbuild    # development build

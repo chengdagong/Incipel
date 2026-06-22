@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 在「本 worktree 专属」的 iOS 模拟器上,用「本 worktree 专属」的 Metro 端口启动开发。
+# 在所有 worktree 共用的 iOS development simulator 上,用固定 Metro 端口启动开发。
 #
 #   bash scripts/dev-ios.sh --go          # Expo Go
 #   bash scripts/dev-ios.sh --devbuild    # development build
 #
-# 关键点:多个 worktree 各开一台模拟器后,Expo CLI 默认会指向「最近打开的那台」
-# (expo/expo#42611)。本脚本改为按 UDID 用 `simctl openurl` 显式定向,避免打错设备。
+# 关键点:dev:ios 只使用一台机器级共享 simulator。脚本仍按 UDID 用 `simctl openurl`
+# 显式定向,避免 Expo CLI 在多台已开机 simulator 中打开错误设备。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,6 +68,9 @@ DEVBUILD=0
 # shellcheck source=lib/worktree-dev-env.sh
 . "$SCRIPT_DIR/lib/worktree-dev-env.sh"
 
+# development 启动只使用一台机器级共享 simulator。E2E 仍使用
+# scripts/lib/worktree-dev-env.sh 提供的 worktree 专属 simulator。
+IOS_SIMULATOR_NAME="incipel-development"
 IOS_DEVICE_TYPE="${IOS_DEVICE_TYPE:-iPhone 16 Pro}"
 APP_SCHEME="${APP_SCHEME:-incipel}"
 IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-com.incipel.app}"

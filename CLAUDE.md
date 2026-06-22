@@ -9,15 +9,17 @@ AI 原生编剧助手「织幕」。项目背景见 [README.md](README.md),领�
 都占用机器级的独占资源,**直接照 README「本地开发」里的裸命令跑会与其它 worktree 撞车**:
 
 - Metro 端口 `8081`(固定;我们总是只跑一个 dev 环境,不再为每个 worktree 错开,见 [docs/worktree-dev.md](docs/worktree-dev.md))
-- iOS / Android 模拟器(Expo CLI 默认指向「最近打开的那台」,多模拟器时会打错)
+- iOS simulator(`pnpm dev:ios` 固定使用机器级共享实例 `incipel-development`;Expo CLI 默认指向「最近打开的那台」,多 simulator 时会打错)
+- Android 模拟器 / 设备(多设备在线时需要显式指定 serial)
 - 本地 Supabase 栈(CLI 按 `project_id` 归一,多个 worktree **共用同一套**数据库 / auth / storage;agent 作为 edge function 挂在它的 API 端口下,没有单独端口)
 
 因此在本仓库:
 
 1. **起开发服务或模拟器,用 worktree 感知的脚本,不要用裸命令**:
-   - `pnpm dev:ios` / `pnpm dev:android` —— Metro 固定 8081 + 本 worktree 专属模拟器(按 UDID / serial 定向);起 Metro 前会自动起共用栈、**后台** serve agent(经 `tools/incipel-dev up`,设 `INCIPEL_SKIP_AGENT=1` 可跳过)
+   - `pnpm dev:ios` —— Metro 固定 8081 + 共享 iOS simulator `incipel-development`(按 UDID 定向);起 Metro 前会自动起共用栈、**后台** serve agent(经 `tools/incipel-dev up`,设 `INCIPEL_SKIP_AGENT=1` 可跳过)
+   - `pnpm dev:android` —— Metro 固定 8081 + 显式指定的 Android 设备 / 模拟器(按 serial 定向);起 Metro 前会自动起共用栈、**后台** serve agent(经 `tools/incipel-dev up`,设 `INCIPEL_SKIP_AGENT=1` 可跳过)
    - `pnpm dev:agent` —— **前台**起共用栈 + serve agent(想看 agent 热重载日志时用;edge function,agent 已无 per-worktree 端口,见 [ADR-0008](docs/adr/0008-edge-only-agent-runtime.md))
-   它们用固定的 Metro 8081(+ 本 worktree 独立的 Metro 缓存)、各自的模拟器,并把 `apps/mobile/.env` 与 `supabase/.env` 写好。新 worktree 第一次需要 `supabase/.env` 时,`tools/incipel-dev` 必须先从主工作区完整复制该文件,再写本地 JWT 校验变量。机制与取舍见 [docs/worktree-dev.md](docs/worktree-dev.md)。
+   它们用固定的 Metro 8081(+ 本 worktree 独立的 Metro 缓存),并把 `apps/mobile/.env` 与 `supabase/.env` 写好。`pnpm dev:ios` 在任一 worktree 中都打开同一个 `incipel-development` simulator;`pnpm e2e:ios` 仍使用 worktree 专属 simulator。新 worktree 第一次需要 `supabase/.env` 时,`tools/incipel-dev` 必须先从主工作区完整复制该文件,再写本地 JWT 校验变量。机制与取舍见 [docs/worktree-dev.md](docs/worktree-dev.md)。
 
 2. **跑会启动模拟器或长驻服务的自动化测试前**,先确认模拟器 / 共用栈不会和别处冲突:
    走上面的脚本,或显式指定设备(`expo run:ios --device <UDID>`、`adb -s <serial>`)。
