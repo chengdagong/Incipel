@@ -1,0 +1,34 @@
+# [supabase] 历史续写(需真实 Supabase 会话):一轮落进数据库后,历史页出现该会话,点开续写回对话屏。
+# 验证客户端直连 Supabase 的会话列表读取与续写导航。
+#
+# 注:历史页行标题只读 sessions.title(不回落 documents.state.meta.title,与抽屉/作品不同),
+# 首轮 sessions.title 多为空 → 显示「未命名作品」。故这里按 history-row 的 testID 前缀点,标题无关。
+appId: com.incipel.app
+tags:
+  - supabase
+---
+- runFlow: ../subflows/enter-welcome-anon.yaml
+- runFlow: ../subflows/run-one-turn.yaml
+- tapOn:
+    id: "chat-back"
+- extendedWaitUntil:
+    visible:
+      id: "welcome-start"
+    timeout: 20000
+# 经抽屉「会话」进历史页(按 testID 点,免去 NavRow 计数徽标合并文案的脆弱)
+- tapOn:
+    id: "menu-button"
+- tapOn:
+    id: "drawer-sessions"
+# 历史列表加载出该会话行(testID 前缀,标题无关)
+- extendedWaitUntil:
+    visible:
+      id: "history-row-.*"
+    timeout: 20000
+# 点该行续写 → 回到对话屏(文档按钮 testID 恒在)
+- tapOn:
+    id: "history-row-.*"
+- extendedWaitUntil:
+    visible:
+      id: "chat-doc"
+    timeout: 20000

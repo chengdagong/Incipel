@@ -109,6 +109,7 @@ export function PortraitSheet() {
                         : { backgroundColor: P.chipOffBg },
                     ]}
                     accessibilityRole="button"
+                    testID={`portrait-style-${o.key}`}
                   >
                     <Text style={[styles.styleChipText, { color: selected ? '#fff' : P.chipOffText }]}>
                       {t(o.tkey)}
@@ -128,6 +129,8 @@ export function PortraitSheet() {
               style={styles.genBtn}
               onPress={() => sheetChar && generate(sheetChar.id, style)}
               accessibilityRole="button"
+              // E2E:弹窗内「生成」与标题「生成「…」的肖像」文案相撞,用 testID 精确点生成按钮。
+              testID="portrait-generate"
             >
               <Text style={styles.genStar}>★</Text>
               <Text style={styles.genText}>{t('generate')}</Text>

@@ -87,7 +87,7 @@ export default function SettingsScreen() {
     <View style={[styles.screen, { backgroundColor: defaultTheme.palette.pageBg, paddingTop: insets.top }]}>
       {/* 顶栏 */}
       <View style={styles.header}>
-        <Pressable onPress={back} hitSlop={8} accessibilityRole="button" accessibilityLabel="返回">
+        <Pressable onPress={back} hitSlop={8} accessibilityRole="button" accessibilityLabel="返回" testID="settings-back">
           <Text style={styles.back}>‹</Text>
         </Pressable>
         <Text style={styles.title}>{t('settingsTitle')}</Text>
@@ -134,6 +134,7 @@ export default function SettingsScreen() {
             style={styles.langRow}
             onPress={() => setLangMenuOpen((v) => !v)}
             accessibilityRole="button"
+            testID="settings-lang-row"
           >
             <View style={styles.langLeft}>
               <Globe />
@@ -156,6 +157,7 @@ export default function SettingsScreen() {
                     setLangMenuOpen(false);
                   }}
                   accessibilityRole="button"
+                  testID={`settings-lang-${l.code}`}
                 >
                   <Text style={styles.langItemText}>{l.name}</Text>
                   {l.code === lang && <Text style={[styles.check, { color: accent }]}>✓</Text>}

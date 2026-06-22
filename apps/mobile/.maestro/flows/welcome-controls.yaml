@@ -1,0 +1,20 @@
+# [frontend-only] 欢迎页纯 UI:控件在位 + 建议 chip 回填灵感框。
+# 刻意不点骰子(/logline)、不进对话屏(/run)——这两者要后端,留给 stub-agent 层。
+appId: com.incipel.app
+tags:
+  - frontend-only
+---
+- runFlow: ../subflows/enter-welcome.yaml
+# 关键控件在位:提示文案(内容)用文案断言;控件本身按 testID
+- assertVisible: "没头绪？试试这些方向"
+- assertVisible:
+    id: "welcome-chip-0"
+- assertVisible:
+    id: "welcome-start"
+# 连点两个方向 chip:idea 被拼成「A（B）」。带全角括号的拼接串只可能在输入框里,
+# 不是任何 chip 的标签 —— 以此证明 chip 确实回填了输入框(setIdea)。
+- tapOn:
+    id: "welcome-chip-0"
+- tapOn:
+    id: "welcome-chip-1"
+- assertVisible: ".*（一个荒诞的设定）.*"

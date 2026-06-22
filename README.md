@@ -38,3 +38,18 @@ pnpm mobile:start
 ```
 
 > 骨架阶段:文件树、配置与契约源码已就位,逻辑体多为 TODO。依赖未安装、云端 Supabase 项目未创建——按需自行执行。
+
+## 测试
+
+```bash
+pnpm test          # 各包 Vitest 单元/集成测试(packages/shared、packages/agent)
+pnpm test:db       # Supabase pgTAP(supabase db reset 后跑 supabase/tests/*.sql)
+
+# 端到端(Maestro,iOS 模拟器)—— 详见 apps/mobile/.maestro/README.md
+pnpm e2e:ios             # 默认 frontend-only,stub-agent 两层(免 Supabase)
+pnpm e2e:ios supabase    # 需真实匿名登录 + 本地 Supabase 的流
+```
+
+E2E 套件分三层(frontend-only / stub-agent / supabase),用确定性 stub provider 离线覆盖创作主路径;
+以 release 包(JS 内嵌)为运行目标,`pnpm e2e:ios` 会按层出包、装到本 worktree 的模拟器、起 stub
+agent 再跑(首次自动 `expo prebuild` + `pod install`)。合并前的人工关卡见 [CONTRIBUTING.md](CONTRIBUTING.md)。

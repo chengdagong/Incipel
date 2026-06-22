@@ -62,7 +62,7 @@ export default function ChatScreen() {
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
 
-  const { messages, screenplay, streamingText, options, isRunning, error, sendMessage, retry } =
+  const { messages, screenplay, streamingText, options, isRunning, thinking, error, sendMessage, retry } =
     useScreenplayAgent(threadId);
 
   // 「作品」入口可带 view=doc 直接进文档视图。
@@ -128,6 +128,15 @@ export default function ChatScreen() {
   // 最后一条 assistant 消息挂本轮卡片与选项(瞬时,随下一轮清空)。
   const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id;
 
+  // 本轮运行中,@ag-ui/client 已把「正在流式的那条助手消息」实时加进 messages(随 token 增长)。
+  // 它由下方的流式气泡(streamingText)或思考点代表显示,若同时留在列表里就会同屏重复(用户反馈)。
+  const lastMsg = messages[messages.length - 1];
+  const lastIsAssistant = !!lastMsg && lastMsg.role === 'assistant';
+  const lastMsgText = lastMsg ? messageText(lastMsg) : '';
+  // 末条助手消息「正在本轮流式中」(尚未定稿):正在打字(streamingText 有内容),或还没首 token(消息为空)。
+  // 定稿后(streamingText 清空且消息已有内容)不再成立,消息照常显示——避免文本结束到 RUN_FINISHED 之间短暂消失。
+  const trailingAssistantStreaming = isRunning && lastIsAssistant && (!!streamingText || lastMsgText === '');
+
   return (
     <PortraitProvider>
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
@@ -139,7 +148,9 @@ export default function ChatScreen() {
       />
 
       <ScrollView style={styles.thread} contentContainerStyle={styles.threadContent}>
-        {messages.map((m) => {
+        {messages.map((m, i) => {
+          // 末条助手消息正在本轮流式中时,交给下方流式气泡/思考点显示,这里跳过,避免同屏重复。
+          if (trailingAssistantStreaming && i === messages.length - 1) return null;
           const isAssistant = m.role === 'assistant';
           const isLastAssistant = isAssistant && m.id === lastAssistantId;
           return (
@@ -157,8 +168,9 @@ export default function ChatScreen() {
           );
         })}
 
-        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。 */}
-        {isRunning && !streamingText && <ThinkingDots />}
+        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。
+            thinking 由 hook 按 run 生命周期维护:retry 不追加 user 消息时也准确(见 #42 P3)。 */}
+        {thinking && <ThinkingDots />}
 
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
@@ -176,6 +188,7 @@ export default function ChatScreen() {
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="重试本轮"
+              testID="error-retry"
             >
               <Text style={[styles.retry, { color: palette.danger }]}>重试</Text>
             </Pressable>
@@ -224,7 +237,7 @@ function Header({
   return (
     <View style={[styles.header, { paddingTop: insets.top, borderColor: palette.border }]}>
       <View style={styles.headerInner}>
-        <Pressable onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }} accessibilityRole="button" accessibilityLabel="返回">
+        <Pressable onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }} accessibilityRole="button" accessibilityLabel="返回" testID="chat-back">
           <Text style={[styles.backChevron, { color: palette.textSecondary }]}>‹</Text>
         </Pressable>
 
@@ -239,6 +252,7 @@ function Header({
           style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
           accessibilityRole="button"
           accessibilityLabel={t('docBtn')}
+          testID="chat-doc"
           hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
         >
           <View

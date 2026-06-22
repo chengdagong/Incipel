@@ -1,0 +1,18 @@
+# 复用片段(supabase 层):清态启动 → 真实匿名登录(「先随便逛逛」)→ 欢迎页。
+# 前置:本地 Supabase 栈已起、apps/mobile/.env 填好真实 anon key、未设 EXPO_PUBLIC_DEV_NO_AUTH。
+appId: com.incipel.app
+---
+- launchApp:
+    clearState: true
+# 登录页:「先随便逛逛」匿名登录入口(testID login-anon)
+- extendedWaitUntil:
+    visible:
+      id: "login-anon"
+    timeout: 60000
+- tapOn:
+    id: "login-anon"
+# 匿名登录成功 → 会话门控放行 → 欢迎页
+- extendedWaitUntil:
+    visible:
+      id: "welcome-start"
+    timeout: 30000

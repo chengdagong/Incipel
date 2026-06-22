@@ -120,7 +120,7 @@ export function DrawerOverlay({
     <View style={StyleSheet.absoluteFill} pointerEvents={open ? 'auto' : 'none'}>
       {/* 遮罩:点击关闭 */}
       <Animated.View style={[styles.backdrop, { opacity: anim }]}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="关闭抽屉" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="关闭抽屉" testID="drawer-backdrop" />
       </Animated.View>
 
       {/* 面板 */}
@@ -136,6 +136,7 @@ export function DrawerOverlay({
               onPress={onOpenSettings}
               accessibilityRole="button"
               accessibilityLabel="设置"
+              testID="drawer-settings"
             >
               <Text style={styles.avatarText}>{initial}</Text>
             </Pressable>
@@ -148,12 +149,13 @@ export function DrawerOverlay({
 
         {/* 导航:新建创作 / 会话 */}
         <View style={styles.nav}>
-          <NavRow icon={<PencilIcon />} label={t('newChat')} onPress={onNew} />
+          <NavRow icon={<PencilIcon />} label={t('newChat')} onPress={onNew} testID="drawer-new" />
           <NavRow
             icon={<BubbleIcon />}
             label={t('sessions')}
             onPress={onOpenSessions}
             trailing={<Text style={styles.count}>{sessionCount}</Text>}
+            testID="drawer-sessions"
           />
         </View>
 
@@ -169,6 +171,7 @@ export function DrawerOverlay({
                   {starred.map((s) => (
                     <SessionRow
                       key={s.id}
+                      id={s.id}
                       title={s.title || t('untitled')}
                       starred
                       accent={theme.accent}
@@ -185,6 +188,7 @@ export function DrawerOverlay({
                   {recent.map((s) => (
                     <SessionRow
                       key={s.id}
+                      id={s.id}
                       title={s.title || t('untitled')}
                       subtitle={timeAgo(s.updatedAt, t)}
                       accent={theme.accent}
@@ -205,6 +209,7 @@ export function DrawerOverlay({
           style={[styles.floatNew, { bottom: insets.bottom + 26 }]}
           onPress={onNew}
           accessibilityRole="button"
+          testID="drawer-new-float"
         >
           <Text style={styles.floatPlus}>＋</Text>
           <Text style={styles.floatLabel}>{t('newChat')}</Text>
@@ -219,17 +224,20 @@ function NavRow({
   label,
   onPress,
   trailing,
+  testID,
 }: {
   icon: React.ReactNode;
   label: string;
   onPress: () => void;
   trailing?: React.ReactNode;
+  testID?: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.navRow, pressed && { backgroundColor: DRAWER.navPressed }]}
       accessibilityRole="button"
+      testID={testID}
     >
       <View style={styles.navIconWrap}>{icon}</View>
       <Text style={styles.navText}>{label}</Text>
@@ -239,6 +247,7 @@ function NavRow({
 }
 
 function SessionRow({
+  id,
   title,
   subtitle,
   starred,
@@ -247,6 +256,8 @@ function SessionRow({
   onOpen,
   onToggleStar,
 }: {
+  // 会话 id:仅用于 E2E testID(同列表多行,标题可能重复/不唯一,按 id 精确定位)。
+  id: string;
   title: string;
   subtitle?: string;
   starred?: boolean;
@@ -261,6 +272,7 @@ function SessionRow({
         style={({ pressed }) => [styles.sessionMain, pressed && { backgroundColor: DRAWER.navPressed }]}
         onPress={onOpen}
         accessibilityRole="button"
+        testID={`session-row-${id}`}
       >
         <Text style={styles.sessionTitle} numberOfLines={1}>
           {title}
@@ -273,6 +285,7 @@ function SessionRow({
         accessibilityRole="button"
         accessibilityLabel={starred ? t('unstarTitle') : t('starTitle')}
         hitSlop={6}
+        testID={`session-star-${id}`}
       >
         {starred ? (
           <Text style={[styles.starGlyph, { color: accent }]}>★</Text>
@@ -300,6 +313,7 @@ export function MenuButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={t('menuTitle')}
+      testID="menu-button"
       hitSlop={8}
       style={({ pressed }) => [
         circle ? styles.menuCircle : styles.menuPlain,

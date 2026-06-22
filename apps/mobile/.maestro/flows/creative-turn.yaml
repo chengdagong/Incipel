@@ -1,0 +1,25 @@
+# [stub-agent] 核心价值路径:灵感 → 开始创作 → stub 一轮的流式回复 → 内联人物卡 → 文档沉淀提示 → 引导选项。
+# 需 stub agent(MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1)在线。这一轮内容写死在 src/model/stub.ts。
+appId: com.incipel.app
+tags:
+  - stub-agent
+---
+- runFlow: ../subflows/enter-welcome.yaml
+- tapOn:
+    id: "welcome-chip-0"
+- tapOn:
+    id: "welcome-start"
+# 助手流式回复(助手名「主管编剧」=内容断言)
+- extendedWaitUntil:
+    visible: "主管编剧"
+    timeout: 40000
+# 内联人物卡:stub 写死的人物「林夏」与其定位
+- extendedWaitUntil:
+    visible: "林夏"
+    timeout: 40000
+- assertVisible: "钟点工"
+# 卡片底部:已沉淀进剧本草稿 + 打开文档全文入口
+- assertVisible: ".*已存入剧本草稿.*"
+- assertVisible: ".*打开文档全文.*"
+# 引导选项(propose_options 的第一项)
+- assertVisible: ".*先挖她的过去.*"

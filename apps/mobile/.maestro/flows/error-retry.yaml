@@ -1,0 +1,27 @@
+# [stub-agent] 出错重试:灵感里带暗号 → stub 抛错 → 对话屏出现「出错了 + 重试本轮」→ 点重试再跑仍报错。
+# 出错路径最会静默坏、又最该被罩住:验证错误显示 + 重试入口可用,且重试确实重跑本轮(暗号仍在 → 再报错)。
+# 暗号见 packages/agent/src/model/stub.ts 的 STUB_ERROR_TOKEN(__STUB_ERROR__)。
+appId: com.incipel.app
+tags:
+  - stub-agent
+---
+- runFlow: ../subflows/enter-welcome.yaml
+# 在灵感框打暗号(按 testID 聚焦输入框,再 inputText),收起键盘后开始创作 → 首轮把暗号作为用户消息发出
+- tapOn:
+    id: "welcome-idea"
+- inputText: "__STUB_ERROR__"
+- hideKeyboard
+- tapOn:
+    id: "welcome-start"
+# stub 见暗号抛错 → runTurnCore 重试一次仍失败 → RUN_ERROR → 对话屏显示「出错了」(内容断言)与重试入口
+- extendedWaitUntil:
+    visible: ".*出错了.*"
+    timeout: 40000
+- assertVisible:
+    id: "error-retry"
+# 点「重试本轮」→ 同一 runId 重跑;暗号仍在 → 再次报错(证明重试入口确实重跑了本轮)
+- tapOn:
+    id: "error-retry"
+- extendedWaitUntil:
+    visible: ".*出错了.*"
+    timeout: 40000

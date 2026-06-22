@@ -1,0 +1,20 @@
+# [stub-agent] 肖像弹窗:从人物卡打开肖像生成弹窗。
+# 先跑一轮建出人物「林夏」,再点其卡片上的「生成肖像」唤出弹窗。
+#
+# 范围说明:PortraitSheet 是 RN <Modal>,其内部控件(风格 chip / ★生成 / 取消)在 Maestro 的
+# iOS 视图树里取不到(Modal + Maestro 的已知限制),testID 与坐标点都不稳。故本 UI 流程只验证
+# 「肖像弹窗能从人物卡打开」(标题出现)。实际生成是纯客户端占位定时器(empty→loading→done,
+# 见 portrait.tsx「真实生图在 v1 之外」),其状态机由逻辑/单测覆盖,不在此 E2E 内。
+appId: com.incipel.app
+tags:
+  - stub-agent
+---
+- runFlow: ../subflows/enter-welcome.yaml
+- runFlow: ../subflows/run-one-turn.yaml
+# 人物卡上「生成肖像」(testID 前缀正则:人物 id 服务端生成,单人物下不歧义)→ 打开底部生成弹窗
+- tapOn:
+    id: "char-portrait-gen-.*"
+# 弹窗标题「生成「林夏」的肖像」——用松正则避开全角「」匹配坑(内容断言)
+- extendedWaitUntil:
+    visible: ".*林夏.*肖像.*"
+    timeout: 20000
