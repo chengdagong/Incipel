@@ -41,6 +41,8 @@ Edge 上由平台**自动注入**、无需也不能手设(平台禁止设 `SUPAB
 
 校验客户端 JWT 默认走非对称签名 + JWKS(端点由 `SUPABASE_URL` 推出),故 Edge 上**不必**设 `SUPABASE_JWT_SECRET`(仅旧项目用对称 HS256 签名时才需要)。
 
+本地 `supabase functions serve --env-file supabase/.env` 使用 `tools/incipel-dev` 写入的 `INCIPEL_SUPABASE_JWT_ISS` / `INCIPEL_SUPABASE_JWT_AUD` / `INCIPEL_SUPABASE_JWT_SECRET`,让本地 anonymous auth 的 JWT 能按浏览器看到的 issuer 校验。远端项目不需要这些 `INCIPEL_*` 变量。
+
 ```bash
 # 一次性把模型密钥写进远端项目的 secrets(也可用 --env-file)
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-... MODEL_PROVIDER=anthropic --project-ref <project-ref>
@@ -62,9 +64,9 @@ supabase start
 supabase functions serve agent --env-file supabase/.env --no-verify-jwt
 ```
 
-> `pnpm dev:ios` / `dev:android` 起 Metro 前会自动 `up`(起栈 + 后台 serve agent),所以平时跑客户端一条命令就够;设 `INCIPEL_SKIP_AGENT=1` 可跳过。`up` 已在 serve 时(探 `/health`)不会重复启动。
+> `pnpm dev:ios` / `dev:android` 起 Metro 前会自动 `up`(起栈 + 后台 serve agent),所以平时跑客户端一条命令就够;设 `INCIPEL_SKIP_AGENT=1` 可跳过。`up` 已在 serve 且 `supabase/.env` 未变化时(探 `/health`)不会重复启动;若 `up` 实际改动了 `supabase/.env`,会重启后台 Edge Runtime,让新环境变量生效。
 
-> 日常共用 dev 走免鉴权(`supabase/.env` 设 `DEV_NO_AUTH=1`,客户端 `EXPO_PUBLIC_DEV_NO_AUTH=1`);要隔离数据 / 跑 E2E 时用 `pnpm e2e:stack up` 起一套独立栈(见 [docs/worktree-dev.md](../../docs/worktree-dev.md))。
+> 日常共用 dev 走 Supabase anonymous auth:登录页点「先随便逛逛」后取得 session,agent 校验 JWT 并写入本地 Supabase 数据库。要隔离数据 / 跑 E2E 时用 `pnpm e2e:stack up` 起一套独立栈(见 [docs/worktree-dev.md](../../docs/worktree-dev.md))。
 
 ## 部署到远端
 

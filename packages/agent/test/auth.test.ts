@@ -23,6 +23,9 @@ let esPrivate: any;
 beforeAll(async () => {
   process.env.SUPABASE_URL = SUPABASE_URL;
   process.env.SUPABASE_JWT_SECRET = SECRET_TEXT;
+  delete process.env.INCIPEL_SUPABASE_JWT_SECRET;
+  delete process.env.INCIPEL_SUPABASE_JWT_ISS;
+  delete process.env.INCIPEL_SUPABASE_JWT_AUD;
   delete process.env.SUPABASE_JWT_ISS;
   delete process.env.SUPABASE_JWT_AUD;
   const { publicKey, privateKey } = await generateKeyPair('ES256');
@@ -68,9 +71,9 @@ describe('verifyJwt — HS256 后备路径', () => {
     const { verifyJwt } = await import('../src/auth');
     expect((await verifyJwt(await mint({ sub: 'user-123', role: 'authenticated' }))).userId).toBe('user-123');
   });
-  it('匿名用户(role=anon)同样放行', async () => {
+  it('anonymous user 同样放行', async () => {
     const { verifyJwt } = await import('../src/auth');
-    expect((await verifyJwt(await mint({ sub: 'anon-1', role: 'anon' }))).userId).toBe('anon-1');
+    expect((await verifyJwt(await mint({ sub: 'anon-1', role: 'authenticated', is_anonymous: true }))).userId).toBe('anon-1');
   });
   it('过期 → 拒绝', async () => {
     const { verifyJwt, AuthError } = await import('../src/auth');
@@ -98,6 +101,25 @@ describe('verifyJwt — issuer / audience(KI-4)', () => {
   it('同密钥签出的 service_role token(iss=supabase、无 aud)被拒', async () => {
     const { verifyJwt, AuthError } = await import('../src/auth');
     await expect(verifyJwt(await mint({ sub: 'service_role', role: 'service_role' }, { iss: 'supabase', aud: null }))).rejects.toBeInstanceOf(AuthError);
+  });
+  it('本地 edge runtime 可用 INCIPEL_* 覆盖 issuer 与 HS256 secret', async () => {
+    const { verifyJwt } = await import('../src/auth');
+    const previousSecret = process.env.SUPABASE_JWT_SECRET;
+    process.env.INCIPEL_SUPABASE_JWT_SECRET = SECRET_TEXT;
+    process.env.INCIPEL_SUPABASE_JWT_ISS = 'http://127.0.0.1:54521/auth/v1';
+    delete process.env.SUPABASE_JWT_SECRET;
+    try {
+      const token = await mint(
+        { sub: 'local-anon', role: 'authenticated', is_anonymous: true },
+        { iss: 'http://127.0.0.1:54521/auth/v1' },
+      );
+      expect((await verifyJwt(token)).userId).toBe('local-anon');
+    } finally {
+      if (previousSecret) process.env.SUPABASE_JWT_SECRET = previousSecret;
+      else delete process.env.SUPABASE_JWT_SECRET;
+      delete process.env.INCIPEL_SUPABASE_JWT_SECRET;
+      delete process.env.INCIPEL_SUPABASE_JWT_ISS;
+    }
   });
 });
 

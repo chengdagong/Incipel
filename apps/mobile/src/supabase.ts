@@ -8,8 +8,8 @@ import * as Crypto from 'expo-crypto';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-// DEV_NO_AUTH(与 src/auth.tsx 的同名开关一致):此模式不取 token、不碰 Supabase auth
-//(agent 端也不校验 JWT),避免本地栈停掉时 getSession() 因过期会话刷新而卡住(Codex P3)。
+// DEV_NO_AUTH(与 src/auth.tsx 的同名开关一致):此调试模式不取 token、不访问 Supabase auth
+//(agent 端也不校验 JWT),避免本地栈停掉时 getSession() 因过期会话刷新而卡住。
 const DEV_NO_AUTH = process.env.EXPO_PUBLIC_DEV_NO_AUTH === '1';
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -22,7 +22,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 // 缺环境变量时退回本地栈地址(端口段见 supabase/config.toml),保证 createClient 不在模块加载期抛
 // 「supabaseUrl is required」而把整个 app 拦在启动前 —— 后续请求会失败,但不会卡在启动:启动只读
 // 会话(getExistingSession 返回 null),失败的匿名登录由登录页给出明确重试提示。
-//(本地试用走 agent 的 DEV_NO_AUTH,不依赖 Supabase)。环境变量存在时一律以其为准,不受影响。
+// 显式 DEV_NO_AUTH 调试模式不依赖 Supabase;环境变量存在时一律以其为准。
 export const supabase: SupabaseClient = createClient(
   SUPABASE_URL || 'http://127.0.0.1:54521',
   SUPABASE_ANON_KEY || 'public-anon-key',

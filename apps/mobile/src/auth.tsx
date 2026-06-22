@@ -6,8 +6,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session } from '@supabase/supabase-js';
 import { getExistingSession, supabase } from './supabase';
 
-// 本地开发开关:置 1 时跳过登录门、不需要 Supabase 会话(对应 agent 的 DEV_NO_AUTH/STORE=memory,
-// 见 CLAUDE.md「只做 UI/agent 逻辑、完全不碰 Supabase」)。生产默认关闭。
+// 本地调试开关:置 1 时跳过登录页、不需要 Supabase 会话(对应 agent 的 DEV_NO_AUTH/STORE=memory)。
+// 日常开发默认走 Supabase anonymous auth,生产默认关闭。
 export const DEV_NO_AUTH = process.env.EXPO_PUBLIC_DEV_NO_AUTH === '1';
 
 type AuthState = {
@@ -23,8 +23,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // DEV_NO_AUTH:不碰 Supabase——直接就绪、不读会话(门控在此模式下放行),避免 getSession()
-    // 在本地栈停掉时等待 auth 初始化 / 网络刷新而把人卡在加载屏(Codex P2)。
+    // DEV_NO_AUTH:不访问 Supabase,直接就绪、不读会话(门控在此模式下放行),避免 getSession()
+    // 在本地栈停掉时等待 auth 初始化 / 网络刷新而把人卡在加载屏。
     if (DEV_NO_AUTH) {
       setReady(true);
       return;

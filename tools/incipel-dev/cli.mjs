@@ -13,14 +13,15 @@
 //
 //   dev              起共用栈(若未起)+ 同步 env + serve agent(前台,带热重载日志)
 //   up               起共用栈(若未起)+ 同步 env + 后台 serve agent(不阻塞;dev:ios/android 会调它)
-//   env [sync]       只同步 env:写 apps/mobile/.env 的 EXPO_PUBLIC_*、确保 supabase/.env 模板
+//   env [sync]       起共用栈(若未起)+ 同步 env:写 apps/mobile/.env 的 EXPO_PUBLIC_*、
+//                    确保 supabase/.env 有本地 JWT 校验配置
 //   e2e up           生成隔离 workdir + supabase start --workdir,打印该栈的 URL
 //   e2e down         supabase stop --workdir + 清理 workdir
 //   help
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -66,13 +67,15 @@ function repoRoot() {
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
+function isSensitiveEnvKey(key) {
+  if (key.startsWith('EXPO_PUBLIC_')) return false;
+  return key.includes('SECRET') || key.includes('TOKEN') || key.endsWith('_KEY');
+}
 // 替换/追加 .env 文件里的一行(整行前缀匹配);--dry-run 下只打印。
 function setEnvVar(file, key, val) {
-  if (DRY) {
-    log(`  [dry-run] set ${key}=${val}  (${file})`);
-    return;
-  }
-  let lines = existsSync(file) ? readFileSync(file, 'utf8').split('\n') : [];
+  const displayVal = isSensitiveEnvKey(key) ? '<redacted>' : val;
+  const beforeText = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  let lines = beforeText ? beforeText.split('\n') : [];
   let found = false;
   lines = lines.map((line) => {
     if (line.startsWith(`${key}=`)) {
@@ -86,8 +89,36 @@ function setEnvVar(file, key, val) {
     lines.push(`${key}=${val}`);
     lines.push('');
   }
-  writeFileSync(file, lines.join('\n'));
-  log(`  set ${key}=${val}  (${file})`);
+  const nextText = lines.join('\n');
+  const changed = nextText !== beforeText;
+  if (DRY) {
+    log(`  [dry-run] set ${key}=${displayVal}  (${file})`);
+    return changed;
+  }
+  if (changed) writeFileSync(file, nextText);
+  log(`  set ${key}=${displayVal}  (${file})`);
+  return changed;
+}
+function getEnvVar(file, key) {
+  if (!existsSync(file)) return undefined;
+  const text = readFileSync(file, 'utf8');
+  const m = text.match(new RegExp(`^${key}=(.*)$`, 'm'));
+  return m?.[1];
+}
+function unsetEnvVar(file, key) {
+  if (!existsSync(file)) return false;
+  const before = readFileSync(file, 'utf8').split('\n');
+  const after = before.filter((line) => !line.startsWith(`${key}=`));
+  const changed = after.length !== before.length;
+  if (DRY) {
+    log(`  [dry-run] unset ${key}  (${file})`);
+    return changed;
+  }
+  if (changed) {
+    writeFileSync(file, after.join('\n'));
+    log(`  unset ${key}  (${file})`);
+  }
+  return changed;
 }
 // 从 config.toml 读某 section 下某 key 的整数(如 [api] port)。
 function tomlInt(toml, section, key) {
@@ -109,12 +140,111 @@ function canonicalApiPort(root) {
   const toml = readFileSync(join(root, 'supabase', 'config.toml'), 'utf8');
   return tomlInt(toml, 'api', 'port') ?? 54521;
 }
+function canonicalProjectId(root) {
+  const toml = readFileSync(join(root, 'supabase', 'config.toml'), 'utf8');
+  const m = toml.match(/^project_id\s*=\s*"([^"]+)"/m);
+  return m?.[1] ?? 'incipel';
+}
+
+function parseStatusJson(out) {
+  const start = out.indexOf('{');
+  const end = out.lastIndexOf('}');
+  if (start < 0 || end < start) return null;
+  try {
+    return JSON.parse(out.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+function statusVars(root) {
+  const res = run('supabase', ['status', '-o', 'json'], { mutate: false, capture: true, cwd: root });
+  if (res.code !== 0) return null;
+  return parseStatusJson(res.stdout);
+}
+
+function worktreeRoots(root) {
+  const res = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: root, encoding: 'utf8' });
+  if (res.status !== 0) return [];
+  return res.stdout
+    .split('\n')
+    .filter((line) => line.startsWith('worktree '))
+    .map((line) => line.slice('worktree '.length).trim())
+    .filter(Boolean);
+}
+
+function primaryWorktreeRoot(root) {
+  const roots = worktreeRoots(root);
+  const primary = roots.find(
+    (candidate) =>
+      candidate !== root && !candidate.includes('/.claude/worktrees/') && !candidate.includes('/.codex/worktrees/')
+  );
+  if (primary) return primary;
+  const marker = '/.claude/worktrees/';
+  const idx = root.indexOf(marker);
+  return idx >= 0 ? root.slice(0, idx) : null;
+}
+
+function setEnvVarFromFileIfPresent(dst, src, key) {
+  const val = getEnvVar(src, key);
+  if (!val) return false;
+  return setEnvVar(dst, key, val);
+}
+
+function providerKey(provider) {
+  if (provider === 'openrouter') return 'OPENROUTER_API_KEY';
+  if (provider === 'anthropic') return 'ANTHROPIC_API_KEY';
+  return null;
+}
+
+function copyFnEnvFromPrimaryForNewWorktree(root, fnEnv) {
+  if (existsSync(fnEnv)) return { copied: false, available: false };
+  const primaryRoot = primaryWorktreeRoot(root);
+  const primaryEnv = primaryRoot ? join(primaryRoot, 'supabase', '.env') : null;
+  if (!primaryEnv || !existsSync(primaryEnv)) return { copied: false, available: false };
+
+  if (DRY) {
+    log(`  [dry-run] cp ${primaryEnv} -> ${fnEnv}`);
+    return { copied: false, available: true, changed: true };
+  }
+  writeFileSync(fnEnv, readFileSync(primaryEnv, 'utf8'));
+  log('  从主工作区复制 supabase/.env');
+  return { copied: true, available: true, changed: true };
+}
+
+function syncModelEnvFromPrimary(root, fnEnv) {
+  const primaryRoot = primaryWorktreeRoot(root);
+  const primaryEnv = primaryRoot ? join(primaryRoot, 'supabase', '.env') : null;
+  const currentProvider = getEnvVar(fnEnv, 'MODEL_PROVIDER') || 'anthropic';
+  const currentKey = providerKey(currentProvider);
+  if (!primaryEnv || !existsSync(primaryEnv) || (currentKey && getEnvVar(fnEnv, currentKey))) return { copied: false };
+
+  const primaryProvider = getEnvVar(primaryEnv, 'MODEL_PROVIDER') || currentProvider;
+  const key = providerKey(primaryProvider);
+  if (!key || !getEnvVar(primaryEnv, key)) {
+    if (currentKey) log(`  注意:${currentKey} 为空,/logline 与 /run 的模型调用会失败;请填写 ${fnEnv}`);
+    return { copied: false };
+  }
+
+  log(`  当前 worktree 缺少模型密钥;从主工作区补充模型配置`);
+  let changed = false;
+  changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'MODEL_PROVIDER') || changed;
+  changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, key) || changed;
+  if (primaryProvider === 'openrouter') changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'OPENROUTER_MODEL') || changed;
+  if (primaryProvider === 'anthropic') {
+    changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'TURN_MODEL') || changed;
+    changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'LOGLINE_MODEL') || changed;
+  }
+  return { changed };
+}
 
 // ── env sync:把 agent 路由相关的 env 写到位 ──────────────────────────────────
 // agent 已不再是本地 Node 服务,客户端一律指向 edge function:`<api>/functions/v1/agent`。
 function envSync(root) {
   const apiPort = canonicalApiPort(root);
-  const agentUrl = `http://127.0.0.1:${apiPort}/functions/v1/agent`;
+  const status = statusVars(root);
+  const apiUrl = status?.API_URL || `http://127.0.0.1:${apiPort}`;
+  const agentUrl = `${apiUrl}/functions/v1/agent`;
   const mobileEnv = join(root, 'apps', 'mobile', '.env');
   const mobileExample = join(root, 'apps', 'mobile', '.env.example');
 
@@ -125,13 +255,18 @@ function envSync(root) {
       log('  生成 apps/mobile/.env(从 .env.example),请填 EXPO_PUBLIC_SUPABASE_ANON_KEY');
     }
   }
+  setEnvVar(mobileEnv, 'EXPO_PUBLIC_SUPABASE_URL', apiUrl);
+  if (status?.ANON_KEY) setEnvVar(mobileEnv, 'EXPO_PUBLIC_SUPABASE_ANON_KEY', status.ANON_KEY);
   setEnvVar(mobileEnv, 'EXPO_PUBLIC_AGENT_URL', agentUrl);
-  // 日常共用 dev 走免鉴权(见 ADR-0007):客户端跳过登录门,agent 端 DEV_NO_AUTH=1。
-  setEnvVar(mobileEnv, 'EXPO_PUBLIC_DEV_NO_AUTH', '1');
+  // 日常 dev 走 Supabase anonymous auth:显示登录页,点「先随便逛逛」后取得真实 session。
+  setEnvVar(mobileEnv, 'EXPO_PUBLIC_DEV_NO_AUTH', '');
 
-  // 确保 agent 的 env-file 存在(supabase functions serve 读它);只在缺失时建模板,不覆盖已填的。
+  // 确保 agent 的 env-file 存在(supabase functions serve 读它):新 worktree 先从主工作区复制,
+  // 复制不到才建模板;不把服务端模型密钥写进仓库。
   const fnEnv = join(root, 'supabase', '.env');
-  if (!existsSync(fnEnv)) {
+  const copiedFnEnv = copyFnEnvFromPrimaryForNewWorktree(root, fnEnv);
+  let agentEnvChanged = copiedFnEnv.changed || false;
+  if (!existsSync(fnEnv) && !copiedFnEnv.available) {
     const tmpl = [
       '# agent edge function 的本地 secret(supabase functions serve --env-file 读取)。',
       '# SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由本地 edge runtime 自动注入,勿在此设。',
@@ -139,13 +274,8 @@ function envSync(root) {
       'MODEL_PROVIDER=openrouter',
       'OPENROUTER_API_KEY=',
       'OPENROUTER_MODEL=anthropic/claude-sonnet-4.5',
-      '# 日常共用 dev 免鉴权(见 ADR-0007):本地注入的 SUPABASE_URL 与 token 的 iss 不一致,',
-      '# 且 SUPABASE_JWT_ISS 是 SUPABASE_ 前缀进不了 env-file,故统一用 DEV_NO_AUTH 跳过。',
-      'DEV_NO_AUTH=1',
-      '# DEV_NO_AUTH=1 用固定的 dev-user,它不是合法的 auth.users UUID;必须配 STORE=memory',
-      '# (进程内存 store,不写库),否则首轮 create_session_if_missing(uuid) 会因 dev-user 非 UUID 失败。',
-      '# 要测真实持久化/历史:删掉 DEV_NO_AUTH 与 STORE(走真实匿名登录 + SupabaseStore)。',
-      'STORE=memory',
+      '# 本地 dev 默认走 Supabase anonymous auth,agent 照常校验 JWT 并使用 SupabaseStore。',
+      '# INCIPEL_* 覆盖项只给本地 edge runtime 使用;客户端不会读取这个文件。',
       '',
     ].join('\n');
     if (DRY) log(`  [dry-run] write supabase/.env (模板)`);
@@ -153,8 +283,18 @@ function envSync(root) {
       writeFileSync(fnEnv, tmpl);
       log('  生成 supabase/.env(模板),请填 OPENROUTER_API_KEY(或改用 ANTHROPIC_API_KEY)');
     }
+    agentEnvChanged = true;
   }
+  agentEnvChanged = unsetEnvVar(fnEnv, 'DEV_NO_AUTH') || agentEnvChanged;
+  agentEnvChanged = unsetEnvVar(fnEnv, 'STORE') || agentEnvChanged;
+  const modelEnv = existsSync(fnEnv) ? syncModelEnvFromPrimary(root, fnEnv) : { copied: false };
+  agentEnvChanged = (modelEnv.changed || false) || agentEnvChanged;
+  if (status?.JWT_SECRET) agentEnvChanged = setEnvVar(fnEnv, 'INCIPEL_SUPABASE_JWT_SECRET', status.JWT_SECRET) || agentEnvChanged;
+  agentEnvChanged = setEnvVar(fnEnv, 'INCIPEL_SUPABASE_JWT_ISS', `${apiUrl}/auth/v1`) || agentEnvChanged;
+  agentEnvChanged = setEnvVar(fnEnv, 'INCIPEL_SUPABASE_JWT_AUD', 'authenticated') || agentEnvChanged;
+  log(`  EXPO_PUBLIC_SUPABASE_URL = ${apiUrl}`);
   log(`  EXPO_PUBLIC_AGENT_URL = ${agentUrl}`);
+  return { agentEnvChanged };
 }
 
 function sleep(ms) {
@@ -191,9 +331,29 @@ async function agentHealthy(apiPort) {
 // 确保 agent serve 在跑:已在(/health 正常)则跳过;否则 detached 后台拉起一个
 // `supabase functions serve`(日志 / PID 落 tmp),再轮询 /health 几秒。轮询超时不阻断——
 // 首次要编译 npm 依赖图较慢,serve 仍在后台继续,调用方(dev:ios)可照常起 Metro。
-async function ensureAgentServe(root) {
+function stopEdgeRuntime(root) {
+  const container = `supabase_edge_runtime_${canonicalProjectId(root)}`;
+  if (DRY) {
+    run('docker', ['stop', container], { cwd: root });
+    log(`  [dry-run] 将重启 ${container}`);
+    return true;
+  }
+  const stopped = run('docker', ['stop', container], { capture: true, cwd: root });
+  if (stopped.code !== 0) {
+    log(`  注意:${container} 未停止;如果 agent 仍使用旧配置,请手动重启 supabase functions serve`);
+    return false;
+  }
+  log(`  已停止 ${container},准备重新启动 agent`);
+  return true;
+}
+
+async function ensureAgentServe(root, { restart = false } = {}) {
   const apiPort = canonicalApiPort(root);
-  if (await agentHealthy(apiPort)) {
+  const healthy = await agentHealthy(apiPort);
+  if (healthy && restart) {
+    log('  agent env 已更新,重启 agent edge runtime');
+    stopEdgeRuntime(root);
+  } else if (healthy) {
     log('  agent edge function 已在 serve(/health 正常),跳过');
     return;
   }
@@ -225,11 +385,11 @@ async function ensureAgentServe(root) {
 
 // ── dev:起共用栈(若未起)+ env sync + 前台 serve agent(带热重载日志)──────────
 function dev(root) {
-  log('▸ 同步 env');
-  envSync(root);
   log('▸ 检查共用 Supabase 栈');
   ensureStack(root);
-  log('▸ serve agent(前台,免网关 JWT,鉴权由 app 内 authenticate / DEV_NO_AUTH 决定)');
+  log('▸ 同步 env');
+  envSync(root);
+  log('▸ serve agent(前台,网关不校验 JWT,鉴权由 app 内 authenticate 决定)');
   const r = run('supabase', ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'], {
     cwd: root,
   });
@@ -240,12 +400,12 @@ function dev(root) {
 // ── up:确保「共用栈 + agent serve」就绪(serve 走后台,不阻塞)──────────────────
 // 供 dev:ios / dev:android 在起 Metro 前调用,使一条 `pnpm dev:ios` 就把后端也带起来。
 async function up(root) {
-  log('▸ 同步 env');
-  envSync(root);
   log('▸ 确保共用 Supabase 栈在运行');
   ensureStack(root);
+  log('▸ 同步 env');
+  const synced = envSync(root);
   log('▸ 确保 agent edge function 在 serve');
-  await ensureAgentServe(root);
+  await ensureAgentServe(root, { restart: synced.agentEnvChanged });
 }
 
 // ── E2E 隔离栈 ────────────────────────────────────────────────────────────────
@@ -287,6 +447,18 @@ function planIsolatedStack(root) {
   const apiPort = (tomlInt(canonical, 'api', 'port') ?? 54521) + delta;
   return { projectId, delta, apiPort, configText: text };
 }
+function replaceDirSymlink(src, dst) {
+  if (!existsSync(src)) return false;
+  if (existsSync(dst)) rmSync(dst, { recursive: true, force: true });
+  symlinkSync(src, dst, 'dir');
+  return true;
+}
+function copyDirFresh(src, dst) {
+  if (!existsSync(src)) return false;
+  if (existsSync(dst)) rmSync(dst, { recursive: true, force: true });
+  cpSync(src, dst, { recursive: true });
+  return true;
+}
 function e2eUp(root) {
   const plan = planIsolatedStack(root);
   const workdir = e2eWorkdir(root);
@@ -297,15 +469,19 @@ function e2eUp(root) {
   if (DRY) {
     log(`  [dry-run] mkdir -p ${sb}`);
     log(`  [dry-run] write ${join(sb, 'config.toml')}  (project_id + 端口已偏移)`);
-    log(`  [dry-run] symlink migrations / functions / seed(若有) -> ${sb}`);
+    log(`  [dry-run] symlink migrations / seed(若有) -> ${sb}`);
+    log(`  [dry-run] copy supabase/functions -> ${join(sb, 'functions')}`);
+    log(`  [dry-run] symlink packages -> ${join(workdir, 'packages')}`);
   } else {
     mkdirSync(sb, { recursive: true });
     writeFileSync(join(sb, 'config.toml'), plan.configText);
-    for (const name of ['migrations', 'functions', 'seed']) {
+    for (const name of ['migrations', 'seed']) {
       const src = join(root, 'supabase', name);
       const dst = join(sb, name);
-      if (existsSync(src) && !existsSync(dst)) symlinkSync(src, dst, 'dir');
+      replaceDirSymlink(src, dst);
     }
+    copyDirFresh(join(root, 'supabase', 'functions'), join(sb, 'functions'));
+    replaceDirSymlink(join(root, 'packages'), join(workdir, 'packages'));
     // workdir 不该入库:写一份 .gitignore 兜底(根 .gitignore 也已忽略)。
     writeFileSync(join(workdir, '.gitignore'), '*\n');
   }
@@ -352,6 +528,8 @@ switch (cmd) {
     break;
   case 'env':
     if (sub && sub !== 'sync') fail(`未知子命令: env ${sub}(只支持 env sync)`);
+    log('▸ 确保共用 Supabase 栈在运行');
+    ensureStack(root);
     log('▸ env sync');
     envSync(root);
     break;

@@ -5,7 +5,7 @@
 // 两种签名都支持,按 token 头部的 alg 分流:
 //   · 非对称(ES256/RS256/EdDSA):Supabase 现默认用 JWT 签名密钥(asymmetric signing
 //     keys),公钥经 JWKS 端点(/auth/v1/.well-known/jwks.json)发布;按 kid 取公钥验签。
-//   · HS256:旧项目用共享 secret(SUPABASE_JWT_SECRET)对称签名;作为后备保留。
+//   · HS256:旧项目/本地栈用共享 secret 对称签名;作为后备保留。
 // 远端与本地一视同仁:JWKS 的地址由 SUPABASE_URL 推出。
 
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
@@ -34,11 +34,14 @@ const DEFAULT_AUDIENCE = 'authenticated';
 // 校验 token 的作用范围(issuer / audience),而不只看签名(见 docs/known-issues.md KI-4)。
 // 只校验签名会接受任何用同一密钥材料签出的 token——尤其是 agent 自己持有的 service_role JWT;
 // 钉住 iss/aud 后,只有面向本项目终端用户签发的 token 才放行。
-//   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用 SUPABASE_JWT_ISS 覆盖。
-//   · audience:默认 'authenticated';可用 SUPABASE_JWT_AUD 覆盖。
+//   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用
+//     INCIPEL_SUPABASE_JWT_ISS / SUPABASE_JWT_ISS 覆盖。
+//   · audience:默认 'authenticated';可用 INCIPEL_SUPABASE_JWT_AUD / SUPABASE_JWT_AUD 覆盖。
+// INCIPEL_* 覆盖项供本地 `supabase functions serve --env-file` 使用:env-file 不适合写
+// SUPABASE_ 前缀变量,但本地匿名登录需要把浏览器看到的 issuer 传给 edge runtime。
 function expectedClaims(): { issuer: string; audience: string } {
-  const audience = env('SUPABASE_JWT_AUD') || DEFAULT_AUDIENCE;
-  const issOverride = env('SUPABASE_JWT_ISS');
+  const audience = env('INCIPEL_SUPABASE_JWT_AUD') || env('SUPABASE_JWT_AUD') || DEFAULT_AUDIENCE;
+  const issOverride = env('INCIPEL_SUPABASE_JWT_ISS') || env('SUPABASE_JWT_ISS');
   if (issOverride) return { issuer: issOverride, audience };
   const url = env('SUPABASE_URL');
   if (!url) {
@@ -48,9 +51,9 @@ function expectedClaims(): { issuer: string; audience: string } {
 }
 
 function jwtSecretKey(): Uint8Array {
-  const secret = env('SUPABASE_JWT_SECRET');
+  const secret = env('INCIPEL_SUPABASE_JWT_SECRET') || env('SUPABASE_JWT_SECRET');
   if (!secret) {
-    throw new AuthError('SUPABASE_JWT_SECRET 未配置(HS256 校验需要)');
+    throw new AuthError('SUPABASE_JWT_SECRET / INCIPEL_SUPABASE_JWT_SECRET 未配置(HS256 校验需要)');
   }
   return new TextEncoder().encode(secret);
 }

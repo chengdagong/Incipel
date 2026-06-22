@@ -33,9 +33,11 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer pnpm --filter @incipel/
 
 去掉 `CI=1`(若设过)可开热重载。app 加载后:输入灵感 → 开始创作 → 在对话里流式创作。
 
-## 本地试用(dev)模式
+## 本地开发登录路径
 
-为在模拟器里快速试对话、不依赖持久化,在 agent 的 env-file(`supabase/.env`,`supabase functions serve` 读它)里设:
+日常开发默认走 Supabase anonymous auth:登录页显示后点击「先随便逛逛」,客户端调用 `signInAnonymously()` 取得 session,agent 用该 JWT 校验身份并把会话数据保存到本地 Supabase 数据库。`pnpm dev:ios` / `dev:android` / `dev:agent` 会经 `tools/incipel-dev` 写好 `apps/mobile/.env` 的本地 URL、anon key 与 agent URL。
+
+只试 UI 且不需要保存时,才手动启用跳过身份校验的调试模式。在 agent 的 env-file(`supabase/.env`,`supabase functions serve` 读它)里设:
 
 ```
 MODEL_PROVIDER=openrouter
@@ -43,7 +45,7 @@ STORE=memory        # 进程级内存 store,免 Supabase schema(重启即丢)
 DEV_NO_AUTH=1       # 跳过 JWT 校验,用固定 dev 用户
 ```
 
-客户端侧再在 `apps/mobile/.env` 设 `EXPO_PUBLIC_DEV_NO_AUTH=1`:登录页是入口(见 [ADR-0005](../../docs/adr/0005-auth-entry-in-v1.md)),不设它则没有 Supabase 会话、过不了登录门、到不了创作页。**这些 DEV 开关仅本地用,prod 绝不开。**
+客户端侧再在 `apps/mobile/.env` 设 `EXPO_PUBLIC_DEV_NO_AUTH=1`:登录页是入口(见 [ADR-0005](../../docs/adr/0005-auth-entry-in-v1.md)),不设它则没有 Supabase 会话,无法进入创作页。**这些 DEV 开关仅用于本地调试,prod 绝不开。**
 
 ## 这套依赖在 RN/Expo 下踩过的坑(都已修进本包,改动时勿回退)
 
