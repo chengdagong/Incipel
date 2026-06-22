@@ -115,7 +115,7 @@ build_and_install_ios_devbuild() {
     -configuration Debug \
     -destination "platform=iOS Simulator,id=$UDID" \
     -derivedDataPath "$ios_build_dir" \
-    CODE_SIGNING_ALLOWED=NO \
+    CODE_SIGN_IDENTITY="-" \
     build
   if [ ! -d "$ios_app_path" ]; then
     echo "✗ Xcode build 未生成 $ios_app_path。"

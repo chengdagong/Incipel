@@ -45,6 +45,22 @@ Apple 与 Google 的代码路径保持分开。Apple 继续使用 `expo-apple-au
      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<你的 iOS client id>
      ```
 
+   - iOS app 必须带 Keychain access group entitlement。`apps/mobile/app.json` 已声明:
+
+     ```json
+     {
+       "ios": {
+         "entitlements": {
+           "keychain-access-groups": [
+             "$(AppIdentifierPrefix)$(CFBundleIdentifier)"
+           ]
+         }
+       }
+     }
+     ```
+
+     GoogleSignIn 使用第一项 `keychain-access-groups` 读写登录凭据;缺少该 entitlement 时,iOS 会返回 `com.google.GIDSignIn Code=-2 "keychain error"`。
+
 3. **Android client**
    - Package name 必须是 `com.incipel.app`。
    - 登记对应构建证书的 SHA-1,至少包括本地 development build 与 EAS build。日后上架 Google Play 时,还要登记 Play App Signing 的 SHA-1。
@@ -82,6 +98,7 @@ skip_nonce_check = true
 - iOS 的 Google 相关 pods 通过 `expo-build-properties` 的 `ios.extraPods` 声明 `modular_headers`,不要直接修改生成出来的 `apps/mobile/ios/Podfile`。
 - 本仓库有多 worktree 场景,跑模拟器或 E2E 前仍应走 worktree 感知脚本。Google 登录请用 `pnpm dev:ios -- --devbuild` 或 `pnpm dev:android -- --devbuild`;`pnpm dev:ios` / `pnpm dev:android` 不带参数会退出。
 - 首次使用 `--devbuild` 前,脚本发现目标设备缺少 `com.incipel.app` 时会自动构建并安装 development build,然后继续启动 Metro。这个步骤可能需要几分钟。
+- iOS simulator development build 使用 ad-hoc signing,以便保留 Keychain entitlement。若旧 app 安装包返回 `Code=-2 "keychain error"`,先卸载旧 app,再用 `pnpm dev:ios -- --devbuild` 重新构建并安装。
 
 ## 验证清单
 

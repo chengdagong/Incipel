@@ -19,7 +19,7 @@ INCIPEL_SKIP_AGENT=1 pnpm dev:ios -- --go # 不自动起 agent(你已在别处�
 
 `pnpm dev:ios` / `dev:android` 必须显式传 `--go` 或 `--devbuild`;不带参数会打印用法后退出。Google Sign-In 需要 development build,不能用 Expo Go 验证。启动脚本起 Metro 前会先调 `tools/incipel-dev up`:确保共用栈在运行、并在**后台** serve agent edge function(已在跑则跳过)——所以平时一条带参数的命令就把前后端都带起来。新 worktree 首跑时,若 `apps/mobile` 缺依赖(以 `expo` 为探针),会先自动 `pnpm install`(pnpm 用全局内容寻址 store,命中时只是几秒硬链接、不重复下载,所以每个 worktree 装一次很轻;无需也无法靠「全局装 expo」省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库,记下模拟器名),并按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量。agent 已不是本地 Node 服务,**没有 per-worktree 端口**(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md))。
 
-首次使用 `--devbuild` 前,脚本会在目标设备缺少 `com.incipel.app` 时自动构建并安装 development build。这个步骤可能需要几分钟,完成后脚本会继续启动 Metro。iOS simulator 路径由脚本执行 `expo prebuild`、`pod install`、`xcodebuild` 与 `simctl install`;CocoaPods 需要的 `modular_headers` 由 `expo-build-properties` 写入生成配置,脚本不会直接修改 `Podfile`。不要手动用 `expo run:ios --device <UDID>` 代替,该命令在某些 Xcode / Expo CLI 组合下会走需要 code signing 的 device build 分支。
+首次使用 `--devbuild` 前,脚本会在目标设备缺少 `com.incipel.app` 时自动构建并安装 development build。这个步骤可能需要几分钟,完成后脚本会继续启动 Metro。iOS simulator 路径由脚本执行 `expo prebuild`、`pod install`、`xcodebuild` 与 `simctl install`;CocoaPods 需要的 `modular_headers` 由 `expo-build-properties` 写入生成配置,脚本不会直接修改 `Podfile`。本地 simulator build 使用 ad-hoc signing,使 app 携带 Keychain entitlement;Google 登录返回 `com.google.GIDSignIn Code=-2 "keychain error"` 时,先卸载旧 app 安装包再让脚本重建。不要手动用 `expo run:ios --device <UDID>` 代替,该命令在某些 Xcode / Expo CLI 组合下会走需要 code signing 的 device build 分支。
 
 ## 三层隔离
 
@@ -72,3 +72,4 @@ emulator -avd <名字> -port 5556     # serial = emulator-5556;再起一台用 5
 - **dev build 不认自定义端口**:SDK 52 早期版本有此 bug(expo/expo#35542),已于 2025-03 修复并 backport。请把 `expo` 升到含修复的 patch 版,否则 `--port` 在 dev build 上失效。
 - **首次该模拟器没装 Expo Go**:脚本会提示按 `shift+i`(iOS)/ `a`(Android)装一次,之后即可自动定向。
 - **仓库出现 `/ios`、`/android` 原生目录**:managed 工作流下它们会盖过 `app.config.js`,建议加入 `.gitignore`。
+- **Google 登录返回 `Code=-2 "keychain error"`**:旧 simulator app 安装包可能没有 Keychain entitlement。执行 `xcrun simctl uninstall <UDID> com.incipel.app` 后再运行 `pnpm dev:ios -- --devbuild`,脚本会重新构建并安装。
