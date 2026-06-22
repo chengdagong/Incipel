@@ -87,8 +87,9 @@ secret = "local-native-id-token-flow-needs-no-secret"
 # 远端 Supabase Dashboard 需填写真实 Google client secret。
 [auth.external.google]
 enabled = true
-client_id = "REPLACE_WITH_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com"
-secret = "local-native-id-token-flow-needs-provider-secret"
+client_id = "585832312756-n6gabhbjgjmigge641pq4e9trr2tabs6.apps.googleusercontent.com,585832312756-btcd7d9c7ihj4djnfv04hftecb6jhjrj.apps.googleusercontent.com"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = false
 
 [edge_runtime]
 enabled = true
