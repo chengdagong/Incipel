@@ -13,6 +13,11 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "keychain-access-groups": [
+          "$(AppIdentifierPrefix)$(CFBundleIdentifier)"
+        ]
       }
     },
     "android": {
@@ -25,7 +30,30 @@
     "plugins": [
       "expo-router",
       "expo-apple-authentication",
-      "expo-font"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.585832312756-btcd7d9c7ihj4djnfv04hftecb6jhjrj"
+        }
+      ],
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "extraPods": [
+              {
+                "name": "GoogleUtilities",
+                "modular_headers": true
+              },
+              {
+                "name": "RecaptchaInterop",
+                "modular_headers": true
+              }
+            ]
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

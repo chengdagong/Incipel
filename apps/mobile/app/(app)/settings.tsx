@@ -1,15 +1,20 @@
 // 设置页(issue #13):账号区(匿名/已登录两态)+ 通用 → 界面语言下拉 + 登出。
 // 视觉按原型 SETTINGS SCREEN 还原。多语言只切界面文案,不影响 AI 回复语言(见 i18n.tsx)。
 //
-// 账号态读自 useAuth():有会话且非匿名 = 已登录(Apple,issue #10),显示身份 + 登出;
-// 匿名会话(先随便逛逛)仍视为「未登录」,提示去登录。匿名→正式账号的升级(linkIdentity)
-// 是设置里的单独后续流程(ADR-0005),此处「登录 ›」暂占位。
+// 账号态读自 useAuth():有会话且非匿名 = 已登录,按 provider 显示 Google / Apple;
+// 匿名会话(先随便逛逛)仍视为「未登录」,可在此绑定 Google 并保留当前用户的作品。
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../src/auth';
+import {
+  getGoogleProviderLabel,
+  googleAuthLogDetailsForDebug,
+  googleAuthMessageKey,
+  linkGoogleIdentity,
+} from '../../src/google-auth';
 import { LANGS, useI18n } from '../../src/i18n';
 import { signOut } from '../../src/supabase';
 import { defaultTheme, palette } from '../../src/theme';
@@ -46,17 +51,42 @@ export default function SettingsScreen() {
 
   const [langMenuOpen, setLangMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [providerLabel, setProviderLabel] = useState<'google' | 'apple' | 'signed-in'>('signed-in');
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   const user = session?.user ?? null;
-  // 已登录 = 有会话且非匿名(Apple 登录);匿名会话仍视为「未登录」,提示去登录。
+  // 已登录 = 有会话且非匿名;匿名会话仍视为「未登录」,提示绑定 Google。
   const isSignedIn = !!user && !user.is_anonymous;
-  // 已登录优先显示邮箱(Apple 可能给私密转发地址),没有则「Apple 用户」。
-  const accountName = isSignedIn ? user?.email || t('appleUser') : t('notSignedIn');
-  const accountSub = isSignedIn ? (user?.email ? t('appleUser') : '') : t('anonSub');
+  const providerName =
+    providerLabel === 'google' ? t('googleUser') : providerLabel === 'apple' ? t('appleUser') : t('signedInUser');
+  // 已登录优先显示邮箱;没有邮箱时显示 provider。
+  const accountName = isSignedIn ? user?.email || providerName : t('notSignedIn');
+  const accountSub = isSignedIn ? (user?.email ? providerName : '') : t('anonSub');
   const accountInitial = (
     isSignedIn ? accountName.charAt(0) : t('guestName').charAt(0) || '你'
   ).toUpperCase();
   const currentLangName = LANGS.find((l) => l.code === lang)?.name ?? '';
+
+  useEffect(() => {
+    let mounted = true;
+    if (!user || user.is_anonymous) {
+      setProviderLabel('signed-in');
+      return () => {
+        mounted = false;
+      };
+    }
+    getGoogleProviderLabel({ appMetadataProvider: user.app_metadata?.provider })
+      .then((label) => {
+        if (mounted) setProviderLabel(label);
+      })
+      .catch(() => {
+        if (mounted) setProviderLabel('signed-in');
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id, user?.is_anonymous, user?.app_metadata?.provider]);
 
   function confirmSignOut() {
     Alert.alert(t('signOutConfirm'), t('signOutConfirmSub'), [
@@ -78,6 +108,29 @@ export default function SettingsScreen() {
     }
   }
 
+  function googleMessage(e: unknown): string | null {
+    const key = googleAuthMessageKey(e, 'link');
+    return key ? t(key) : null;
+  }
+
+  async function bindGoogle() {
+    if (linkingGoogle) return;
+    setAccountError(null);
+    setLinkingGoogle(true);
+    try {
+      await linkGoogleIdentity();
+      setProviderLabel('google');
+    } catch (e) {
+      const message = googleMessage(e);
+      if (message) {
+        console.warn('[settings] Google 绑定失败:', googleAuthLogDetailsForDebug(e));
+        setAccountError(message);
+      }
+    } finally {
+      setLinkingGoogle(false);
+    }
+  }
+
   function back() {
     if (router.canGoBack()) router.back();
     else router.replace('/');
@@ -95,7 +148,7 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}>
-        {/* 账号区:已登录(Apple)显示身份;匿名态整行可点 → 登录入口(升级流程暂占位)。 */}
+        {/* 账号区:正式账号按 provider 显示;匿名账号可在此绑定 Google。 */}
         {isSignedIn ? (
           <View style={styles.accountRow}>
             <View style={[styles.avatar, { backgroundColor: accent }]}>
@@ -111,9 +164,8 @@ export default function SettingsScreen() {
         ) : (
           <Pressable
             style={styles.accountRow}
-            onPress={() => {
-              // 匿名→正式账号的升级(linkIdentity)是设置里的单独后续流程(ADR-0005),暂占位。
-            }}
+            onPress={bindGoogle}
+            disabled={linkingGoogle}
             accessibilityRole="button"
           >
             <View style={[styles.avatar, { backgroundColor: S.avatarAnonBg }]}>
@@ -123,9 +175,14 @@ export default function SettingsScreen() {
               <Text style={styles.accountName}>{t('notSignedIn')}</Text>
               <Text style={styles.accountSub}>{t('anonSub')}</Text>
             </View>
-            <Text style={[styles.signIn, { color: accent }]}>{t('signIn')} ›</Text>
+            {linkingGoogle ? (
+              <ActivityIndicator color={accent} />
+            ) : (
+              <Text style={[styles.signIn, { color: accent }]}>{t('linkGoogle')} ›</Text>
+            )}
           </Pressable>
         )}
+        {accountError ? <Text style={styles.accountError}>{accountError}</Text> : null}
 
         {/* 通用 */}
         <Text style={styles.sectionLabel}>{t('generalSection')}</Text>
@@ -229,6 +286,7 @@ const styles = StyleSheet.create({
   accountName: { fontSize: 16, color: S.primary, fontWeight: '600' },
   accountSub: { fontSize: 12.5, color: S.sub, marginTop: 2, lineHeight: 18.75 },
   signIn: { fontSize: 13, fontWeight: '600' },
+  accountError: { color: S.signOutText, fontSize: 12.5, lineHeight: 18, paddingHorizontal: 8, marginTop: -4, marginBottom: 8 },
 
   sectionLabel: {
     fontSize: 12,
