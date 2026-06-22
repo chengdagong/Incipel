@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 在「本 worktree 选定」的 Android 设备/模拟器上,用「本 worktree 专属」的 Metro 端口启动开发。
 #
-#   bash scripts/dev-android.sh                # Expo Go(默认)
-#   bash scripts/dev-android.sh --dev-client   # development build
+#   bash scripts/dev-android.sh --go          # Expo Go
+#   bash scripts/dev-android.sh --devbuild    # development build
 #
 # 并行多 AVD 的前置(每个 worktree 一台,serial 各不相同):
 #   emulator -list-avds
@@ -13,17 +13,67 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  cat <<EOF
+用法:
+  bash scripts/dev-android.sh --go          # Expo Go
+  bash scripts/dev-android.sh --devbuild    # development build
+
+通过 pnpm:
+  pnpm dev:android -- --go
+  pnpm dev:android -- --devbuild
+EOF
+}
+
+MODE=""
+for arg in "$@"; do
+  case "$arg" in
+    --go)
+      if [ -n "$MODE" ]; then
+        echo "✗ 只能在 --go 与 --devbuild 中选择一个。"
+        usage
+        exit 2
+      fi
+      MODE="go"
+      ;;
+    --devbuild)
+      if [ -n "$MODE" ]; then
+        echo "✗ 只能在 --go 与 --devbuild 中选择一个。"
+        usage
+        exit 2
+      fi
+      MODE="devbuild"
+      ;;
+    --dev-client|-d)
+      echo "✗ 参数 $arg 已停用,请改用 --devbuild。"
+      usage
+      exit 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "✗ 未知参数: $arg"
+      usage
+      exit 2
+      ;;
+  esac
+done
+if [ -z "$MODE" ]; then
+  echo "✗ 必须明确指定 --go 或 --devbuild。"
+  usage
+  exit 2
+fi
+DEVBUILD=0
+[ "$MODE" = "devbuild" ] && DEVBUILD=1
+
 # shellcheck source=lib/worktree-dev-env.sh
 . "$SCRIPT_DIR/lib/worktree-dev-env.sh"
 
-DEV_CLIENT=0
-for arg in "$@"; do
-  case "$arg" in
-    --dev-client|-d) DEV_CLIENT=1 ;;
-  esac
-done
-
 APP_SCHEME="${APP_SCHEME:-incipel}"
+ANDROID_APP_ID="${ANDROID_APP_ID:-com.incipel.app}"
 EXPO_GO_PKG="host.exp.exponent"
 
 online_devices() { adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1}'; }
@@ -50,6 +100,13 @@ echo "▸ Metro 端口   : $EXPO_PORT"
 echo "▸ Agent        : edge function(共用栈 /functions/v1/agent;本脚本会自动起栈并后台 serve)"
 echo "▸ Android 设备 : $ANDROID_SERIAL"
 
+if [ "$DEVBUILD" -eq 1 ] && ! adb -s "$ANDROID_SERIAL" shell pm path "$ANDROID_APP_ID" >/dev/null 2>&1; then
+  echo ""
+  echo "▸ 该设备尚未安装 development build($ANDROID_APP_ID),正在构建并安装…"
+  ( cd "$REPO_ROOT/apps/mobile" && npx expo run:android --device "$ANDROID_SERIAL" --no-bundler )
+  echo "✓ development build 已安装到 $ANDROID_SERIAL"
+fi
+
 # 起共用 Supabase 栈 + 后台 serve agent edge function(已在跑则自动跳过)。
 # 设 INCIPEL_SKIP_AGENT=1 可跳过(例如你在另一个终端用 `pnpm dev:agent` 前台跑 agent)。
 if [ "${INCIPEL_SKIP_AGENT:-0}" != "1" ]; then
@@ -71,10 +128,10 @@ cd "$REPO_ROOT/apps/mobile"
 
 (
   url="exp://127.0.0.1:$EXPO_PORT"
-  [ "$DEV_CLIENT" -eq 1 ] && url="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$EXPO_PORT"
+  [ "$DEVBUILD" -eq 1 ] && url="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$EXPO_PORT"
   for _ in $(seq 1 90); do
     if curl -sf "http://127.0.0.1:$EXPO_PORT/status" >/dev/null 2>&1; then
-      if [ "$DEV_CLIENT" -eq 0 ] && ! adb -s "$ANDROID_SERIAL" shell pm path "$EXPO_GO_PKG" >/dev/null 2>&1; then
+      if [ "$DEVBUILD" -eq 0 ] && ! adb -s "$ANDROID_SERIAL" shell pm path "$EXPO_GO_PKG" >/dev/null 2>&1; then
         echo ""
         echo "ℹ 该设备尚未安装 Expo Go。首次请在下方 Metro 菜单按 a 安装(多设备时按 shift+a 选设备),"
         echo "  之后再次运行本脚本即可自动定向到这台设备。"
@@ -91,7 +148,7 @@ cd "$REPO_ROOT/apps/mobile"
   done
 ) &
 
-if [ "$DEV_CLIENT" -eq 1 ]; then
+if [ "$DEVBUILD" -eq 1 ]; then
   exec npx expo start --port "$EXPO_PORT" --dev-client
 else
   exec npx expo start --port "$EXPO_PORT" --go

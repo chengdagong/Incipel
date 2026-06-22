@@ -8,16 +8,18 @@
 在任一 worktree 根目录:
 
 ```bash
-pnpm dev:ios          # iOS 模拟器 + Metro 8081 + 自动起共用栈并后台 serve agent
-pnpm dev:android      # Android 设备 + Metro 8081 + 自动起共用栈并后台 serve agent
+pnpm dev:ios -- --go          # iOS 模拟器 + Expo Go + Metro 8081 + 自动起共用栈并后台 serve agent
+pnpm dev:android -- --go      # Android 设备 + Expo Go + Metro 8081 + 自动起共用栈并后台 serve agent
+pnpm dev:ios -- --devbuild    # iOS development build + Metro 8081 + 自动起共用栈并后台 serve agent
+pnpm dev:android -- --devbuild
 pnpm dev:agent        # (前台)起共用栈 + serve agent;想在专用终端看 agent 热重载日志时用
 
-pnpm dev:ios -- --dev-client      # 改用 development build
-pnpm dev:android -- --dev-client
-INCIPEL_SKIP_AGENT=1 pnpm dev:ios # 不自动起 agent(你已在别处前台跑 dev:agent 时)
+INCIPEL_SKIP_AGENT=1 pnpm dev:ios -- --go # 不自动起 agent(你已在别处前台跑 dev:agent 时)
 ```
 
-`pnpm dev:ios` / `dev:android` 起 Metro 前会先调 `tools/incipel-dev up`:确保共用栈在运行、并在**后台** serve agent edge function(已在跑则跳过)——所以平时一条命令就把前后端都带起来。新 worktree 首跑时,若 `apps/mobile` 缺依赖(以 `expo` 为探针),会先自动 `pnpm install`(pnpm 用全局内容寻址 store,命中时只是几秒硬链接、不重复下载,所以每个 worktree 装一次很轻;无需也无法靠「全局装 expo」省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库,记下模拟器名),并按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量。agent 已不是本地 Node 服务,**没有 per-worktree 端口**(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md))。
+`pnpm dev:ios` / `dev:android` 必须显式传 `--go` 或 `--devbuild`;不带参数会打印用法后退出。Google Sign-In 需要 development build,不能用 Expo Go 验证。启动脚本起 Metro 前会先调 `tools/incipel-dev up`:确保共用栈在运行、并在**后台** serve agent edge function(已在跑则跳过)——所以平时一条带参数的命令就把前后端都带起来。新 worktree 首跑时,若 `apps/mobile` 缺依赖(以 `expo` 为探针),会先自动 `pnpm install`(pnpm 用全局内容寻址 store,命中时只是几秒硬链接、不重复下载,所以每个 worktree 装一次很轻;无需也无法靠「全局装 expo」省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库,记下模拟器名),并按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量。agent 已不是本地 Node 服务,**没有 per-worktree 端口**(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md))。
+
+首次使用 `--devbuild` 前,脚本会在目标设备缺少 `com.incipel.app` 时自动构建并安装 development build。这个步骤可能需要几分钟,完成后脚本会继续启动 Metro。iOS simulator 路径由脚本执行 `expo prebuild`、`pod install`、`xcodebuild` 与 `simctl install`;CocoaPods 需要的 `modular_headers` 由 `expo-build-properties` 写入生成配置,脚本不会直接修改 `Podfile`。不要手动用 `expo run:ios --device <UDID>` 代替,该命令在某些 Xcode / Expo CLI 组合下会走需要 code signing 的 device build 分支。
 
 ## 三层隔离
 

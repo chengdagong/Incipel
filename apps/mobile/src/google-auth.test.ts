@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '@supabase/supabase-js';
 import {
   GoogleAuthError,
@@ -10,18 +10,47 @@ import {
 } from './google-auth';
 import type { GoogleNativeAdapter, GoogleSupabaseAuth } from './google-auth';
 
+vi.hoisted(() => {
+  process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = 'web-client-id.apps.googleusercontent.com';
+});
+
 const googleModule = vi.hoisted(() => ({
+  loadError: null as Error | null,
   statusCodes: {
     SIGN_IN_CANCELLED: '12501',
     IN_PROGRESS: 'ASYNC_OP_IN_PROGRESS',
     PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
   },
   GoogleSignin: {
+    configure: vi.fn(),
+    hasPlayServices: vi.fn(async () => true),
     getTokens: vi.fn(async () => ({ accessToken: 'google-access-token', idToken: 'google-id-token' })),
   },
 }));
 
-vi.mock('@react-native-google-signin/google-signin', () => googleModule);
+const expoConstants = vi.hoisted(() => ({
+  default: {
+    appOwnership: null as 'expo' | null,
+  },
+}));
+
+vi.mock('@react-native-google-signin/google-signin', () => {
+  if (googleModule.loadError) throw googleModule.loadError;
+  return googleModule;
+});
+vi.mock('expo-constants', () => expoConstants);
+
+afterEach(() => {
+  googleModule.loadError = null;
+  googleModule.GoogleSignin.configure.mockClear();
+  googleModule.GoogleSignin.hasPlayServices.mockClear();
+  googleModule.GoogleSignin.getTokens.mockReset();
+  googleModule.GoogleSignin.getTokens.mockImplementation(async () => ({
+    accessToken: 'google-access-token',
+    idToken: 'google-id-token',
+  }));
+  expoConstants.default.appOwnership = null;
+});
 
 function session(provider: string): Session {
   return {
@@ -277,6 +306,35 @@ describe('googleAuthMessageKey', () => {
 });
 
 describe('nativeGoogleAdapter', () => {
+  it('reports configuration instead of loading Google native module inside Expo Go', async () => {
+    expoConstants.default.appOwnership = 'expo';
+    googleModule.loadError = new Error(
+      "TurboModuleRegistry.getEnforcing(...): 'RNGoogleSignin' could not be found.",
+    );
+    const supabaseAuth = auth();
+
+    await expect(
+      signInWithGoogle({
+        auth: supabaseAuth,
+      }),
+    ).rejects.toMatchObject({ kind: 'configuration' });
+
+    expect(googleModule.GoogleSignin.configure).not.toHaveBeenCalled();
+    expect(supabaseAuth.signInWithIdToken).not.toHaveBeenCalled();
+  });
+
+  it('classifies a missing RNGoogleSignin native module as configuration', async () => {
+    const missingModuleError = new Error(
+      "TurboModuleRegistry.getEnforcing(...): 'RNGoogleSignin' could not be found. Verify that a module by this name is registered in the native binary.",
+    );
+    googleModule.loadError = missingModuleError;
+
+    await expect(nativeGoogleAdapter.ensureConfigured()).rejects.toMatchObject({
+      kind: 'configuration',
+      cause: missingModuleError,
+    });
+  });
+
   it('classifies native SDK in-progress status code as silent', async () => {
     const err = await nativeGoogleAdapter.classifyError({ code: googleModule.statusCodes.IN_PROGRESS });
     expect(err).toMatchObject({ kind: 'in_progress', silent: true });

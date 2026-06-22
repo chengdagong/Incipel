@@ -7,7 +7,7 @@
 - `apps/mobile/src/google-auth.ts`:Google native Sign-In 与 Supabase Auth 交换。
 - `apps/mobile/app/login.tsx`:无会话时的 Google 登录入口。
 - `apps/mobile/app/(app)/settings.tsx`:匿名账号绑定 Google。
-- `apps/mobile/app.json`:Google Sign-In config plugin。里面的 `iosUrlScheme` 现在是占位值,原生构建前必须替换。
+- `apps/mobile/app.json`:Google Sign-In config plugin,以及 `expo-build-properties` 的 iOS CocoaPods 配置。里面的 `iosUrlScheme` 现在是占位值,原生构建前必须替换。
 
 Apple 与 Google 的代码路径保持分开。Apple 继续使用 `expo-apple-authentication`;Google 使用 `@react-native-google-signin/google-signin`。
 
@@ -77,7 +77,9 @@ secret = "local-native-id-token-flow-needs-provider-secret"
 
 - Expo Go 不支持该 native module。
 - 改完 config plugin 后,需要重新执行 `expo prebuild` 并构建 development build / TestFlight / Android build。
-- 本仓库有多 worktree 场景,跑模拟器或 E2E 前仍应走 `pnpm dev:ios` / `pnpm dev:android` / `pnpm e2e:ios` 这类 worktree 感知脚本。
+- iOS 的 Google 相关 pods 通过 `expo-build-properties` 的 `ios.extraPods` 声明 `modular_headers`,不要直接修改生成出来的 `apps/mobile/ios/Podfile`。
+- 本仓库有多 worktree 场景,跑模拟器或 E2E 前仍应走 worktree 感知脚本。Google 登录请用 `pnpm dev:ios -- --devbuild` 或 `pnpm dev:android -- --devbuild`;`pnpm dev:ios` / `pnpm dev:android` 不带参数会退出。
+- 首次使用 `--devbuild` 前,脚本发现目标设备缺少 `com.incipel.app` 时会自动构建并安装 development build,然后继续启动 Metro。这个步骤可能需要几分钟。
 
 ## 验证清单
 

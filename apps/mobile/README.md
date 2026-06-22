@@ -20,22 +20,31 @@ EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:54521
 EXPO_PUBLIC_SUPABASE_ANON_KEY=<本地 Supabase anon key>
 ```
 
-只放公开的 anon key 与 agent URL,**绝不放模型密钥**(模型只在 agent 端调用)。`pnpm dev:ios` / `dev:android` 会自动把 `EXPO_PUBLIC_AGENT_URL` 写好。iOS 模拟器与 `localhost` 直通;Android 模拟器经 `dev-android.sh` 的 `adb reverse` 也走 `localhost`;真机则把 `127.0.0.1` 换成本机局域网 IP。
+只放公开的 anon key 与 agent URL,**绝不放模型密钥**(模型只在 agent 端调用)。`pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` 会自动把 `EXPO_PUBLIC_AGENT_URL` 写好。iOS 模拟器与 `localhost` 直通;Android 模拟器经 `dev-android.sh` 的 `adb reverse` 也走 `localhost`;真机则把 `127.0.0.1` 换成本机局域网 IP。
 
 ## 启动
 
 先起 agent(`pnpm dev:agent` —— 起共用 Supabase 栈 + serve agent edge function),再起本客户端。
-推荐用 worktree 感知脚本 `pnpm dev:ios`(Metro 固定 8081、定向到本 worktree 的模拟器);或手动:
+推荐用 worktree 感知脚本,并明确选择运行环境:
+
+```bash
+pnpm dev:ios -- --go
+pnpm dev:ios -- --devbuild
+```
+
+Google Sign-In 需要 development build,请用 `pnpm dev:ios -- --devbuild` 验证;Expo Go 不包含该 native module。也可以手动启动:
 
 ```bash
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer pnpm --filter @incipel/mobile exec expo start --ios
 ```
 
+首次使用 development build 时,`pnpm dev:ios -- --devbuild` 会在目标模拟器缺少 `com.incipel.app` 时自动构建并安装原生 app。iOS 的 Google 相关 CocoaPods 配置由 `expo-build-properties` 生成;不要直接修改生成出来的 `apps/mobile/ios/Podfile`。iOS simulator 请走这个脚本,不要手动用 `expo run:ios --device <UDID>` 代替。
+
 去掉 `CI=1`(若设过)可开热重载。app 加载后:输入灵感 → 开始创作 → 在对话里流式创作。
 
 ## 本地开发登录路径
 
-日常开发默认走 Supabase anonymous auth:登录页显示后点击「先随便逛逛」,客户端调用 `signInAnonymously()` 取得 session,agent 用该 JWT 校验身份并把会话数据保存到本地 Supabase 数据库。`pnpm dev:ios` / `dev:android` / `dev:agent` 会经 `tools/incipel-dev` 写好 `apps/mobile/.env` 的本地 URL、anon key 与 agent URL。
+日常开发默认走 Supabase anonymous auth:登录页显示后点击「先随便逛逛」,客户端调用 `signInAnonymously()` 取得 session,agent 用该 JWT 校验身份并把会话数据保存到本地 Supabase 数据库。`pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` / `pnpm dev:agent` 会经 `tools/incipel-dev` 写好 `apps/mobile/.env` 的本地 URL、anon key 与 agent URL。
 
 只试 UI 且不需要保存时,才手动启用跳过身份校验的调试模式。**注意:`pnpm dev:*` / `dx up` / `env:sync` 会从 `supabase/.env` 删掉 `STORE` / `DEV_NO_AUTH` 以强制 anonymous auth(见 ADR-0009),所以别把它们写进 `supabase/.env`**;改用一个**自备** env-file、手动跑 serve(绕开 dev 脚本):
 

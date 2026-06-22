@@ -75,11 +75,44 @@ const CONFIGURATION_ERROR_CODES = new Set([
 ]);
 const CONFIGURATION_MESSAGE_PATTERN =
   /manual linking|provider.*disabled|provider.*not.*enabled|oauth provider|unsupported provider|client[_ ]?id|audience/i;
+const MISSING_NATIVE_GOOGLE_MODULE_PATTERN =
+  /RNGoogleSignin|NativeGoogleSignin|TurboModuleRegistry\.getEnforcing/i;
 
 let configured = false;
 
+function missingNativeGoogleModuleCause(error: unknown): unknown | null {
+  if (!error || typeof error !== 'object') return null;
+  const cause = (error as { cause?: unknown }).cause;
+  const nested = missingNativeGoogleModuleCause(cause);
+  if (nested) return nested;
+
+  const message = (error as { message?: unknown }).message;
+  if (typeof message === 'string' && MISSING_NATIVE_GOOGLE_MODULE_PATTERN.test(message)) {
+    return error;
+  }
+  return null;
+}
+
+async function assertGoogleNativeRuntime() {
+  const Constants = (await import('expo-constants')).default;
+  if (Constants.appOwnership === 'expo') {
+    throw new GoogleAuthError(
+      'configuration',
+      new Error('Google Sign-In requires a development build. Expo Go does not include RNGoogleSignin.'),
+    );
+  }
+}
+
 async function googleSignInModule() {
-  return import('@react-native-google-signin/google-signin');
+  try {
+    return await import('@react-native-google-signin/google-signin');
+  } catch (error) {
+    const nativeModuleCause = missingNativeGoogleModuleCause(error);
+    if (nativeModuleCause) {
+      throw new GoogleAuthError('configuration', nativeModuleCause);
+    }
+    throw error;
+  }
 }
 
 async function platformOS(): Promise<string> {
@@ -92,6 +125,7 @@ export const nativeGoogleAdapter: GoogleNativeAdapter = {
     if (!WEB_CLIENT_ID) {
       throw new GoogleAuthError('configuration');
     }
+    await assertGoogleNativeRuntime();
     const { GoogleSignin } = await googleSignInModule();
     if (!configured) {
       GoogleSignin.configure({
@@ -128,6 +162,10 @@ export const nativeGoogleAdapter: GoogleNativeAdapter = {
   },
 
   async classifyError(error) {
+    const nativeModuleCause = missingNativeGoogleModuleCause(error);
+    if (nativeModuleCause) {
+      return new GoogleAuthError('configuration', nativeModuleCause);
+    }
     const code = (error as { code?: string } | null)?.code;
     if (!code) return null;
     const { statusCodes } = await googleSignInModule();
