@@ -372,16 +372,30 @@ async function ensureAgentServe(root, { restart = false } = {}) {
   // detached + unref + stdio 重定向到日志文件:Node 退出后该 serve 仍继续跑。
   const fd = openSync(logPath, 'a');
   const child = spawn('supabase', serveArgs, { cwd: root, detached: true, stdio: ['ignore', fd, fd] });
+  // 监听早退:serve 因 Deno 解析 / env / 端口错误立刻退出时,别让健康检查超时后还谎报「仍在编译」、
+  // 把 Metro 指向一个根本没在跑的 agent(评审 A)。父进程(本 CLI)存活期间 'exit' 照常触发。
+  let serveExited = false;
+  let serveExitCode = null;
+  child.on('exit', (code) => {
+    serveExited = true;
+    serveExitCode = code;
+  });
   child.unref();
   if (child.pid) writeFileSync(pidPath, `${child.pid}\n`);
   log(`  已后台启动 agent serve(pid ${child.pid ?? '?'});日志 ${logPath}`);
   log(`  停止它:kill \$(cat ${pidPath})  (停整个栈:supabase stop)`);
   for (let i = 0; i < 20; i++) {
     await sleep(500);
+    if (serveExited) {
+      fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'})——多半是 Deno 解析 / env / 端口问题;看日志:${logPath}`);
+    }
     if (await agentHealthy(apiPort)) {
       log('  agent 已就绪(/health 正常)');
       return;
     }
+  }
+  if (serveExited) {
+    fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'});看日志:${logPath}`);
   }
   log('  agent 仍在后台编译启动(首次较慢),稍候即可;有问题看上面的日志。');
 }
@@ -496,13 +510,37 @@ function e2eUp(root) {
   const started = run('supabase', ['start', '--workdir', workdir], { cwd: root });
   if (started.code !== 0 && !DRY) fail('隔离栈 supabase start 失败');
 
-  const agentUrl = `http://127.0.0.1:${plan.apiPort}/functions/v1/agent`;
+  const isoApi = `http://127.0.0.1:${plan.apiPort}`;
+  const agentUrl = `${isoApi}/functions/v1/agent`;
+  // 为隔离栈生成专属 agent env-file:用隔离栈自己的 API 端口(issuer)与 JWT secret。否则若复用共用栈的
+  // supabase/.env,其 INCIPEL_SUPABASE_JWT_ISS 指向 54521,而隔离栈签出的 token issuer 是
+  // 127.0.0.1:<apiPort>,authenticate() 优先用这个本地覆盖 → /run、/logline 全部 401(评审 B)。
+  const isoEnvFile = join(workdir, 'agent.env');
+  if (DRY) {
+    log(`  [dry-run] write ${isoEnvFile}(隔离栈 issuer/secret + 从 supabase/.env 复制的模型 env)`);
+  } else {
+    const isoRes = run('supabase', ['status', '--workdir', workdir, '-o', 'json'], { mutate: false, capture: true, cwd: root });
+    const isoStatus = isoRes.code === 0 ? parseStatusJson(isoRes.stdout) : null;
+    const sharedFnEnv = join(root, 'supabase', '.env');
+    const lines = ['# 隔离 E2E 栈的 agent env(由 tools/incipel-dev e2e up 生成,勿入库)'];
+    for (const k of ['MODEL_PROVIDER', 'OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'ANTHROPIC_API_KEY', 'TURN_MODEL', 'LOGLINE_MODEL']) {
+      const v = existsSync(sharedFnEnv) ? getEnvVar(sharedFnEnv, k) : null;
+      if (v) lines.push(`${k}=${v}`);
+    }
+    lines.push(`INCIPEL_SUPABASE_JWT_ISS=${isoApi}/auth/v1`);
+    lines.push('INCIPEL_SUPABASE_JWT_AUD=authenticated');
+    if (isoStatus?.JWT_SECRET) lines.push(`INCIPEL_SUPABASE_JWT_SECRET=${isoStatus.JWT_SECRET}`);
+    lines.push('');
+    writeFileSync(isoEnvFile, lines.join('\n'));
+  }
+
   log('');
   log('隔离栈已起。E2E 把客户端指向这套栈:');
-  log(`  EXPO_PUBLIC_SUPABASE_URL = http://127.0.0.1:${plan.apiPort}`);
+  log(`  EXPO_PUBLIC_SUPABASE_URL = ${isoApi}`);
   log(`  EXPO_PUBLIC_AGENT_URL    = ${agentUrl}`);
   log(`  anon key / service key:supabase status --workdir ${workdir}`);
-  log(`  serve agent(fake provider 等):supabase functions serve agent --workdir ${workdir} --env-file supabase/.env --no-verify-jwt`);
+  log(`  serve agent:supabase functions serve agent --workdir ${workdir} --env-file ${isoEnvFile} --no-verify-jwt`);
+  log(`  (${isoEnvFile} 已写好隔离栈自己的 INCIPEL_SUPABASE_JWT_ISS=${isoApi}/auth/v1,避免用共用栈 issuer 校验导致 401)`);
 }
 function e2eDown(root) {
   const workdir = e2eWorkdir(root);
