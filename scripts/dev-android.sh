@@ -47,16 +47,21 @@ fi
 
 echo "▸ worktree     : $REPO_ROOT"
 echo "▸ Metro 端口   : $EXPO_PORT"
-echo "▸ Agent 端口   : $AGENT_PORT"
+echo "▸ Agent        : edge function(共用栈 /functions/v1/agent;本脚本会自动起栈并后台 serve)"
 echo "▸ Android 设备 : $ANDROID_SERIAL"
+
+# 起共用 Supabase 栈 + 后台 serve agent edge function(已在跑则自动跳过)。
+# 设 INCIPEL_SKIP_AGENT=1 可跳过(例如你在另一个终端用 `pnpm dev:agent` 前台跑 agent)。
+if [ "${INCIPEL_SKIP_AGENT:-0}" != "1" ]; then
+  node "$REPO_ROOT/tools/incipel-dev/cli.mjs" up
+fi
 
 # 把本 worktree 的端口转发进「这台」设备(带 -s,避免打错)。Android 模拟器的 localhost 是
 # 模拟器自身,这几条 reverse 让设备上的 localhost:<port> 直达宿主机,从而与 iOS 行为一致:
 #   - Metro:加载 bundle
-#   - Agent:EXPO_PUBLIC_AGENT_URL=http://localhost:$AGENT_PORT
-#   - Supabase:共用本地栈的 API 端口(从 supabase/config.toml 的 [api] 解析)
+#   - Supabase / Agent:共用本地栈的 API 端口(agent edge function 挂在它的 /functions/v1/agent
+#     下,见 ADR-0007;reverse 这一个端口就同时覆盖 EXPO_PUBLIC_SUPABASE_URL 与 EXPO_PUBLIC_AGENT_URL)。
 adb -s "$ANDROID_SERIAL" reverse tcp:"$EXPO_PORT" tcp:"$EXPO_PORT"
-adb -s "$ANDROID_SERIAL" reverse tcp:"$AGENT_PORT" tcp:"$AGENT_PORT" >/dev/null 2>&1 || true
 SUPA_PORT="$(awk '/^\[api\]/{f=1} f&&/^port[[:space:]]*=/{gsub(/[^0-9]/,""); print; exit}' "$REPO_ROOT/supabase/config.toml" 2>/dev/null || true)"
 if [ -n "${SUPA_PORT:-}" ]; then
   adb -s "$ANDROID_SERIAL" reverse tcp:"$SUPA_PORT" tcp:"$SUPA_PORT" >/dev/null 2>&1 || true

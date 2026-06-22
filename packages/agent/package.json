@@ -3,9 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "src/index.ts",
+  "main": "src/app.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
     "smoke": "tsx src/dev/smoke-turn.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
@@ -13,7 +12,6 @@
   "dependencies": {
     "@ag-ui/core": "0.0.57",
     "@ai-sdk/anthropic": "^1.0.0",
-    "@hono/node-server": "^1.13.0",
     "@incipel/shared": "workspace:*",
     "@openrouter/ai-sdk-provider": "0.7.3",
     "@supabase/supabase-js": "^2.45.0",

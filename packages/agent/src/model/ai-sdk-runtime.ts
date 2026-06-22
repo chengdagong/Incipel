@@ -18,7 +18,7 @@ import type {
   ModelProvider,
   StreamChunk,
   StreamTurnInput,
-} from './provider';
+} from './provider.ts';
 
 // 由具体 provider 提供:按用途取一个 LanguageModelV1。
 //  - 'turn'    每轮对话的强模型(tool-use 可靠)。

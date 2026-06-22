@@ -9,11 +9,14 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "test:db": "supabase db reset && supabase test db",
-    "agent:dev": "pnpm --filter @incipel/agent dev",
     "mobile:start": "pnpm --filter @incipel/mobile start",
     "dev:ios": "bash scripts/dev-ios.sh",
     "dev:android": "bash scripts/dev-android.sh",
-    "dev:agent": "bash scripts/dev-agent.sh",
+    "dx": "node tools/incipel-dev/cli.mjs",
+    "dev:agent": "node tools/incipel-dev/cli.mjs dev",
+    "env:sync": "node tools/incipel-dev/cli.mjs env sync",
+    "e2e:stack": "node tools/incipel-dev/cli.mjs e2e",
+    "agent:deploy": "supabase functions deploy agent",
     "db:reset": "supabase db reset"
   }
 }

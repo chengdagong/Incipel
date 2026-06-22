@@ -13,7 +13,7 @@
 | KI-3 | 同会话并发 `save_turn` 竞争 `turn_index` | Medium | `0001_init.sql` + `index.ts` |
 | KI-4 | `verifyJwt` 未校验 issuer/audience | Low | `packages/agent/src/auth.ts` |
 | KI-5 | `createSessionIfMissing` 非原子的两表创建 | Low | `packages/agent/src/store.ts` |
-| KI-6 | `/run` 入口无输入大小上限 | Low | `packages/agent/src/index.ts` |
+| KI-6 | `/run` 入口无输入大小上限 | Low | `packages/agent/src/app.ts` |
 
 被驳回的三项见文末「附:经核查不予立项」。
 
@@ -112,7 +112,7 @@
 
 - **现象 / 机制**:`save_turn` 写 version 前 `select coalesce(max(turn_index),0)+1`(`0001_init.sql:214-217`),再插 `document_versions`,该列有唯一索引 `(session_id, turn_index)`(`:44-45`)。默认 READ COMMITTED 下,两个同会话并发调用各自读到同一个 N(对方未提交不可见),都算出 N+1、都插入 → 先提交者成功,后者撞 unique_violation。
 - **原子性结论**:plpgsql 函数作为单个隐式事务执行,异常使本次调用整体回滚——user/assistant 消息、`documents.state`、`sessions.updated_at` 全部撤销,**无半截脏数据**(原子性成立)。但代价是败方整轮一字未存,经 `store.ts:177` 包成 `StoreError`、`run.ts:163-169` 转 `RUN_ERROR{code:'PERSIST_FAILED'}`。
-- **触发**:§16 假设「同一会话同一时刻只跑一轮」,客户端用 `agent.isRunning` 守(`client.ts:170`),但服务端 `/run`(`index.ts:74-140`)无 per-session 串行化。两端设备、重发与原连接尾段重叠、或绕过客户端的直连,都能并发。
+- **触发**:§16 假设「同一会话同一时刻只跑一轮」,客户端用 `agent.isRunning` 守(`client.ts:170`),但服务端 `/run`(`app.ts` 的 `/run` handler)无 per-session 串行化。两端设备、重发与原连接尾段重叠、或绕过客户端的直连,都能并发。
 - **影响**:败方那一轮整体落库失败,用户见「落库失败」,该轮对话与剧本改动丢失(需重发)。
 - **修复选项**:① `save_turn` 开头取 `pg_advisory_xact_lock(hashtext(p_session_id::text))` 或对 `sessions` 行 `SELECT ... FOR UPDATE`,串行化关键区,使第二个调用拿到 N+2、两轮都成功且 `turn_index` 连续。② 捕获 unique_violation 后重算 `max` 重试。③ 在 `/run` 入口按 `threadId` 做 per-session 串行闸(呼应 §16),从源头杜绝。
 - **回归测试**:对同一 session 同时发起两次 `save_turn`(均 `changed=true`)。修复后断言两次都成功、`document_versions` 出现连续 `turn_index`;或在「干净拒绝」策略下断言败方返回可重试错误且无任何部分写。当前实现下该测试应观察到一方 unique_violation、其整轮被回滚(用以固化原子性、暴露整轮丢失)。

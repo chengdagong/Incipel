@@ -4,8 +4,8 @@
     {
       "name": "agent",
       "runtimeExecutable": "/Users/chengdagong/.hermes/node/bin/pnpm",
-      "runtimeArgs": ["--filter", "@incipel/agent", "dev"],
-      "port": 8787
+      "runtimeArgs": ["dev:agent"],
+      "port": 54521
     },
     {
       "name": "mobile",

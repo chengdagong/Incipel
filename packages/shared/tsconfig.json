@@ -2,7 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    // shared 不产物(各方按 main: src/index.ts 直接引源码),恒 noEmit。
+    "noEmit": true,
+    // index.deno.ts / tools.ts 的 type-only import 写了显式 .ts 扩展名(供 Deno 严格解析);
+    // 此项让 tsc 放行(需配合 noEmit)。客户端(Metro)走 index.ts,不受影响。
+    "allowImportingTsExtensions": true
   },
   "include": ["src"]
 }

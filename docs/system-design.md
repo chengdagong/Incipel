@@ -310,7 +310,7 @@ messages
 
 - **延迟**:TTFT 主要取决于模型;prompt caching 把系统提示与剧本前缀的处理成本降下来,首 token 更快。
 - **并发**:AG-UI run 是 I/O 密集(大多在等模型),单个轻量主机可扛大量并发 SSE。
-- **计算层部署**:v1 跑 Supabase Edge Function(Hono 编写)。Edge Function 有响应 / CPU 上限,长轮有撞限风险;因 agent 无状态 + Hono 可移植,**触发条件**满足时(单轮时长逼近上限,或并发/冷启动伤体验)迁到专用轻量主机(Cloud Run / Fly / Railway),改部署目标即可,不是重写(见 ADR-0002)。
+- **计算层部署**:v1 跑 Supabase Edge Function(Hono 编写),且 Edge 是唯一受支持的运行时(见 [ADR-0007](adr/0007-edge-only-agent-runtime.md))。Edge Function 有响应 / CPU 上限,长轮有撞限风险;因 agent 无状态 + `createApp` 仍运行时无关,**触发条件**满足时(单轮时长逼近上限,或并发/冷启动伤体验)迁到专用轻量主机(Cloud Run / Fly / Railway)——加回一个薄 Node 入口即可,不是重写(Node 入口已删,逻辑可移植性仍在,见 ADR-0007 / ADR-0002)。
 - **跨设备同步**:v1 打开会话时重新拉取即可;需要实时再上 Supabase Realtime 推 `documents` 变更。
 - **成本主因**:每个有改动的轮约 2 次模型生成(多步:工具步 + 总结步)+ 每次骰子一次调用。控制手段:bounded context、prompt caching、骰子用便宜模型 + 限流。
 
@@ -339,7 +339,7 @@ messages
 - **LangGraph**:若 agent 长出多步规划(自动取材、多角色推演等)。
 - **多人协作 / 多端实时同步**:更大的工程,v1 不做。
 - **超长会话**:对话历史的摘要/压缩策略。
-- **`/run` 的输入大小 / 滥用限制**:目前 `/run` 不限制请求体大小。日后若要加(防滥用或防超大请求),按**请求体字节数**与**本轮用户消息长度**设限,**不要**按 `messages` 条数设限。原因:移动端 `@ag-ui/client` 每轮把累积的整个 `messages` 数组发来(约每轮加 2 条,仅在 `threadId` 变化时清空),而 agent 只取其中最后一条 `role==='user'` 的文本(`lastUserText`,见 `packages/agent/src/index.ts`),真正的 prompt 窗口另从 DB 载入(`loadSession`,最近约 10 条,见 §9)。所以请求里的消息条数与 prompt 窗口、成本无关:按条数封顶会随正常会话变长而误伤——几百轮的长会话即便每条都很短也会被拒——同时对单个超大 payload 又拦不住。
+- **`/run` 的输入大小 / 滥用限制**:目前 `/run` 不限制请求体大小。日后若要加(防滥用或防超大请求),按**请求体字节数**与**本轮用户消息长度**设限,**不要**按 `messages` 条数设限。原因:移动端 `@ag-ui/client` 每轮把累积的整个 `messages` 数组发来(约每轮加 2 条,仅在 `threadId` 变化时清空),而 agent 只取其中最后一条 `role==='user'` 的文本(`lastUserText`,见 `packages/agent/src/app.ts`),真正的 prompt 窗口另从 DB 载入(`loadSession`,最近约 10 条,见 §9)。所以请求里的消息条数与 prompt 窗口、成本无关:按条数封顶会随正常会话变长而误伤——几百轮的长会话即便每条都很短也会被拒——同时对单个超大 payload 又拦不住。
 - **更多 provider**:接 tool-use 较弱的模型时,由其适配器把结构化提示包装成统一 tool-use 接口,而不是引入第二套契约。
 - **CopilotKit Runtime(方案 A 的后续选项)**:若日后要做 web 端共用同一端点,或用 runtime 的 BuiltInAgent / server-side tools / 中间件 / 多 agent 路由,可把 fetch-native 的 `CopilotRuntime`(`createCopilotRuntimeHandler`)挂到 Supabase Edge(Deno)。注意:`InMemory` / `Sqlite` AgentRunner 在 serverless 上不持久,需自写 **Postgres-backed 的自定义 AgentRunner**;Intelligence 模式不可自托管;Edge 的 CPU/墙钟上限照旧。v1 用方案 B(直连 `@ag-ui/client`),持久化由本项目的 Supabase 层承担,无论将来是否上 runtime 都用得上。
 

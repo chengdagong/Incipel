@@ -5,6 +5,7 @@
 // 把结构化提示包装成与此一致的 tool-use 接口,而不是引入第二套契约。
 
 import type { z } from 'zod';
+import { env } from '../env.ts';
 
 // 一次工具调用:工具名 + 已解析好的参数对象。参数 schema 由 @incipel/shared 的
 // buildToolSchemas(idSetsOf(state)) 按当前剧本状态生成(含 id 枚举门控)。
@@ -47,14 +48,14 @@ export type ProviderName = 'anthropic' | 'openrouter';
 
 // 工厂:按 env MODEL_PROVIDER 选 provider。只在 tool-use 可靠的 provider 间切换。
 export async function createModelProvider(): Promise<ModelProvider> {
-  const name = (process.env.MODEL_PROVIDER ?? 'anthropic') as ProviderName;
+  const name = (env('MODEL_PROVIDER') ?? 'anthropic') as ProviderName;
   switch (name) {
     case 'anthropic': {
-      const { createAnthropicProvider } = await import('./anthropic');
+      const { createAnthropicProvider } = await import('./anthropic.ts');
       return createAnthropicProvider();
     }
     case 'openrouter': {
-      const { createOpenRouterProvider } = await import('./openrouter');
+      const { createOpenRouterProvider } = await import('./openrouter.ts');
       return createOpenRouterProvider();
     }
     default:

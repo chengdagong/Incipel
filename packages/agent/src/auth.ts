@@ -9,6 +9,7 @@
 // 远端与本地一视同仁:JWKS 的地址由 SUPABASE_URL 推出。
 
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify, type JWTPayload } from 'jose';
+import { env } from './env.ts';
 
 export class AuthError extends Error {
   constructor(message: string) {
@@ -36,10 +37,10 @@ const DEFAULT_AUDIENCE = 'authenticated';
 //   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用 SUPABASE_JWT_ISS 覆盖。
 //   · audience:默认 'authenticated';可用 SUPABASE_JWT_AUD 覆盖。
 function expectedClaims(): { issuer: string; audience: string } {
-  const audience = process.env.SUPABASE_JWT_AUD || DEFAULT_AUDIENCE;
-  const issOverride = process.env.SUPABASE_JWT_ISS;
+  const audience = env('SUPABASE_JWT_AUD') || DEFAULT_AUDIENCE;
+  const issOverride = env('SUPABASE_JWT_ISS');
   if (issOverride) return { issuer: issOverride, audience };
-  const url = process.env.SUPABASE_URL;
+  const url = env('SUPABASE_URL');
   if (!url) {
     throw new AuthError('SUPABASE_URL 未配置(校验 JWT issuer 需要)');
   }
@@ -47,7 +48,7 @@ function expectedClaims(): { issuer: string; audience: string } {
 }
 
 function jwtSecretKey(): Uint8Array {
-  const secret = process.env.SUPABASE_JWT_SECRET;
+  const secret = env('SUPABASE_JWT_SECRET');
   if (!secret) {
     throw new AuthError('SUPABASE_JWT_SECRET 未配置(HS256 校验需要)');
   }
@@ -59,7 +60,7 @@ function jwtSecretKey(): Uint8Array {
 let jwks: ReturnType<typeof createRemoteJWKSet> | null = null;
 function getJwks(): ReturnType<typeof createRemoteJWKSet> {
   if (jwks) return jwks;
-  const url = process.env.SUPABASE_URL;
+  const url = env('SUPABASE_URL');
   if (!url) {
     throw new AuthError('SUPABASE_URL 未配置(JWKS 校验需要)');
   }

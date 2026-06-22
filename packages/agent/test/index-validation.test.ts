@@ -1,14 +1,15 @@
-// index.ts HTTP 层(testing-strategy §3.5 + KI-6):请求校验、输入上限、/logline。
+// app.ts HTTP 层(testing-strategy §3.5 + KI-6):请求校验、输入上限、/logline。
 // 这些分支都在进入 SSE 流(调 store/provider)之前返回,无需 Supabase 或真实模型。
-// INCIPEL_RUNTIME=edge 跳过本地 node-server;DEV_NO_AUTH=1 跳过 JWT 校验。
+// DEV_NO_AUTH=1 跳过 JWT 校验。
 // 本文件刻意不配 SUPABASE_*/模型 key:据此覆盖 createSessionIfMissing 失败(500)与 logline 无 key(502)。
 
 import { describe, it, expect } from 'vitest';
+import { createApp } from '../src/app';
 
-process.env.INCIPEL_RUNTIME = 'edge';
+// createApp() 在构造时读 DEV_NO_AUTH / STORE,故先设环境变量再建 app。
 process.env.DEV_NO_AUTH = '1';
 delete process.env.STORE;
-const { app } = await import('../src/index');
+const app = createApp();
 
 function run(body: unknown, headers: Record<string, string> = {}): Promise<Response> {
   return app.request('/run', {

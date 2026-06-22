@@ -24,11 +24,11 @@ import {
   type Screenplay,
 } from '@incipel/shared';
 import { nanoid } from 'nanoid';
-import { applyToolCall } from './apply';
-import { createModelProvider } from './model/provider';
-import type { ModelProvider, StreamChunk } from './model/provider';
-import { buildPrompt } from './prompt';
-import { createStore, type Store } from './store';
+import { applyToolCall } from './apply.ts';
+import { createModelProvider } from './model/provider.ts';
+import type { ModelProvider, StreamChunk } from './model/provider.ts';
+import { buildPrompt } from './prompt.ts';
+import { createStore, type Store } from './store.ts';
 
 export type RunInput = {
   // threadId 即会话标识(等同 session id)。
