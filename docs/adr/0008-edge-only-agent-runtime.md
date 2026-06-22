@@ -2,14 +2,14 @@
 
 > Status: accepted ·
 > 部分取代 [ADR-0002](0002-agent-runtime-hono-edge-sse.md):0002 把 agent 写成可跨 Edge 与专用主机(Cloud Run / Fly / Node)的可移植运行时,并以 Node 专用主机作为「迁移退路」;本 ADR 删掉随时可用的 Node 部署入口,只留 Edge 一个运行时。0002 关于「应用本身运行时无关」的设计不变。
-> 本文关于“本地 dev 默认 `DEV_NO_AUTH`”的决定已被 [ADR-0008](0008-dev-uses-anonymous-auth.md) 修订:日常开发默认使用 Supabase anonymous auth。
+> 本文关于“本地 dev 默认 `DEV_NO_AUTH`”的决定已被 [ADR-0009](0009-dev-uses-anonymous-auth.md) 修订:日常开发默认使用 Supabase anonymous auth。
 
 [ADR-0002](0002-agent-runtime-hono-edge-sse.md) 让同一份 Hono app 既能跑 Supabase Edge Function(Deno),也能跑 Node 专用主机;v1 部署 Edge,Node 既是本地开发回路(`pnpm dev:agent`,每 worktree 独立端口、tsx 热重载),也是「Edge 撞上限时迁回专用主机」的现成退路。本 ADR 记录一次有意的收窄:**Edge 成为 agent 唯一受支持的运行时,删除 Node 服务器入口,本地开发与 E2E 都改在 Supabase 的 edge runtime 上跑。**
 
 **决定:**
 
 - **只删 Node 服务器入口,不删逻辑。** 删除 [packages/agent/src/index.ts](../../packages/agent/src/index.ts) 里的 `@hono/node-server` 启动块、`@hono/node-server` 依赖、`dev:agent` / `agent:dev` 脚本、[scripts/dev-agent.sh](../../scripts/dev-agent.sh),以及 [worktree-dev-env.sh](../../scripts/lib/worktree-dev-env.sh) 里分配 `AGENT_PORT`、写 `EXPO_PUBLIC_AGENT_URL=localhost:<port>` 那部分。**保留**运行时无关的 `createApp` 工厂([app.ts](../../packages/agent/src/app.ts))、全部 agent 逻辑、经 `app.request()` 测应用的 vitest、以及 `dev/` 下的冒烟脚本(它们走 tsx、不依赖服务器)。
-- **日常本地开发 = 单一共用栈上的一个 edge function。** 配置定为**SupabaseStore + Supabase anonymous auth + 模型 key**(OpenRouter 或 Anthropic)。`SUPABASE_URL` / service key 由本地 edge runtime 自动注入;本地 JWT 的 issuer / audience / HS256 secret 由 [ADR-0008](0008-dev-uses-anonymous-auth.md) 定义的 `INCIPEL_SUPABASE_JWT_*` 环境变量补齐。
+- **日常本地开发 = 单一共用栈上的一个 edge function。** 配置定为**SupabaseStore + Supabase anonymous auth + 模型 key**(OpenRouter 或 Anthropic)。`SUPABASE_URL` / service key 由本地 edge runtime 自动注入;本地 JWT 的 issuer / audience / HS256 secret 由 [ADR-0009](0009-dev-uses-anonymous-auth.md) 定义的 `INCIPEL_SUPABASE_JWT_*` 环境变量补齐。
 - **一份 function 同一时刻只有一套配置。** 共用 edge function 的 `MODEL_PROVIDER` 与本地 JWT 校验配置是全局一套;谁的配置需求不同(要隔离数据、并行 E2E),谁就去起独立栈。每 worktree「自带一个内存版 agent」(旧 [worktree-dev.md](../worktree-dev.md) §选项 2)随 Node 入口一并消失。
 - **E2E = 按需起的 per-worktree 隔离栈。** E2E 会真实写入数据库,共用栈上并行会互相影响数据。改为:跑 E2E 时按 worktree 派生 `project_id` 与错开的整段端口,生成一份 gitignored 的 workdir(链入 migrations / seed,复制 functions,在 workdir 根目录链入 packages 供 Edge Function 相对 import 解析),`supabase start --workdir` 起栈 + serve function,跑完 `stop` 拆掉;日常仍只一套共用栈。之所以要文本生成 config:config.toml 的 `env()` 插值只支持字符串,**整数端口改不了**,无法靠环境变量动态错开。
 - **配置交给一个轻量 Node CLI。** 新增 `tools/incipel-dev`(依赖极少),子命令大致 `dev`(起共用栈 + serve agent + 写 env)、`e2e up|down`(生成 / 拆隔离 workdir)、`env sync`(写 `EXPO_PUBLIC_*` 与 `supabase/.env`)。它接手 `dev-agent.sh` 与 `worktree-dev-env.sh` 里 agent 相关的职责;选 Node 而非 bash,是因为生成 per-worktree config.toml 涉及 TOML 改写 / 模板 / 符号链接,bash 做这些易错。

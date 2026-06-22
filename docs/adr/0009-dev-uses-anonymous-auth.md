@@ -1,7 +1,7 @@
 # 本地开发默认使用匿名登录,不跳过身份校验
 
 > Status: accepted ·
-> 修订 [ADR-0007](0007-edge-only-agent-runtime.md) 中“本地 dev 用 `DEV_NO_AUTH` 跳过鉴权”的决定。延续 [ADR-0005](0005-auth-entry-in-v1.md) 中“登录页是入口,「先随便逛逛」走匿名登录”的产品决定。
+> 修订 [ADR-0008](0008-edge-only-agent-runtime.md) 中“本地 dev 用 `DEV_NO_AUTH` 跳过鉴权”的决定。延续 [ADR-0005](0005-auth-entry-in-v1.md) 中“登录页是入口,「先随便逛逛」走匿名登录”的产品决定。
 
 ## 背景
 

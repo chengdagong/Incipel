@@ -60,7 +60,7 @@ fi
 # 模拟器自身,这几条 reverse 让设备上的 localhost:<port> 直达宿主机,从而与 iOS 行为一致:
 #   - Metro:加载 bundle
 #   - Supabase / Agent:共用本地栈的 API 端口(agent edge function 挂在它的 /functions/v1/agent
-#     下,见 ADR-0007;reverse 这一个端口就同时覆盖 EXPO_PUBLIC_SUPABASE_URL 与 EXPO_PUBLIC_AGENT_URL)。
+#     下,见 ADR-0008;reverse 这一个端口就同时覆盖 EXPO_PUBLIC_SUPABASE_URL 与 EXPO_PUBLIC_AGENT_URL)。
 adb -s "$ANDROID_SERIAL" reverse tcp:"$EXPO_PORT" tcp:"$EXPO_PORT"
 SUPA_PORT="$(awk '/^\[api\]/{f=1} f&&/^port[[:space:]]*=/{gsub(/[^0-9]/,""); print; exit}' "$REPO_ROOT/supabase/config.toml" 2>/dev/null || true)"
 if [ -n "${SUPA_PORT:-}" ]; then

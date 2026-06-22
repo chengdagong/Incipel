@@ -10,11 +10,11 @@ agent/
 
 ## 唯一运行时:Edge Function
 
-agent 的应用本身(路由 / 鉴权 / SSE 编排)在 `packages/agent/src/app.ts` 的 `createApp(basePath)`,运行时无关;唯一受支持的运行时是 Supabase Edge Function(见 [ADR-0007](../../docs/adr/0007-edge-only-agent-runtime.md))。
+agent 的应用本身(路由 / 鉴权 / SSE 编排)在 `packages/agent/src/app.ts` 的 `createApp(basePath)`,运行时无关;唯一受支持的运行时是 Supabase Edge Function(见 [ADR-0008](../../docs/adr/0008-edge-only-agent-runtime.md))。
 
 - **Edge 入口**(本目录):`Deno.serve(createApp('/agent').fetch)`。Supabase 网关把 `/functions/v1/agent/…` 以 `/agent/…` 交给运行时,故路由加 `/agent` 前缀。
 - 环境变量经 `app` 内的 `env()` 读取(先 `Deno.env`,再 `process.env`)。
-- `createApp` 仍运行时无关:真撞 Edge 时长 / CPU 上限需迁专用主机时,加回一个 ~30 行的 Node 入口 + `@hono/node-server` 即可(休眠可恢复的退路,见 ADR-0007 / [ADR-0002](../../docs/adr/0002-agent-runtime-hono-edge-sse.md))。
+- `createApp` 仍运行时无关:真撞 Edge 时长 / CPU 上限需迁专用主机时,加回一个 ~30 行的 Node 入口 + `@hono/node-server` 即可(休眠可恢复的退路,见 ADR-0008 / [ADR-0002](../../docs/adr/0002-agent-runtime-hono-edge-sse.md))。
 
 > 跨运行时模块解析:agent 源码内部相对 import 写显式 `.ts` 扩展名;`@incipel/shared` 经 `deno.json` 映射到 `packages/shared/src/index.deno.ts`(显式 `.ts` re-export)。客户端(Metro)与 Node 测试仍走无扩展名的 `index.ts`。如此不依赖 Deno 的 unstable `sloppy-imports`,部署稳定。
 

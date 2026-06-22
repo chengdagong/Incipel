@@ -17,7 +17,7 @@ pnpm dev:android -- --dev-client
 INCIPEL_SKIP_AGENT=1 pnpm dev:ios # 不自动起 agent(你已在别处前台跑 dev:agent 时)
 ```
 
-`pnpm dev:ios` / `dev:android` 起 Metro 前会先调 `tools/incipel-dev up`:确保共用栈在运行、并在**后台** serve agent edge function(已在跑则跳过)——所以平时一条命令就把前后端都带起来。新 worktree 首跑时,若 `apps/mobile` 缺依赖(以 `expo` 为探针),会先自动 `pnpm install`(pnpm 用全局内容寻址 store,命中时只是几秒硬链接、不重复下载,所以每个 worktree 装一次很轻;无需也无法靠「全局装 expo」省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库,记下模拟器名),并按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量。agent 已不是本地 Node 服务,**没有 per-worktree 端口**(见 [ADR-0007](adr/0007-edge-only-agent-runtime.md))。
+`pnpm dev:ios` / `dev:android` 起 Metro 前会先调 `tools/incipel-dev up`:确保共用栈在运行、并在**后台** serve agent edge function(已在跑则跳过)——所以平时一条命令就把前后端都带起来。新 worktree 首跑时,若 `apps/mobile` 缺依赖(以 `expo` 为探针),会先自动 `pnpm install`(pnpm 用全局内容寻址 store,命中时只是几秒硬链接、不重复下载,所以每个 worktree 装一次很轻;无需也无法靠「全局装 expo」省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库,记下模拟器名),并按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量。agent 已不是本地 Node 服务,**没有 per-worktree 端口**(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md))。
 
 ## 三层隔离
 
@@ -34,7 +34,7 @@ INCIPEL_SKIP_AGENT=1 pnpm dev:ios # 不自动起 agent(你已在别处前台跑 
 
 ## Agent 与 Supabase(后端)
 
-agent 唯一运行时是 Supabase Edge Function(见 [ADR-0007](adr/0007-edge-only-agent-runtime.md)),它就跑在本地 Supabase 栈的 edge runtime 里——后端只剩「一套 Supabase 栈」这一个进程,不再有单独的 Node agent 端口。
+agent 唯一运行时是 Supabase Edge Function(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md)),它就跑在本地 Supabase 栈的 edge runtime 里——后端只剩「一套 Supabase 栈」这一个进程,不再有单独的 Node agent 端口。
 
 - **agent(edge function)**:本地 `supabase start` **不会**自动 serve 函数,必须另跑 `supabase functions serve`(它常驻、热重载)。所以 `pnpm dev:ios` / `dev:android` 经 `tools/incipel-dev up` 在**后台**拉起这个 serve(detached,日志/PID 落 `os.tmpdir()`,探 `/health` 确认),不阻塞 Metro;想在前台看 agent 日志就单独 `pnpm dev:agent`(= `up` 的前台版,别和后台的同时跑)。两条路都会把 `apps/mobile/.env`(`EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` / `EXPO_PUBLIC_AGENT_URL`)与 `supabase/.env`(`INCIPEL_SUPABASE_JWT_*`)写好。客户端一律指向共用栈的 `<api>/functions/v1/agent`(`api` 端口取自 `supabase/config.toml` 的 `[api]`,默认 54521)。如果 `up` 实际改动了 `supabase/.env`,已在 serve 的后台 agent 会先停止 Edge Runtime 再重新启动,确保新环境变量生效。
   - 日常共用 dev 走 **Supabase anonymous auth**:无 session 时显示登录页,点击「先随便逛逛」创建 anonymous user;agent 校验 JWT 后使用 SupabaseStore 保存会话数据。不要把这条路径称作“免登录”;它仍有用户身份。

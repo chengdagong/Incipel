@@ -310,7 +310,7 @@ messages
 
 - **延迟**:TTFT 主要取决于模型;prompt caching 把系统提示与剧本前缀的处理成本降下来,首 token 更快。
 - **并发**:AG-UI run 是 I/O 密集(大多在等模型),单个轻量主机可扛大量并发 SSE。
-- **计算层部署**:v1 跑 Supabase Edge Function(Hono 编写),且 Edge 是唯一受支持的运行时(见 [ADR-0007](adr/0007-edge-only-agent-runtime.md))。Edge Function 有响应 / CPU 上限,长轮有撞限风险;因 agent 无状态 + `createApp` 仍运行时无关,**触发条件**满足时(单轮时长逼近上限,或并发/冷启动伤体验)迁到专用轻量主机(Cloud Run / Fly / Railway)——加回一个薄 Node 入口即可,不是重写(Node 入口已删,逻辑可移植性仍在,见 ADR-0007 / ADR-0002)。
+- **计算层部署**:v1 跑 Supabase Edge Function(Hono 编写),且 Edge 是唯一受支持的运行时(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md))。Edge Function 有响应 / CPU 上限,长轮有撞限风险;因 agent 无状态 + `createApp` 仍运行时无关,**触发条件**满足时(单轮时长逼近上限,或并发/冷启动伤体验)迁到专用轻量主机(Cloud Run / Fly / Railway)——加回一个薄 Node 入口即可,不是重写(Node 入口已删,逻辑可移植性仍在,见 ADR-0008 / ADR-0002)。
 - **跨设备同步**:v1 打开会话时重新拉取即可;需要实时再上 Supabase Realtime 推 `documents` 变更。
 - **成本主因**:每个有改动的轮约 2 次模型生成(多步:工具步 + 总结步)+ 每次骰子一次调用。控制手段:bounded context、prompt caching、骰子用便宜模型 + 限流。
 

@@ -12,7 +12,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     // 内部相对 import 可写显式 .ts 扩展名(Supabase Edge Function/Deno 的严格模块解析需要,
-    // 见 ADR-0007;连 type-only import 也要——edge runtime 建图阶段先解析、后擦类型)。
+    // 见 ADR-0008;连 type-only import 也要——edge runtime 建图阶段先解析、后擦类型)。
     // 各包均 noEmit(tsc 仅类型检查),故此项有效。
     "allowImportingTsExtensions": true,
     "baseUrl": ".",

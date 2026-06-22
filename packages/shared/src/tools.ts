@@ -1,6 +1,6 @@
 import { z } from 'zod';
 // 显式 .ts 扩展名:Supabase 的 edge runtime 在「建模块图」阶段就解析这条 import(即便是
-// type-only,也是先找文件、后擦类型),无扩展名会 boot 失败(见 ADR-0007)。Metro/Babel 仍会
+// type-only,也是先找文件、后擦类型),无扩展名会 boot 失败(见 ADR-0008)。Metro/Babel 仍会
 // 把整行 type import 擦掉、不参与运行时解析;tsc 经 base 的 allowImportingTsExtensions 放行。
 import type { Screenplay } from './screenplay.ts';
 

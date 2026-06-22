@@ -285,7 +285,7 @@ function envSync(root) {
     }
     agentEnvChanged = true;
   }
-  // dev:* / env:sync 强制 Supabase backend + anonymous auth(见 ADR-0008):始终从 supabase/.env
+  // dev:* / env:sync 强制 Supabase backend + anonymous auth(见 ADR-0009):始终从 supabase/.env
   // 移除 DEV_NO_AUTH / STORE,杜绝把 memory / 免鉴权带进日常开发。要 memory-only / 免鉴权调试,
   // 不要走 dev 脚本——自己 `supabase functions serve --env-file <自备文件>`(unsetEnvVar 会打印移除日志)。
   agentEnvChanged = unsetEnvVar(fnEnv, 'DEV_NO_AUTH') || agentEnvChanged;
