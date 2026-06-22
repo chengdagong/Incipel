@@ -142,6 +142,10 @@ function envSync(root) {
       '# 日常共用 dev 免鉴权(见 ADR-0007):本地注入的 SUPABASE_URL 与 token 的 iss 不一致,',
       '# 且 SUPABASE_JWT_ISS 是 SUPABASE_ 前缀进不了 env-file,故统一用 DEV_NO_AUTH 跳过。',
       'DEV_NO_AUTH=1',
+      '# DEV_NO_AUTH=1 用固定的 dev-user,它不是合法的 auth.users UUID;必须配 STORE=memory',
+      '# (进程内存 store,不写库),否则首轮 create_session_if_missing(uuid) 会因 dev-user 非 UUID 失败。',
+      '# 要测真实持久化/历史:删掉 DEV_NO_AUTH 与 STORE(走真实匿名登录 + SupabaseStore)。',
+      'STORE=memory',
       '',
     ].join('\n');
     if (DRY) log(`  [dry-run] write supabase/.env (模板)`);
@@ -226,9 +230,11 @@ function dev(root) {
   log('▸ 检查共用 Supabase 栈');
   ensureStack(root);
   log('▸ serve agent(前台,免网关 JWT,鉴权由 app 内 authenticate / DEV_NO_AUTH 决定)');
-  run('supabase', ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'], {
+  const r = run('supabase', ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'], {
     cwd: root,
   });
+  // 传递 serve 的失败退出码(端口占用 / Deno 解析错 / Docker 问题),别把启动失败当成功退出。
+  if (r.code !== 0) process.exit(r.code);
 }
 
 // ── up:确保「共用栈 + agent serve」就绪(serve 走后台,不阻塞)──────────────────
