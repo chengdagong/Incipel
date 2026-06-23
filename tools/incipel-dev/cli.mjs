@@ -24,6 +24,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 // 管道被下游(如 `| head`)提前关闭时,别让 EPIPE 把进程打成未捕获异常。
 process.stdout.on('error', (e) => {
@@ -498,6 +499,16 @@ function stopKnownAgentServe(pidPath) {
   }
 }
 
+function processAlive(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureAgentServe(root, { restart = false } = {}) {
   const apiPort = canonicalApiPort(root);
   const paths = agentPaths(root);
@@ -593,6 +604,108 @@ async function ensureAgentServe(root, { restart = false } = {}) {
   log('  agent 仍在后台编译启动(首次较慢),稍候即可;有问题看上面的日志。');
 }
 
+async function ensureAgentWatcher(root) {
+  const paths = agentPaths(root);
+  const snapshot = agentSnapshot(root);
+  const meta = readJson(paths.watcherMeta);
+  if (
+    meta?.repoRoot === root &&
+    meta?.functionName === AGENT_FUNCTION &&
+    meta?.watchedPathsHash === snapshot.watchedPathsHash &&
+    processAlive(Number(meta.pid))
+  ) {
+    log('  agent watcher 已在监控当前 worktree,跳过');
+    return;
+  }
+
+  if (meta && (meta.repoRoot !== root || meta.functionName !== AGENT_FUNCTION)) {
+    log('  agent watcher metadata does not match current worktree, restarting');
+  } else if (meta && meta.watchedPathsHash !== snapshot.watchedPathsHash) {
+    log('  agent watcher watched paths changed, restarting');
+  } else if (meta && !processAlive(Number(meta.pid))) {
+    log('  agent watcher 进程不在,重新启动');
+  } else {
+    log('  agent watcher metadata missing, starting');
+  }
+
+  const cliPath = fileURLToPath(import.meta.url);
+  const watchArgs = [cliPath, 'agent', 'watch'];
+  if (DRY) {
+    log(`  [dry-run] detached: node tools/incipel-dev/cli.mjs agent watch`);
+    log(`  [dry-run] watcher 日志 ${paths.watcherLog} / metadata ${paths.watcherMeta}`);
+    return;
+  }
+
+  const fd = openSync(paths.watcherLog, 'a');
+  const child = spawn(process.execPath, watchArgs, { cwd: root, detached: true, stdio: ['ignore', fd, fd] });
+  child.unref();
+  writeJson(paths.watcherMeta, {
+    repoRoot: root,
+    functionName: AGENT_FUNCTION,
+    pid: child.pid ?? null,
+    command: `node tools/incipel-dev/cli.mjs agent watch`,
+    logPath: paths.watcherLog,
+    watchedPathsHash: snapshot.watchedPathsHash,
+    sourceFiles: snapshot.sourceFiles,
+    status: 'starting',
+    updatedAt: new Date().toISOString(),
+  });
+  log(`  已后台启动 agent watcher(pid ${child.pid ?? '?'});日志 ${paths.watcherLog}`);
+}
+
+async function watchAgent(root) {
+  const paths = agentPaths(root);
+  let snapshot = agentSnapshot(root);
+  writeJson(paths.watcherMeta, {
+    repoRoot: root,
+    functionName: AGENT_FUNCTION,
+    pid: process.pid,
+    command: 'node tools/incipel-dev/cli.mjs agent watch',
+    logPath: paths.watcherLog,
+    watchedPathsHash: snapshot.watchedPathsHash,
+    sourceFiles: snapshot.sourceFiles,
+    sourceHash: snapshot.sourceHash,
+    envHash: snapshot.envHash,
+    status: 'watching',
+    updatedAt: new Date().toISOString(),
+  });
+  log('agent watcher started');
+  for (;;) {
+    await sleep(1000);
+    const next = agentSnapshot(root);
+    const changed =
+      next.sourceHash !== snapshot.sourceHash ||
+      next.envHash !== snapshot.envHash ||
+      next.watchedPathsHash !== snapshot.watchedPathsHash;
+    if (!changed) continue;
+
+    await sleep(300);
+    const stable = agentSnapshot(root);
+    const stillChanged =
+      stable.sourceHash !== snapshot.sourceHash ||
+      stable.envHash !== snapshot.envHash ||
+      stable.watchedPathsHash !== snapshot.watchedPathsHash;
+    if (!stillChanged) continue;
+
+    log('agent source/env changed; restarting serve');
+    await ensureAgentServe(root, { restart: true });
+    snapshot = stable;
+    writeJson(paths.watcherMeta, {
+      repoRoot: root,
+      functionName: AGENT_FUNCTION,
+      pid: process.pid,
+      command: 'node tools/incipel-dev/cli.mjs agent watch',
+      logPath: paths.watcherLog,
+      watchedPathsHash: snapshot.watchedPathsHash,
+      sourceFiles: snapshot.sourceFiles,
+      sourceHash: snapshot.sourceHash,
+      envHash: snapshot.envHash,
+      status: 'watching',
+      updatedAt: new Date().toISOString(),
+    });
+  }
+}
+
 // ── dev:起共用栈(若未起)+ env sync + 前台 serve agent(带热重载日志)──────────
 function dev(root) {
   log('▸ 检查共用 Supabase 栈');
@@ -616,6 +729,8 @@ async function up(root) {
   const synced = envSync(root);
   log('▸ 确保 agent edge function 在 serve');
   await ensureAgentServe(root, { restart: synced.agentEnvChanged });
+  log('▸ 确保 agent watcher 在监控当前 worktree');
+  await ensureAgentWatcher(root);
 }
 
 // ── E2E 隔离栈 ────────────────────────────────────────────────────────────────
@@ -774,6 +889,10 @@ switch (cmd) {
     if (sub === 'up') e2eUp(root);
     else if (sub === 'down') e2eDown(root);
     else fail('用法: e2e up | e2e down');
+    break;
+  case 'agent':
+    if (sub === 'watch') await watchAgent(root);
+    else fail('用法: agent watch');
     break;
   case 'help':
   case undefined:

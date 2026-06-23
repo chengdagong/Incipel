@@ -267,7 +267,7 @@ CODEX_DOCS_REVIEWED=1 git commit -m "feat(dev): record agent serve metadata"
 - Modify: `tools/incipel-dev/cli.test.mjs`
 - Modify: `tools/incipel-dev/cli.mjs`
 
-- [ ] **Step 1: Add failing tests for watcher startup**
+- [x] **Step 1: Add failing tests for watcher startup**
 
 Add tests:
 
@@ -287,7 +287,7 @@ test('up dry-run restarts watcher when watcher metadata belongs to another workt
 });
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -297,7 +297,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: watcher tests fail because no watcher command exists.
 
-- [ ] **Step 3: Add hidden watcher command**
+- [x] **Step 3: Add hidden watcher command**
 
 Add command routing:
 
@@ -311,7 +311,7 @@ case 'agent':
 
 Update the header help to mention public `agent stop`. Keep `agent watch` internal by documenting it in comments near the switch, not in user-facing docs.
 
-- [ ] **Step 4: Add watcher metadata validation and startup**
+- [x] **Step 4: Add watcher metadata validation and startup**
 
 Add `ensureAgentWatcher(root)`:
 
@@ -333,7 +333,7 @@ async function ensureAgentWatcher(root) {
 }
 ```
 
-- [ ] **Step 5: Wire watcher into `up`**
+- [x] **Step 5: Wire watcher into `up`**
 
 After `await ensureAgentServe(...)`, call:
 
@@ -342,7 +342,7 @@ log('▸ 确保 agent watcher 在监控当前 worktree');
 await ensureAgentWatcher(root);
 ```
 
-- [ ] **Step 6: Implement polling watcher**
+- [x] **Step 6: Implement polling watcher**
 
 `watchAgent(root)` should:
 
@@ -354,15 +354,15 @@ await ensureAgentWatcher(root);
 
 Use polling rather than adding `chokidar`; this keeps `tools/incipel-dev` dependency-free and works in the current Node >=20 environment.
 
-- [ ] **Step 7: Add focused watcher restart test**
+- [x] **Step 7: Add focused watcher restart test**
 
 Create a test that runs `node tools/incipel-dev/cli.mjs agent watch` in a temp repo with fake `supabase` / `docker` commands, changes `packages/agent/src/app.ts`, waits for fake command log output, and asserts only one restart after repeated saves.
 
-- [ ] **Step 8: Add non-watched path test**
+- [x] **Step 8: Add non-watched path test**
 
 Run watcher, change `apps/mobile/src/ignored.ts` and `docs/ignored.md`, wait at least two polling intervals, and assert fake command log has no restart.
 
-- [ ] **Step 9: Run tests and verify GREEN**
+- [x] **Step 9: Run tests and verify GREEN**
 
 Run:
 
@@ -372,7 +372,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: watcher startup, watcher restart, and non-watched path tests pass.
 
-- [ ] **Step 10: Commit Task 3**
+- [x] **Step 10: Commit Task 3**
 
 ```bash
 git add tools/incipel-dev/cli.mjs tools/incipel-dev/cli.test.mjs

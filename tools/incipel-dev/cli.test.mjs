@@ -25,6 +25,20 @@ function mustRun(bin, args, cwd) {
   return res;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitFor(fn, { timeoutMs = 5000, intervalMs = 100 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const value = await fn();
+    if (value) return value;
+    await sleep(intervalMs);
+  }
+  throw new Error(`condition not met within ${timeoutMs}ms`);
+}
+
 function sha1(text) {
   return createHash('sha1').update(text).digest('hex');
 }
@@ -34,6 +48,7 @@ function metadataPaths(root) {
   return {
     serveMeta: path.join(tmpdir(), `incipel-agent-serve-${token}.json`),
     servePid: path.join(tmpdir(), `incipel-agent-serve-${token}.pid`),
+    watcherMeta: path.join(tmpdir(), `incipel-agent-watcher-${token}.json`),
   };
 }
 
@@ -51,6 +66,45 @@ function cleanupMetadata(root) {
   }
   rmSync(paths.serveMeta, { force: true });
   rmSync(paths.servePid, { force: true });
+  rmSync(paths.watcherMeta, { force: true });
+}
+
+function sourceFiles(root) {
+  return [
+    'packages/agent/model.config.json',
+    'packages/agent/src/app.ts',
+    'packages/shared/src/tools.ts',
+    'supabase/functions/agent/deno.json',
+    'supabase/functions/agent/index.ts',
+  ];
+}
+
+function hashFiles(root, files) {
+  const h = createHash('sha1');
+  for (const file of files) {
+    h.update(file);
+    h.update('\0');
+    h.update(readFileSync(path.join(root, file)));
+    h.update('\0');
+  }
+  return h.digest('hex');
+}
+
+function matchingServeMetadata(root) {
+  const files = sourceFiles(root);
+  return {
+    repoRoot: root,
+    functionName: 'agent',
+    pid: 12345,
+    command: 'supabase functions serve agent --env-file supabase/.env --no-verify-jwt',
+    logPath: path.join(tmpdir(), `incipel-agent-serve-${sha1(root).slice(0, 8)}.log`),
+    sourceHash: hashFiles(root, files),
+    envHash: sha1(readFileSync(path.join(root, 'supabase', '.env'), 'utf8')),
+    watchedPathsHash: sha1(files.join('\n')),
+    sourceFiles: files,
+    status: 'ready',
+    updatedAt: '2026-06-23T00:00:00.000Z',
+  };
 }
 
 function writeAgentFixture(root, port) {
@@ -448,6 +502,158 @@ test('up writes current-worktree serve metadata when starting detached agent', a
     assert.match(meta.envHash, /^[a-f0-9]{40}$/);
     assert.equal(meta.status, 'ready');
   } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up dry-run starts watcher when watcher metadata is missing', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+
+  try {
+    writeAgentFixture(tmp, port);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    writeFileSync(metadataPaths(root).serveMeta, JSON.stringify(matchingServeMetadata(root), null, 2));
+
+    const res = run('node', [cli, 'up', '--dry-run'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /agent edge function 已在 serve\(\/health 正常\),跳过/);
+    assert.match(res.stdout, /确保 agent watcher 在监控当前 worktree/);
+    assert.match(res.stdout, /\[dry-run\] detached: node .*tools\/incipel-dev\/cli\.mjs agent watch/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up dry-run restarts watcher when watcher metadata belongs to another worktree', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+
+  try {
+    writeAgentFixture(tmp, port);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    writeFileSync(metadataPaths(root).serveMeta, JSON.stringify(matchingServeMetadata(root), null, 2));
+    writeFileSync(
+      metadataPaths(root).watcherMeta,
+      JSON.stringify(
+        {
+          repoRoot: `${root}-other`,
+          functionName: 'agent',
+          pid: 12345,
+          watchedPathsHash: matchingServeMetadata(root).watchedPathsHash,
+        },
+        null,
+        2,
+      ),
+    );
+
+    const res = run('node', [cli, 'up', '--dry-run'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /agent watcher metadata does not match current worktree, restarting/);
+    assert.match(res.stdout, /\[dry-run\] detached: node .*tools\/incipel-dev\/cli\.mjs agent watch/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('agent watcher restarts serve once for repeated watched source changes', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+  const serveLog = path.join(tmp, 'serve.log');
+  const dockerLog = path.join(tmp, 'docker.log');
+  let watcher;
+
+  try {
+    writeAgentFixture(tmp, port);
+    makeFakeSupabaseServe(tmp, port);
+    writeFakeDocker(tmp);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+
+    watcher = spawn(process.execPath, [cli, 'agent', 'watch'], {
+      cwd: tmp,
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    await waitFor(() => existsSync(metadataPaths(root).watcherMeta));
+
+    writeFileSync(path.join(tmp, 'packages', 'agent', 'src', 'app.ts'), 'export const app = "changed-1";\n');
+    writeFileSync(path.join(tmp, 'packages', 'agent', 'src', 'app.ts'), 'export const app = "changed-2";\n');
+
+    await waitFor(() => existsSync(serveLog) && readFileSync(serveLog, 'utf8').includes('functions serve agent'));
+    await sleep(1500);
+    const serveLines = readFileSync(serveLog, 'utf8').trim().split('\n').filter(Boolean);
+    assert.equal(serveLines.length, 1);
+  } finally {
+    if (watcher) watcher.kill('SIGTERM');
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('agent watcher ignores mobile docs tests and migration changes', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+  const serveLog = path.join(tmp, 'serve.log');
+  const dockerLog = path.join(tmp, 'docker.log');
+  let watcher;
+
+  try {
+    writeAgentFixture(tmp, port);
+    makeFakeSupabaseServe(tmp, port);
+    writeFakeDocker(tmp);
+    mkdirSync(path.join(tmp, 'apps', 'mobile', 'src'), { recursive: true });
+    mkdirSync(path.join(tmp, 'docs'), { recursive: true });
+    mkdirSync(path.join(tmp, 'supabase', 'migrations'), { recursive: true });
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+
+    watcher = spawn(process.execPath, [cli, 'agent', 'watch'], {
+      cwd: tmp,
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    await waitFor(() => existsSync(metadataPaths(root).watcherMeta));
+
+    writeFileSync(path.join(tmp, 'apps', 'mobile', 'src', 'ignored.ts'), 'export const ignored = true;\n');
+    writeFileSync(path.join(tmp, 'docs', 'ignored.md'), '# ignored\n');
+    writeFileSync(path.join(tmp, 'supabase', 'migrations', '9999_ignored.sql'), 'select 1;\n');
+    await sleep(1800);
+
+    assert.equal(existsSync(serveLog), false);
+  } finally {
+    if (watcher) watcher.kill('SIGTERM');
     const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
     cleanupMetadata(root);
     health.child.kill();
