@@ -129,18 +129,27 @@ export class SupabaseStore implements Store {
     const state = normalizeScreenplay((doc?.state as Screenplay | null) ?? emptyScreenplay());
 
     // 完整对话历史(ADR-0010):取该会话全部消息,按时间正序给 prompt;不再截断成「最近 N 条」。
-    // 长会话的 token / 上下文窗口规模由 compact 机制约束(见 issue #49)。
-    const { data: rows, error: mErr } = await db
-      .from('messages')
-      .select('role, text, created_at')
-      .eq('session_id', threadId)
-      .order('created_at', { ascending: true });
-    if (mErr) throw new StoreError(`加载消息失败: ${mErr.message}`);
-
-    const history: PromptMessage[] = (rows ?? []).map((r) => ({
-      role: r.role === 'assistant' ? 'assistant' : 'user',
-      text: String(r.text ?? ''),
-    }));
+    // 分页读完——PostgREST 单次返回受 supabase/config.toml 的 max_rows(=1000)限制,不分页会
+    // 在长会话里只拿到前 1000 条(因升序读,丢的恰是最新消息);用 .range() 逐页读尽。
+    // 用 (created_at, id) 的全序排序保证翻页不漏不重。长会话的 token / 上下文窗口规模由 compact
+    // 机制约束(见 issue #49)。PAGE 须 ≤ max_rows,否则「满页 < PAGE」会提前判终。
+    const PAGE = 1000;
+    const history: PromptMessage[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data: rows, error: mErr } = await db
+        .from('messages')
+        .select('role, text, created_at, id')
+        .eq('session_id', threadId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (mErr) throw new StoreError(`加载消息失败: ${mErr.message}`);
+      if (!rows || rows.length === 0) break;
+      for (const r of rows) {
+        history.push({ role: r.role === 'assistant' ? 'assistant' : 'user', text: String(r.text ?? '') });
+      }
+      if (rows.length < PAGE) break; // 最后一页(不足整页)
+    }
 
     return { threadId, userId: session.user_id, state, history };
   }
