@@ -19,6 +19,7 @@ The project currently has one Edge Function, `supabase/functions/agent`. This de
 - The file watcher must also belong to the current `worktree` and monitor paths under that same `worktree`.
 - After files that affect `agent` change, the next local request should use the current source and environment variables.
 - Existing commands should remain the entry points: `pnpm dev:ios`, `pnpm dev:android`, `pnpm dev:agent`, and `pnpm dx up`.
+- `Ctrl+C` in Metro should not be required to clean up agent background processes, but there must be an explicit stop command for local cleanup.
 - The implementation must be done in the isolated branch and `worktree` listed at the top of this document.
 
 ## Non-goals
@@ -93,6 +94,27 @@ Restart sequence:
 
 Stopping the Edge Runtime container affects the shared local Supabase stack. That is acceptable for this project because daily development already assumes one active dev environment. The command output and docs must state this clearly.
 
+## Explicit stop command
+
+`agent serve` and `agent watcher` are background processes. They should not automatically exit when the user presses `Ctrl+C` in Metro. Keeping them running preserves the current development behavior: the local Supabase stack and served agent remain ready for the next mobile start.
+
+Add an explicit stop command:
+
+```bash
+pnpm dx agent stop
+```
+
+This command should:
+
+1. Read current `worktree` metadata.
+2. Stop only the `agent watcher` and `agent serve` PIDs whose metadata has `repoRoot` equal to the current `worktree` root.
+3. Use `SIGTERM`, then `SIGKILL` if the process does not exit.
+4. Stop the local Edge Runtime container only when it is stopping a serve process owned by the current `worktree`.
+5. Print the affected PID and log paths.
+6. Leave the local Supabase database, auth, storage, and other stack containers running.
+
+If metadata is missing or belongs to another `worktree`, the command should report that it has nothing safe to stop. It must not stop processes by broad process-name matching.
+
 ## Failure handling
 
 - If `supabase functions serve` exits immediately, `up` should fail with the log path instead of starting Metro against an unavailable agent.
@@ -109,6 +131,8 @@ Add tests in `tools/incipel-dev/cli.test.mjs` using temporary directories and fa
 - Missing watcher metadata, a dead watcher PID, or watcher metadata from another `worktree` causes watcher restart.
 - Changing `packages/agent/src/app.ts` or `packages/shared/src/tools.ts` triggers one restart after repeated save events are combined.
 - Changing `apps/mobile`, docs, tests, or migration files does not restart `agent`.
+- `pnpm dx agent stop` stops only watcher and serve processes whose metadata belongs to the current `worktree`.
+- `pnpm dx agent stop` does not stop processes when metadata is missing or points at another `worktree`.
 - `--dry-run` reports planned serve and watcher actions without writing PID or metadata files and without starting processes.
 
 Run these checks:
@@ -132,8 +156,8 @@ Both passed in the isolated `worktree`.
 Update these documents during implementation:
 
 - `CLAUDE.md`: `pnpm dev:ios` and `pnpm dev:android` confirm that the current `worktree`'s `agent` is being served and watched.
-- `docs/worktree-dev.md`: describe watcher responsibility, watched paths, metadata and log locations, and the shared Edge Runtime restart effect.
-- `supabase/functions/README.md`: explain that local `up` handles both env changes and source changes for `agent`.
+- `docs/worktree-dev.md`: describe watcher responsibility, watched paths, metadata and log locations, the explicit stop command, and the shared Edge Runtime restart effect.
+- `supabase/functions/README.md`: explain that local `up` handles both env changes and source changes for `agent`, and that `pnpm dx agent stop` performs explicit cleanup.
 
 ## Implementation constraint
 
