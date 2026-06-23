@@ -56,7 +56,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
 
   yield ev({ type: EventType.RUN_STARTED, threadId, runId });
 
-  // 载入权威剧本与最近对话(以 DB 为准,不信任 input.state)。失败直接 RUN_ERROR(无内容可编造)。
+  // 载入权威剧本与完整对话历史(以 DB 为准,不信任 input.state)。失败直接 RUN_ERROR(无内容可编造)。
   let loaded;
   try {
     loaded = await store.loadSession(threadId, input.userId);
@@ -103,7 +103,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
 
   const { system, prompt } = buildPrompt({
     state,
-    recent: loaded.recent,
+    history: loaded.history,
     userMessage: input.userMessage,
     assistantName: input.assistantName,
   });

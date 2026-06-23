@@ -1,10 +1,11 @@
 // 主管编剧(AI 助手)的 system 人格与每轮 prompt 拼装。
 // 产品名是「织幕」;助手角色名独立、且可由用户自定义,默认「主管编剧」(见 CONTEXT.md「名称」)。
 //
-// 上下文与成本策略(见 system-design §9):每轮不发完整 transcript,只发
+// 上下文策略(见 ADR-0010):模型上下文使用会话的**完整对话历史**(而非最近 N 条窗口),每轮发:
 //   1. SYSTEM(稳定不变,走 prompt caching);
 //   2. 当前剧本序列化文本(含各实体 id,作 cached prefix,变动小);
-//   3. 最近 6–10 轮对话 + 本轮新消息。
+//   3. 完整对话历史 + 本轮新消息。
+//   长会话的 token / 上下文窗口规模由 compact 机制约束(见 issue #49),不再用截断式的「最近 N 条」。
 
 import { type Screenplay } from '@incipel/shared';
 
@@ -13,9 +14,6 @@ export type PromptMessage = {
   role: 'user' | 'assistant';
   text: string;
 };
-
-// 每轮带进 prompt 的最近对话轮数上限(系统设计给的是 6–10 轮)。
-export const RECENT_MESSAGE_LIMIT = 10;
 
 // AI 助手的默认显示名。产品名是「织幕」(见 CONTEXT.md);助手角色名独立,默认「主管编剧」,
 // 且可由用户自定义。改名只换这里与调用方入参,人格内容不变。
@@ -125,17 +123,17 @@ export function serializeScreenplay(state: Screenplay): string {
   return lines.join('\n');
 }
 
-// 把最近若干轮对话拼成文本。助手发言用其显示名(默认「主管编剧」)标注。
-function serializeRecent(messages: PromptMessage[], assistantName: string): string {
+// 把完整对话历史拼成文本。助手发言用其显示名(默认「主管编剧」)标注。
+function serializeHistory(messages: PromptMessage[], assistantName: string): string {
   if (!messages.length) return '';
   const lines = messages.map((m) => `${m.role === 'user' ? '用户' : assistantName}: ${m.text}`);
-  return ['# 最近对话', ...lines].join('\n');
+  return ['# 对话历史', ...lines].join('\n');
 }
 
 export type BuildPromptInput = {
   state: Screenplay;
-  // 最近历史消息(不含本轮新消息);调用方应已截取到 ~RECENT_MESSAGE_LIMIT 条。
-  recent: PromptMessage[];
+  // 完整对话历史(不含本轮新消息),按时间正序。见 ADR-0010:模型上下文用全部消息,不截断。
+  history: PromptMessage[];
   // 本轮用户新消息。
   userMessage: string;
   // 助手显示名;缺省「主管编剧」。为日后「用户自定义助手名」预留:调用方可按会话/用户传入。
@@ -150,15 +148,14 @@ export type BuiltPrompt = {
 /**
  * 拼一轮的输入。
  * - system:buildSystem(assistantName)(同一助手名下稳定不变,走 prompt caching)。
- * - prompt:[剧本快照(cached prefix)] + [最近对话] + [本轮新消息]。
- *   剧本快照放在最前作为低变动前缀,利于缓存命中。
+ * - prompt:[剧本快照(cached prefix)] + [完整对话历史] + [本轮新消息]。
+ *   剧本快照放在最前作为低变动前缀,利于缓存命中。对话历史用全部消息、不截断(见 ADR-0010)。
  */
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   const assistantName = sanitizeAssistantName(input.assistantName);
-  const recent = input.recent.slice(-RECENT_MESSAGE_LIMIT);
   const parts = [
     serializeScreenplay(input.state),
-    serializeRecent(recent, assistantName),
+    serializeHistory(input.history, assistantName),
     `# 本轮用户消息\n${input.userMessage}`,
   ].filter((p) => p.length > 0);
 

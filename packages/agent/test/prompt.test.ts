@@ -7,7 +7,6 @@ import {
   buildPrompt,
   buildLoglinePrompt,
   buildSystem,
-  RECENT_MESSAGE_LIMIT,
   type PromptMessage,
 } from '../src/prompt';
 
@@ -49,34 +48,34 @@ describe('serializeScreenplay', () => {
 });
 
 describe('buildPrompt', () => {
-  it('system 为 buildSystem() 输出(默认助手名);prompt 含剧本快照、最近对话与本轮消息', () => {
-    const recent: PromptMessage[] = [
+  it('system 为 buildSystem() 输出(默认助手名);prompt 含剧本快照、对话历史与本轮消息', () => {
+    const history: PromptMessage[] = [
       { role: 'user', text: '想写末日废土' },
       { role: 'assistant', text: '好,先定个 logline' },
     ];
-    const { system, prompt } = buildPrompt({ state: sample(), recent, userMessage: '给两个人物' });
+    const { system, prompt } = buildPrompt({ state: sample(), history, userMessage: '给两个人物' });
     expect(system).toBe(buildSystem());
     expect(prompt).toContain('# 当前剧本');
-    expect(prompt).toContain('# 最近对话');
+    expect(prompt).toContain('# 对话历史');
     expect(prompt).toContain('用户: 想写末日废土');
     expect(prompt).toContain('主管编剧: 好,先定个 logline'); // 助手发言用默认显示名标注
     expect(prompt).toContain('# 本轮用户消息\n给两个人物');
   });
 
-  it('最近对话被截到 RECENT_MESSAGE_LIMIT', () => {
-    const recent: PromptMessage[] = Array.from({ length: RECENT_MESSAGE_LIMIT + 5 }, (_, i) => ({
+  it('完整对话历史不截断:全部历史消息都进入 prompt(ADR-0010)', () => {
+    const history: PromptMessage[] = Array.from({ length: 30 }, (_, i) => ({
       role: 'user' as const,
       text: `msg-${i}`,
     }));
-    const { prompt } = buildPrompt({ state: emptyScreenplay(), recent, userMessage: 'x' });
-    // 最早的 5 条被截掉。
-    expect(prompt).not.toContain('msg-0');
-    expect(prompt).toContain(`msg-${RECENT_MESSAGE_LIMIT + 4}`);
+    const { prompt } = buildPrompt({ state: emptyScreenplay(), history, userMessage: 'x' });
+    // 不再截断:最早与最新的都在。
+    expect(prompt).toContain('msg-0');
+    expect(prompt).toContain('msg-29');
   });
 
-  it('无最近对话时,「最近对话」段被过滤掉', () => {
-    const { prompt } = buildPrompt({ state: emptyScreenplay(), recent: [], userMessage: 'x' });
-    expect(prompt).not.toContain('# 最近对话');
+  it('无对话历史时,「对话历史」段被过滤掉', () => {
+    const { prompt } = buildPrompt({ state: emptyScreenplay(), history: [], userMessage: 'x' });
+    expect(prompt).not.toContain('# 对话历史');
     expect(prompt).toContain('# 本轮用户消息');
   });
 });

@@ -30,8 +30,8 @@ export type LoadedSession = {
   userId: string;
   // 权威剧本(以 DB 为准)。
   state: Screenplay;
-  // 最近 N 条消息,按时间正序(早 -> 晚)。
-  recent: PromptMessage[];
+  // 完整对话历史,按时间正序(早 -> 晚)。见 ADR-0010:模型上下文用全部消息,而非最近 N 条窗口。
+  history: PromptMessage[];
 };
 
 export type CreateSessionInput = {
@@ -62,8 +62,8 @@ export type SavedTurn = {
 
 // 一轮核心循环依赖的数据层契约(seam)。
 export interface Store {
-  // 据 threadId 载入权威剧本与最近对话。会话必须存在且属于该 userId。
-  loadSession(threadId: string, userId: string, recentLimit?: number): Promise<LoadedSession>;
+  // 据 threadId 载入权威剧本与完整对话历史。会话必须存在且属于该 userId。
+  loadSession(threadId: string, userId: string): Promise<LoadedSession>;
   // 若该 threadId 尚无会话则建会话 + 空剧本(forwardedProps 可带 accent/title);已存在则不动。
   createSessionIfMissing(input: CreateSessionInput): Promise<void>;
   // 一轮结束的原子落库,调用 save_turn RPC。
@@ -99,8 +99,8 @@ export function getServiceClient(): SupabaseClient {
 }
 
 export class SupabaseStore implements Store {
-  // 取 documents.state 与最近 N 条 messages。校验 session 归属传入的 userId。
-  async loadSession(threadId: string, userId: string, recentLimit = 10): Promise<LoadedSession> {
+  // 取 documents.state 与该会话的完整 messages。校验 session 归属传入的 userId。
+  async loadSession(threadId: string, userId: string): Promise<LoadedSession> {
     const db = getServiceClient();
 
     // 归属校验:session 必须属于该用户。
@@ -128,24 +128,21 @@ export class SupabaseStore implements Store {
     // attrs/role;载入即补齐,避免本轮 idSetsOf/serializeScreenplay 对 undefined 取属性而崩(见评审 #1)。
     const state = normalizeScreenplay((doc?.state as Screenplay | null) ?? emptyScreenplay());
 
-    // 最近 N 条消息:DB 取最新 N 条(倒序),再翻成正序给 prompt 用。
+    // 完整对话历史(ADR-0010):取该会话全部消息,按时间正序给 prompt;不再截断成「最近 N 条」。
+    // 长会话的 token / 上下文窗口规模由 compact 机制约束(见 issue #49)。
     const { data: rows, error: mErr } = await db
       .from('messages')
       .select('role, text, created_at')
       .eq('session_id', threadId)
-      .order('created_at', { ascending: false })
-      .limit(recentLimit);
+      .order('created_at', { ascending: true });
     if (mErr) throw new StoreError(`加载消息失败: ${mErr.message}`);
 
-    const recent: PromptMessage[] = (rows ?? [])
-      .slice()
-      .reverse()
-      .map((r) => ({
-        role: r.role === 'assistant' ? 'assistant' : 'user',
-        text: String(r.text ?? ''),
-      }));
+    const history: PromptMessage[] = (rows ?? []).map((r) => ({
+      role: r.role === 'assistant' ? 'assistant' : 'user',
+      text: String(r.text ?? ''),
+    }));
 
-    return { threadId, userId: session.user_id, state, recent };
+    return { threadId, userId: session.user_id, state, history };
   }
 
   // 若该 threadId 尚无会话:原子地建 sessions 行 + 与之 1:1 的 documents 行(初始空剧本)。

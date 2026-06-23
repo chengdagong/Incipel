@@ -20,7 +20,7 @@ export class MemoryStore implements Store {
   // 累计 saveTurn 实际生效的次数(被幂等跳过的不计),供测试断言重发不重复落库。
   public savedTurnCount = 0;
 
-  async loadSession(threadId: string, userId: string, recentLimit = 10): Promise<LoadedSession> {
+  async loadSession(threadId: string, userId: string): Promise<LoadedSession> {
     const s = this.sessions.get(threadId);
     if (!s) throw new Error(`会话不存在: ${threadId}`);
     if (s.userId !== userId) throw new Error('会话不属于该用户');
@@ -29,7 +29,8 @@ export class MemoryStore implements Store {
       userId: s.userId,
       // 返回引用:核心循环就地推进同一内存剧本(与线上一致)。
       state: s.state,
-      recent: s.messages.slice(-recentLimit),
+      // 完整对话历史(ADR-0010):返回全部消息,不截断。
+      history: s.messages.slice(),
     };
   }
 
