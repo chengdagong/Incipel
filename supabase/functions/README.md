@@ -60,7 +60,8 @@ supabase secrets set OPENROUTER_API_KEY=sk-or-... MODEL_PROVIDER=openrouter --pr
 
 ```bash
 pnpm dev:agent     # 前台:起共用栈(若未起)+ 同步 env + serve agent(看热重载日志用)
-pnpm dx up         # 后台:同上,但 serve 走 detached 不阻塞(pnpm dev:ios / dev:android 会自动调它)
+pnpm dx up         # 后台:同上,并启动 watcher 监控当前 worktree 的 agent 源码与 supabase/.env
+pnpm dx agent stop # 停止当前 worktree 的后台 watcher / serve,保留本地 Supabase 数据库等容器
 # 访问:http://127.0.0.1:54521/functions/v1/agent/health
 
 # 或全手动:
@@ -68,7 +69,7 @@ supabase start
 supabase functions serve agent --env-file supabase/.env --no-verify-jwt
 ```
 
-> `pnpm dev:ios` / `dev:android` 起 Metro 前会自动 `up`(起栈 + 后台 serve agent),所以平时跑客户端一条命令就够;设 `INCIPEL_SKIP_AGENT=1` 可跳过。`up` 已在 serve 且 `supabase/.env` 与上次后台 serve 时一致时(探 `/health`)不会重复启动;若 `up` 发现 `supabase/.env` 内容变化,会重启后台 Edge Runtime,让新环境变量生效。
+> `pnpm dev:ios` / `dev:android` 起 Metro 前会自动 `up`(起栈 + 后台 serve 当前 worktree 的 agent + 后台 watcher),所以平时跑客户端一条命令就够;设 `INCIPEL_SKIP_AGENT=1` 可跳过。`up` 不只探 `/health`:还会确认 serve / watcher metadata 的 `repoRoot` 是当前 worktree,并核对 agent 源码 hash、`supabase/.env` hash 与 watcher 监控路径。agent 源码或 `supabase/.env` 改动后,watcher 会重启 Edge Runtime 并重新 serve 当前 worktree 的 agent。`Ctrl+C` 退出 Metro 不会停止后台 watcher / serve;需要清理时运行 `pnpm dx agent stop`。
 
 > 日常共用 dev 走 Supabase anonymous auth:登录页点「先随便逛逛」后取得 session,agent 校验 JWT 并写入本地 Supabase 数据库。要隔离数据 / 跑 E2E 时用 `pnpm e2e:stack up` 起一套独立栈(见 [docs/worktree-dev.md](../../docs/worktree-dev.md))。
 
