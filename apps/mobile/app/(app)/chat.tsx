@@ -62,8 +62,11 @@ export default function ChatScreen() {
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
 
+  // 带 sessionId(从历史 / 作品 / 抽屉打开已有会话)时恢复历史消息与剧本;
+  // 新建创作(仅带 idea + 全新 threadId)无需恢复。
+  const reopening = !!params.sessionId;
   const { messages, screenplay, streamingText, options, isRunning, thinking, error, sendMessage, retry } =
-    useScreenplayAgent(threadId);
+    useScreenplayAgent(threadId, { hydrate: reopening });
 
   // 「作品」入口可带 view=doc 直接进文档视图。
   const [docOpen, setDocOpen] = useState(params.view === 'doc');
@@ -88,7 +91,18 @@ export default function ChatScreen() {
   // 记录上一版剧本快照;每当 assistant 文本数 +1(本轮结束)时刷新基线。
   const prevScreenplayRef = useRef<Screenplay>(emptyScreenplay());
   const assistantCountRef = useRef(0);
+  const reopenBaselineDone = useRef(false);
   const assistantCount = messages.filter((m) => m.role === 'assistant').length;
+
+  // 续写已有会话:恢复出历史消息与剧本后,把当前剧本设为「本轮新增」的对比基线。
+  // 否则既有的世界观 / 人物会被 diffCard 误判为本轮新增,在末条助手消息上错弹一张大卡片。
+  // 在渲染中惰性确立(仅一次),使紧接其后的 card 在同一渲染内即按正确基线计算。
+  if (reopening && !reopenBaselineDone.current && messages.length > 0) {
+    reopenBaselineDone.current = true;
+    prevScreenplayRef.current = screenplay;
+    assistantCountRef.current = assistantCount;
+  }
+
   const card = useMemo(() => {
     const c = diffCard(prevScreenplayRef.current, screenplay);
     return c;

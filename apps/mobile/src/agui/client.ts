@@ -17,8 +17,10 @@ import {
   type Screenplay,
   OPTIONS_EVENT_NAME,
   emptyScreenplay,
+  normalizeScreenplay,
 } from '@incipel/shared';
-import { getAccessToken } from '../supabase';
+import { getAccessToken, supabase } from '../supabase';
+import { orderStoredMessages, type StoredMessageRow } from './order-messages';
 
 const AGENT_URL = process.env.EXPO_PUBLIC_AGENT_URL;
 
@@ -48,6 +50,46 @@ export async function authHeaders(): Promise<Record<string, string>> {
 // 客户端生成 threadId(= 会话 id):欢迎页开始创作时调一次,传给 chat 屏。
 export function newThreadId(): string {
   return randomUUID();
+}
+
+// 续写已有会话时一次性恢复的历史消息上限。够展示近况;同时为续写时随 /run 回传的 messages
+// 数组留出服务端上限余量(见 packages/agent/src/app.ts 的 MAX_MESSAGES / 请求体字节上限)。
+// 注意:服务端只取 messages 里最后一条 user 文本,prompt 上下文另从数据库窗口重建,故回传历史
+// 既不污染模型上下文,也只受这两条上限约束。
+const MAX_HYDRATE_MESSAGES = 100;
+
+/**
+ * 打开已有会话时,直接从 Supabase 读它的权威剧本(documents.state)与历史消息(messages),
+ * 用于在不触发模型调用、不发 /run 的前提下,把对话与文档面板恢复到界面上。
+ *
+ * 数据来源与抽屉 / 历史 / 作品屏一致:都用 supabase-js 直查、靠 RLS 按 user_id 归属隔离
+ * (messages 的 SELECT 策略经 session 归属校验,见 supabase/migrations/0001_init.sql)。
+ * 全新会话(threadId 尚未落库)查不到任何行,返回 null。
+ */
+export async function loadSessionSnapshot(
+  threadId: string,
+): Promise<{ state: Screenplay; messages: Message[] } | null> {
+  const [docRes, msgRes] = await Promise.all([
+    supabase.from('documents').select('state').eq('session_id', threadId).maybeSingle(),
+    supabase
+      .from('messages')
+      .select('id, role, text, created_at')
+      .eq('session_id', threadId)
+      .order('created_at', { ascending: true })
+      .limit(MAX_HYDRATE_MESSAGES),
+  ]);
+  if (docRes.error) console.warn('[agui] 读取会话剧本失败:', docRes.error.message);
+  if (msgRes.error) console.warn('[agui] 读取会话消息失败:', msgRes.error.message);
+
+  const rawState = (docRes.data?.state ?? null) as Screenplay | null;
+  // 排序与同轮 user/assistant 次序的处理见 order-messages.ts(created_at 在同一轮里相等)。
+  const messages = orderStoredMessages(
+    (msgRes.data ?? []) as StoredMessageRow[],
+  ) as unknown as Message[];
+
+  if (!rawState && messages.length === 0) return null;
+  // 归一旧结构(与服务端 store.loadSession 一致),避免残缺历史剧本让文档面板 / 卡片取属性而崩。
+  return { state: normalizeScreenplay(rawState ?? emptyScreenplay()), messages };
 }
 
 /**
@@ -97,7 +139,14 @@ export type ScreenplayAgentApi = {
  * - onRunStarted/Finished/ErrorEvent → 运行状态与错误
  * 消息历史与 state 的维护交给 SDK(defaultApplyEvents);hook 只做镜像同步。
  */
-export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
+export function useScreenplayAgent(
+  threadId: string,
+  opts?: { hydrate?: boolean },
+): ScreenplayAgentApi {
+  // hydrate:打开已有会话(路由带 sessionId)时为真,挂载即从数据库恢复历史消息与剧本。
+  // 新建创作(欢迎页带 idea 的全新 threadId)为假:无可恢复内容,免一次必空的查询。
+  const hydrate = opts?.hydrate ?? false;
+
   // 每个 threadId 一个 agent 实例;threadId 变了就重建。
   const agentRef = useRef<HttpAgent | null>(null);
   if (agentRef.current === null || agentRef.current.threadId !== threadId) {
@@ -178,6 +227,30 @@ export function useScreenplayAgent(threadId: string): ScreenplayAgentApi {
     syncFromAgent();
     return () => sub.unsubscribe();
   }, [threadId]);
+
+  // 续写已有会话:挂载时直接从 Supabase 读该会话的历史消息与剧本,灌进 agent 实例,
+  // 让对话与文档面板恢复显示(不发 /run、不触发模型调用)。仅在 agent 尚无消息、且未在运行时
+  // 灌入,避免覆盖用户已开始的这一轮;全新会话查不到行(loadSessionSnapshot 返回 null),自然空操作。
+  useEffect(() => {
+    if (!hydrate) return;
+    let alive = true;
+    void (async () => {
+      const snapshot = await loadSessionSnapshot(threadId);
+      if (!alive || !snapshot) return;
+      const agent = agentRef.current;
+      if (!agent || agent.threadId !== threadId) return; // threadId 已切换,放弃这次恢复
+      if (agent.messages.length > 0 || agent.isRunning) return; // 已有内容 / 正在运行,不覆盖
+      // 先灌剧本再灌消息:即便两次 setState 未被批处理,messages 变非空时剧本也已是完整态,
+      // chat.tsx 的「本轮新增」对比基线据此不会把既有实体误判为本轮新增(见 chat.tsx 的 reopen 基线)。
+      agent.setState(snapshot.state as unknown as Record<string, unknown>);
+      agent.setMessages(snapshot.messages);
+      setScreenplay(agent.state as Screenplay);
+      setMessages([...agent.messages]);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [threadId, hydrate]);
 
   // 用指定 runId 跑一轮;捕获未走事件通道的异常(SDK 通常会转成 RUN_ERROR),避免 UI 卡在 running。
   const runWith = useCallback(async (runId: string) => {
