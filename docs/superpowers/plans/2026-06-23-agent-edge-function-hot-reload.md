@@ -385,7 +385,7 @@ CODEX_DOCS_REVIEWED=1 git commit -m "feat(dev): watch agent source changes"
 - Modify: `tools/incipel-dev/cli.test.mjs`
 - Modify: `tools/incipel-dev/cli.mjs`
 
-- [ ] **Step 1: Add failing stop-command tests**
+- [x] **Step 1: Add failing stop-command tests**
 
 Add tests:
 
@@ -403,7 +403,7 @@ test('agent stop dry-run ignores metadata from another worktree', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -413,7 +413,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: stop-command tests fail because `agent stop` does not exist.
 
-- [ ] **Step 3: Implement process helpers**
+- [x] **Step 3: Implement process helpers**
 
 Add:
 
@@ -437,7 +437,7 @@ async function stopPid(pid, label) {
 }
 ```
 
-- [ ] **Step 4: Implement `stopAgent(root)`**
+- [x] **Step 4: Implement `stopAgent(root)`**
 
 `stopAgent` should:
 
@@ -448,7 +448,7 @@ async function stopPid(pid, label) {
 5. Print log paths and metadata paths.
 6. If nothing matches, print `没有可安全停止的当前 worktree agent 进程`.
 
-- [ ] **Step 5: Run tests and verify GREEN**
+- [x] **Step 5: Run tests and verify GREEN**
 
 Run:
 
@@ -458,7 +458,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: stop-command tests pass.
 
-- [ ] **Step 6: Commit Task 4**
+- [x] **Step 6: Commit Task 4**
 
 ```bash
 git add tools/incipel-dev/cli.mjs tools/incipel-dev/cli.test.mjs

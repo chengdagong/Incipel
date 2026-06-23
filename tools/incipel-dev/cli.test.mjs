@@ -660,3 +660,80 @@ test('agent watcher ignores mobile docs tests and migration changes', async () =
     rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('agent stop dry-run stops only current-worktree metadata processes', () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: 11111, logPath: '/tmp/serve.log' }, null, 2),
+    );
+    writeFileSync(
+      metadataPaths(root).watcherMeta,
+      JSON.stringify(
+        {
+          repoRoot: root,
+          functionName: 'agent',
+          pid: 22222,
+          logPath: '/tmp/watcher.log',
+          watchedPathsHash: matchingServeMetadata(root).watchedPathsHash,
+        },
+        null,
+        2,
+      ),
+    );
+
+    const res = run('node', [cli, 'agent', 'stop', '--dry-run'], tmp);
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /\[dry-run\] kill 22222 \(agent watcher\)/);
+    assert.match(res.stdout, /\[dry-run\] kill 11111 \(agent serve\)/);
+    assert.match(res.stdout, /\[dry-run\] docker stop supabase_edge_runtime_incipel/);
+    assert.match(res.stdout, /\/tmp\/watcher\.log/);
+    assert.match(res.stdout, /\/tmp\/serve\.log/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('agent stop dry-run ignores metadata from another worktree', () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), repoRoot: `${root}-other`, pid: 11111 }, null, 2),
+    );
+    writeFileSync(
+      metadataPaths(root).watcherMeta,
+      JSON.stringify(
+        {
+          repoRoot: `${root}-other`,
+          functionName: 'agent',
+          pid: 22222,
+          watchedPathsHash: matchingServeMetadata(root).watchedPathsHash,
+        },
+        null,
+        2,
+      ),
+    );
+
+    const res = run('node', [cli, 'agent', 'stop', '--dry-run'], tmp);
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /没有可安全停止的当前 worktree agent 进程/);
+    assert.doesNotMatch(res.stdout, /kill 11111/);
+    assert.doesNotMatch(res.stdout, /kill 22222/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});

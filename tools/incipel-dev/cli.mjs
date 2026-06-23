@@ -15,6 +15,7 @@
 //   up               起共用栈(若未起)+ 同步 env + 后台 serve agent(不阻塞;dev:ios/android 会调它)
 //   env [sync]       起共用栈(若未起)+ 同步 env:写 apps/mobile/.env 的 EXPO_PUBLIC_*、
 //                    确保 supabase/.env 有本地 JWT 校验配置
+//   agent stop       停止当前 worktree 的后台 agent watcher / serve(不停止数据库 / auth / storage)
 //   e2e up           生成隔离 workdir + supabase start --workdir,打印该栈的 URL
 //   e2e down         supabase stop --workdir + 清理 workdir
 //   help
@@ -509,6 +510,72 @@ function processAlive(pid) {
   }
 }
 
+async function stopPid(pid, label) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  if (DRY) {
+    log(`  [dry-run] kill ${pid} (${label})`);
+    return true;
+  }
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (err) {
+    if (err?.code === 'ESRCH') {
+      log(`  ${label} 进程已不存在(pid ${pid})`);
+      return false;
+    }
+    log(`  注意:${label} 进程(pid ${pid}) 未停止:${err.message}`);
+    return false;
+  }
+  for (let i = 0; i < 15; i++) {
+    await sleep(100);
+    if (!processAlive(pid)) {
+      log(`  已停止 ${label} 进程(pid ${pid})`);
+      return true;
+    }
+  }
+  try {
+    process.kill(pid, 'SIGKILL');
+    log(`  已强制停止 ${label} 进程(pid ${pid})`);
+    return true;
+  } catch (err) {
+    if (err?.code === 'ESRCH') return true;
+    log(`  注意:${label} 进程(pid ${pid}) 未强制停止:${err.message}`);
+    return false;
+  }
+}
+
+function isCurrentAgentMeta(meta, root) {
+  return meta?.repoRoot === root && meta?.functionName === AGENT_FUNCTION;
+}
+
+async function stopAgent(root) {
+  const paths = agentPaths(root);
+  const watcherMeta = readJson(paths.watcherMeta);
+  const serveMeta = readJson(paths.serveMeta);
+  let stoppedAny = false;
+  let stoppedServe = false;
+
+  if (isCurrentAgentMeta(watcherMeta, root)) {
+    if (watcherMeta.logPath) log(`  agent watcher 日志:${watcherMeta.logPath}`);
+    stoppedAny = (await stopPid(Number(watcherMeta.pid), 'agent watcher')) || stoppedAny;
+    if (!DRY) rmSync(paths.watcherMeta, { force: true });
+  }
+
+  if (isCurrentAgentMeta(serveMeta, root)) {
+    if (serveMeta.logPath) log(`  agent serve 日志:${serveMeta.logPath}`);
+    stoppedServe = await stopPid(Number(serveMeta.pid), 'agent serve');
+    stoppedAny = stoppedServe || stoppedAny;
+    if (!DRY) {
+      rmSync(paths.serveMeta, { force: true });
+      rmSync(paths.servePid, { force: true });
+      rmSync(paths.serveEnvHash, { force: true });
+    }
+  }
+
+  if (stoppedServe) stopEdgeRuntime(root);
+  if (!stoppedAny) log('  没有可安全停止的当前 worktree agent 进程');
+}
+
 async function ensureAgentServe(root, { restart = false } = {}) {
   const apiPort = canonicalApiPort(root);
   const paths = agentPaths(root);
@@ -891,13 +958,14 @@ switch (cmd) {
     else fail('用法: e2e up | e2e down');
     break;
   case 'agent':
-    if (sub === 'watch') await watchAgent(root);
-    else fail('用法: agent watch');
+    if (sub === 'stop') await stopAgent(root);
+    else if (sub === 'watch') await watchAgent(root);
+    else fail('用法: agent stop | agent watch');
     break;
   case 'help':
   case undefined:
     help();
     break;
   default:
-    fail(`未知命令: ${cmd}(可用: dev | up | env sync | e2e up|down | help)`);
+    fail(`未知命令: ${cmd}(可用: dev | up | env sync | agent stop | e2e up|down | help)`);
 }
