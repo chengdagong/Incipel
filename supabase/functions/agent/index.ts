@@ -15,8 +15,8 @@
 // 设计一致(见 auth.ts、system-design §4)。如此 /health 也可不带 token 探活。
 //
 // 所需 secret(supabase secrets set;SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_JWKS
-// 由平台自动注入,无需手设):ANTHROPIC_API_KEY,以及可选的 MODEL_PROVIDER / TURN_MODEL /
-// LOGLINE_MODEL / OPENROUTER_API_KEY / OPENROUTER_MODEL。
+// 由平台自动注入,无需手设):OPENROUTER_API_KEY,以及可选的 MODEL_PROVIDER。
+// 模型 id / temperature / reasoning 配置在 packages/agent/model.config.json。
 
 import { createApp } from '../../../packages/agent/src/app.ts';
 

@@ -1,0 +1,25 @@
+{
+  "selected_provider": "openrouter",
+  "turn": {
+    "openrouter": {
+      "model": "openai/gpt-5.1:nitro",
+      "reasoning": { "enabled": false }
+    },
+    "stub": {
+      "model": "stub-turn",
+      "reasoning": { "enabled": false }
+    }
+  },
+  "logline": {
+    "openrouter": {
+      "model": "openai/gpt-5.1:nitro",
+      "temperature": 0.5,
+      "reasoning": { "enabled": false }
+    },
+    "stub": {
+      "model": "stub-logline",
+      "temperature": 0.5,
+      "reasoning": { "enabled": false }
+    }
+  }
+}

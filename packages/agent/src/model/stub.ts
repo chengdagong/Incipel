@@ -1,7 +1,7 @@
 // 确定性 stub provider(仅本地 / E2E 用,prod 永不设 MODEL_PROVIDER=stub)。
 //
 // 目的:让 Maestro 的「创作主路径」E2E 离线、可重复地跑——不花 token、不靠网络、每次产出一致。
-// 工厂 createModelProvider() 在 MODEL_PROVIDER=stub 时返回它;与 anthropic/openrouter 走同一条
+// 工厂 createModelProvider() 在 MODEL_PROVIDER=stub 时返回它;与 openrouter 走同一条
 // 核心循环(run.ts 的 runTurnCore),只是把「真实模型流」换成一段写死的脚本(给罐头答案=stub)。
 //
 // 与真实路径对齐的两点:
@@ -15,7 +15,7 @@ import type {
   ModelProvider,
   StreamChunk,
   StreamTurnInput,
-} from './provider';
+} from './provider.ts';
 
 // 一段写死的一轮:先两段文字,再用三个工具立起开头——设标题/logline、建一个核心人物、给两个走向。
 // 文案刻意具体(人物名「林夏」),便于 Maestro 用可见文本做断言锚点。

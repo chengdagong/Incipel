@@ -34,12 +34,14 @@ Edge 上由平台**自动注入**、无需也不能手设(平台禁止设 `SUPAB
 
 | Secret | 说明 |
 |---|---|
-| `ANTHROPIC_API_KEY` | 默认 provider 的 key(`MODEL_PROVIDER=anthropic` 时必需) |
-| `MODEL_PROVIDER` | `anthropic`(默认)或 `openrouter` |
-| `TURN_MODEL` / `LOGLINE_MODEL` | 可选,覆盖每轮 / logline 的模型 id |
-| `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | 仅 `MODEL_PROVIDER=openrouter` 时需要 |
+| `OPENROUTER_API_KEY` | OpenRouter provider 的 key(`MODEL_PROVIDER=openrouter` 时必需) |
+| `MODEL_PROVIDER` | `openrouter`(默认)或 `stub`(仅本地 / E2E) |
 
-本地 `pnpm env:sync` / `pnpm dx up` 会在只配置了一类模型 key 时补写 `MODEL_PROVIDER`:只有 `OPENROUTER_API_KEY` 时写 `openrouter`,只有 `ANTHROPIC_API_KEY` 时写 `anthropic`。两类 key 同时存在时不自动选择,请手动设置 `MODEL_PROVIDER`。
+模型 id、`temperature`、reasoning 开关和 token 预算集中在 `packages/agent/model.config.json`。OpenRouter 的 reasoning 会转成 `providerOptions.openrouter.reasoning`。
+如果同一个调用同时设置了 `reasoning.budgetTokens` 与 `reasoning.effort`,OpenRouter 优先使用
+token 预算,因为其 API 要求 `max_tokens` 与 `effort` 二选一。
+
+本地 `pnpm env:sync` / `pnpm dx up` 会在配置了 `OPENROUTER_API_KEY` 但没有设置 `MODEL_PROVIDER` 时补写 `MODEL_PROVIDER=openrouter`。
 
 校验客户端 JWT 默认走非对称签名 + JWKS(端点由 `SUPABASE_URL` 推出),故 Edge 上**不必**设 `SUPABASE_JWT_SECRET`(仅旧项目用对称 HS256 签名时才需要)。
 
@@ -47,7 +49,7 @@ Edge 上由平台**自动注入**、无需也不能手设(平台禁止设 `SUPAB
 
 ```bash
 # 一次性把模型密钥写进远端项目的 secrets(也可用 --env-file)
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-... MODEL_PROVIDER=anthropic --project-ref <project-ref>
+supabase secrets set OPENROUTER_API_KEY=sk-or-... MODEL_PROVIDER=openrouter --project-ref <project-ref>
 ```
 
 ## 本地运行(Deno)
@@ -66,7 +68,7 @@ supabase start
 supabase functions serve agent --env-file supabase/.env --no-verify-jwt
 ```
 
-> `pnpm dev:ios` / `dev:android` 起 Metro 前会自动 `up`(起栈 + 后台 serve agent),所以平时跑客户端一条命令就够;设 `INCIPEL_SKIP_AGENT=1` 可跳过。`up` 已在 serve 且 `supabase/.env` 与上次后台 serve 时一致时(探 `/health`)不会重复启动;若 `up` 发现 `supabase/.env` 内容变化,包括你手动改了 `OPENROUTER_MODEL` / `LOGLINE_MODEL`,会重启后台 Edge Runtime,让新环境变量生效。
+> `pnpm dev:ios` / `dev:android` 起 Metro 前会自动 `up`(起栈 + 后台 serve agent),所以平时跑客户端一条命令就够;设 `INCIPEL_SKIP_AGENT=1` 可跳过。`up` 已在 serve 且 `supabase/.env` 与上次后台 serve 时一致时(探 `/health`)不会重复启动;若 `up` 发现 `supabase/.env` 内容变化,会重启后台 Edge Runtime,让新环境变量生效。
 
 > 日常共用 dev 走 Supabase anonymous auth:登录页点「先随便逛逛」后取得 session,agent 校验 JWT 并写入本地 Supabase 数据库。要隔离数据 / 跑 E2E 时用 `pnpm e2e:stack up` 起一套独立栈(见 [docs/worktree-dev.md](../../docs/worktree-dev.md))。
 

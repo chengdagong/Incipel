@@ -13,7 +13,6 @@ delete process.env.STORE;
 // 若 export 了这些会误判,故显式清空,使测试不依赖宿主环境(与 auth.test.ts 一致,见评审 #3)。
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-delete process.env.ANTHROPIC_API_KEY;
 delete process.env.OPENROUTER_API_KEY;
 delete process.env.MODEL_PROVIDER;
 const app = createApp();

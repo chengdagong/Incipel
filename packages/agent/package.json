@@ -11,7 +11,6 @@
   },
   "dependencies": {
     "@ag-ui/core": "0.0.57",
-    "@ai-sdk/anthropic": "^1.0.0",
     "@incipel/shared": "workspace:*",
     "@openrouter/ai-sdk-provider": "0.7.3",
     "@supabase/supabase-js": "^2.45.0",

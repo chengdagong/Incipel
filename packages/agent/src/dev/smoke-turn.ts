@@ -1,7 +1,7 @@
 // 冒烟脚本:用真实 OpenRouter provider + 内存 store 跑几条真实回合,验证核心循环可跑、结构不变量成立。
 //
 // 跑法:pnpm --filter @incipel/agent smoke(发版前 / 夜间手动跑;真实模型不进 E2E,见 ADR-0007 Q2)
-// 需要 packages/agent/.env 里有 OPENROUTER_API_KEY(以及可选 OPENROUTER_MODEL)。
+// 需要 packages/agent/.env 里有 OPENROUTER_API_KEY;模型参数来自 packages/agent/model.config.json。
 // 缺失 key 时打印提示并以 0 退出(不算失败)——见任务说明:缺失不算失败。
 //
 // 它复用 run.ts 的 runTurnCore(注入 { provider, store }),与 /run 同一条核心循环:

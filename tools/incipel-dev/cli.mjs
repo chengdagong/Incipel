@@ -242,15 +242,12 @@ function syncModelProviderFromConfiguredKey(fnEnv) {
   if (getEnvVar(fnEnv, 'MODEL_PROVIDER')) return { changed: false };
 
   const hasOpenRouter = Boolean(getEnvVar(fnEnv, 'OPENROUTER_API_KEY'));
-  const hasAnthropic = Boolean(getEnvVar(fnEnv, 'ANTHROPIC_API_KEY'));
-  if (hasOpenRouter && !hasAnthropic) return { changed: setEnvVar(fnEnv, 'MODEL_PROVIDER', 'openrouter') };
-  if (hasAnthropic && !hasOpenRouter) return { changed: setEnvVar(fnEnv, 'MODEL_PROVIDER', 'anthropic') };
+  if (hasOpenRouter) return { changed: setEnvVar(fnEnv, 'MODEL_PROVIDER', 'openrouter') };
   return { changed: false };
 }
 
 function providerKey(provider) {
   if (provider === 'openrouter') return 'OPENROUTER_API_KEY';
-  if (provider === 'anthropic') return 'ANTHROPIC_API_KEY';
   return null;
 }
 
@@ -272,7 +269,7 @@ function copyFnEnvFromPrimaryForNewWorktree(root, fnEnv) {
 function syncModelEnvFromPrimary(root, fnEnv) {
   const primaryRoot = primaryWorktreeRoot(root);
   const primaryEnv = primaryRoot ? join(primaryRoot, 'supabase', '.env') : null;
-  const currentProvider = getEnvVar(fnEnv, 'MODEL_PROVIDER') || 'anthropic';
+  const currentProvider = getEnvVar(fnEnv, 'MODEL_PROVIDER') || 'openrouter';
   const currentKey = providerKey(currentProvider);
   if (!primaryEnv || !existsSync(primaryEnv) || (currentKey && getEnvVar(fnEnv, currentKey))) return { copied: false };
 
@@ -287,11 +284,6 @@ function syncModelEnvFromPrimary(root, fnEnv) {
   let changed = false;
   changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'MODEL_PROVIDER') || changed;
   changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, key) || changed;
-  if (primaryProvider === 'openrouter') changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'OPENROUTER_MODEL') || changed;
-  if (primaryProvider === 'anthropic') {
-    changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'TURN_MODEL') || changed;
-    changed = setEnvVarFromFileIfPresent(fnEnv, primaryEnv, 'LOGLINE_MODEL') || changed;
-  }
   return { changed };
 }
 
@@ -330,10 +322,10 @@ function envSync(root) {
     const tmpl = [
       '# agent edge function 的本地 secret(supabase functions serve --env-file 读取)。',
       '# SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由本地 edge runtime 自动注入,勿在此设。',
-      '# 模型 key 只在服务端;按需填 OpenRouter 或 Anthropic。',
+      '# 模型 key 只在服务端;填 OpenRouter API key。',
       'MODEL_PROVIDER=openrouter',
       'OPENROUTER_API_KEY=',
-      'OPENROUTER_MODEL=anthropic/claude-sonnet-4.5',
+      '# 模型 id / temperature / reasoning 配置在 packages/agent/model.config.json。',
       '# 本地 dev 默认走 Supabase anonymous auth,agent 照常校验 JWT 并使用 SupabaseStore。',
       '# INCIPEL_* 覆盖项只给本地 edge runtime 使用;客户端不会读取这个文件。',
       '',
@@ -341,7 +333,7 @@ function envSync(root) {
     if (DRY) log(`  [dry-run] write supabase/.env (模板)`);
     else {
       writeFileSync(fnEnv, tmpl);
-      log('  生成 supabase/.env(模板),请填 OPENROUTER_API_KEY(或改用 ANTHROPIC_API_KEY)');
+      log('  生成 supabase/.env(模板),请填 OPENROUTER_API_KEY');
     }
     agentEnvChanged = true;
   }
@@ -619,7 +611,7 @@ function e2eUp(root) {
     const isoStatus = isoRes.code === 0 ? parseStatusJson(isoRes.stdout) : null;
     const sharedFnEnv = join(root, 'supabase', '.env');
     const lines = ['# 隔离 E2E 栈的 agent env(由 tools/incipel-dev e2e up 生成,勿入库)'];
-    for (const k of ['MODEL_PROVIDER', 'OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'ANTHROPIC_API_KEY', 'TURN_MODEL', 'LOGLINE_MODEL']) {
+    for (const k of ['MODEL_PROVIDER', 'OPENROUTER_API_KEY']) {
       const v = existsSync(sharedFnEnv) ? getEnvVar(sharedFnEnv, k) : null;
       if (v) lines.push(`${k}=${v}`);
     }

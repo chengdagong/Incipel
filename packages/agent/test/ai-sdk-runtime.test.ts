@@ -43,6 +43,10 @@ async function collect(it: AsyncIterable<StreamChunk>): Promise<StreamChunk[]> {
   return out;
 }
 
+function resolver(settings: Record<string, unknown> = {}) {
+  return () => ({ model: {} as any, ...settings });
+}
+
 describe('makeAiSdkProvider.streamTurn — fullStream 翻译', () => {
   it('text-delta/tool-call-streaming-start/tool-call 各类 part 正确翻译,未知 part 忽略', async () => {
     const { makeAiSdkProvider } = await import('../src/model/ai-sdk-runtime');
@@ -52,7 +56,7 @@ describe('makeAiSdkProvider.streamTurn — fullStream 翻译', () => {
       { type: 'tool-call', toolCallId: '1', toolName: 'add_character', args: { name: '林深' } },
       { type: 'step-finish' }, // 未知 part:应被忽略
     ];
-    const provider = makeAiSdkProvider(() => ({}) as any);
+    const provider = makeAiSdkProvider(resolver());
     const chunks = await collect(provider.streamTurn({ system: 'sys', prompt: 'p', tools: {} }));
     expect(chunks).toEqual([
       { type: 'text', delta: '你好' },
@@ -67,19 +71,34 @@ describe('makeAiSdkProvider.streamTurn — fullStream 翻译', () => {
       { type: 'text-delta', textDelta: 'x' },
       { type: 'error', error: new Error('上游炸了') },
     ];
-    const provider = makeAiSdkProvider(() => ({}) as any);
+    const provider = makeAiSdkProvider(resolver());
     await expect(collect(provider.streamTurn({ system: 's', prompt: 'p', tools: {} }))).rejects.toThrow('上游炸了');
   });
 
   it('system/prompt 透传给 streamText;工具被包成带 ack execute 的 CoreTool', async () => {
     const { makeAiSdkProvider } = await import('../src/model/ai-sdk-runtime');
     const { z } = await import('zod');
-    const provider = makeAiSdkProvider(() => ({}) as any);
+    const provider = makeAiSdkProvider(resolver());
     await collect(provider.streamTurn({ system: 'SYS', prompt: 'PR', tools: { foo: z.object({}) } }));
     expect(h.lastArgs.system).toBe('SYS');
     expect(h.lastArgs.prompt).toBe('PR');
     // toCoreTools 给每个工具加一个只回 {ok:true} 的 ack execute(开启多步,不在此应用剧本)。
     await expect(h.lastArgs.tools.foo.execute()).resolves.toEqual({ ok: true });
+  });
+
+  it('调用配置透传给 streamText', async () => {
+    const { makeAiSdkProvider } = await import('../src/model/ai-sdk-runtime');
+    const provider = makeAiSdkProvider(
+      resolver({
+        temperature: 0.2,
+        providerOptions: { openrouter: { reasoning: { enabled: true, max_tokens: 1024 } } },
+      }),
+    );
+    await collect(provider.streamTurn({ system: 's', prompt: 'p', tools: {} }));
+    expect(h.lastArgs.temperature).toBe(0.2);
+    expect(h.lastArgs.providerOptions).toEqual({
+      openrouter: { reasoning: { enabled: true, max_tokens: 1024 } },
+    });
   });
 });
 
@@ -87,15 +106,23 @@ describe('makeAiSdkProvider.completeLogline — 累加 textStream', () => {
   it('把 textStream 拼接并 trim', async () => {
     const { makeAiSdkProvider } = await import('../src/model/ai-sdk-runtime');
     h.textChunks = ['  一句', '话  '];
-    const provider = makeAiSdkProvider(() => ({}) as any);
+    const provider = makeAiSdkProvider(resolver());
     const out = await provider.completeLogline({ system: 's', prompt: 'p' });
     expect(out).toBe('一句话');
   });
 
-  it('temperature 透传给 streamText', async () => {
+  it('调用配置透传给 streamText', async () => {
     const { makeAiSdkProvider } = await import('../src/model/ai-sdk-runtime');
-    const provider = makeAiSdkProvider(() => ({}) as any);
-    await provider.completeLogline({ system: 's', prompt: 'p', temperature: 1.1 });
-    expect(h.lastArgs.temperature).toBe(1.1);
+    const provider = makeAiSdkProvider(
+      resolver({
+        temperature: 0.5,
+        providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'medium' } } },
+      }),
+    );
+    await provider.completeLogline({ system: 's', prompt: 'p' });
+    expect(h.lastArgs.temperature).toBe(0.5);
+    expect(h.lastArgs.providerOptions).toEqual({
+      openrouter: { reasoning: { enabled: true, effort: 'medium' } },
+    });
   });
 });

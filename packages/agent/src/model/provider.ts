@@ -5,7 +5,7 @@
 // 把结构化提示包装成与此一致的 tool-use 接口,而不是引入第二套契约。
 
 import type { z } from 'zod';
-import { env } from '../env.ts';
+import { getModelConfig, type ProviderName } from './config.ts';
 
 // 一次工具调用:工具名 + 已解析好的参数对象。参数 schema 由 @incipel/shared 的
 // buildToolSchemas(idSetsOf(state)) 按当前剧本状态生成(含 id 枚举门控)。
@@ -35,7 +35,6 @@ export type StreamTurnInput = {
 export type CompleteLoglineInput = {
   system: string;
   prompt: string;
-  temperature?: number;
 };
 
 export interface ModelProvider {
@@ -46,27 +45,23 @@ export interface ModelProvider {
 }
 
 // 'stub' 仅供本地 / E2E:产出写死的确定性回合,不调任何真实模型(见 model/stub.ts)。prod 永不设。
-export type ProviderName = 'anthropic' | 'openrouter' | 'stub';
+export type { ProviderName };
 
 // 工厂:按 env MODEL_PROVIDER 选 provider。只在 tool-use 可靠的 provider 间切换。
 export async function createModelProvider(): Promise<ModelProvider> {
-  const name = (env('MODEL_PROVIDER') ?? 'anthropic') as ProviderName;
-  switch (name) {
-    case 'anthropic': {
-      const { createAnthropicProvider } = await import('./anthropic.ts');
-      return createAnthropicProvider();
-    }
+  const config = getModelConfig();
+  switch (config.provider) {
     case 'openrouter': {
       const { createOpenRouterProvider } = await import('./openrouter.ts');
-      return createOpenRouterProvider();
+      return createOpenRouterProvider(config);
     }
     case 'stub': {
       // 确定性 stub:离线跑 E2E 创作主路径用,不接任何真实模型。
-      const { createStubProvider } = await import('./stub');
+      const { createStubProvider } = await import('./stub.ts');
       return createStubProvider();
     }
     default:
       // 未知 provider 一律拒绝:绝不静默退回弱模型或文本解析路径。
-      throw new Error(`未知或不被支持的 MODEL_PROVIDER: ${String(name)}`);
+      throw new Error(`未知或不被支持的 MODEL_PROVIDER: ${String(config.provider)}`);
   }
 }

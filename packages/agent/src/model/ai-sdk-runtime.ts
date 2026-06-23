@@ -11,7 +11,7 @@
 // 背景:单步时模型可能纯调工具、不产任何文本(finishReason: tool-calls),聊天里就是空回复;
 // 多步是 Vercel AI SDK 对此的标准解——见 vercel/ai#8738、loop-control 文档。
 
-import { streamText, tool, type CoreTool, type LanguageModelV1 } from 'ai';
+import { streamText, tool, type CoreTool, type LanguageModelV1, type ProviderMetadata } from 'ai';
 import type { z } from 'zod';
 import type {
   CompleteLoglineInput,
@@ -24,7 +24,12 @@ import type {
 //  - 'turn'    每轮对话的强模型(tool-use 可靠)。
 //  - 'logline' /logline 端点的便宜小模型。
 export type ModelKind = 'turn' | 'logline';
-export type ModelResolver = (kind: ModelKind) => LanguageModelV1;
+export type ResolvedModel = {
+  model: LanguageModelV1;
+  temperature?: number;
+  providerOptions?: ProviderMetadata;
+};
+export type ModelResolver = (kind: ModelKind) => ResolvedModel;
 
 // 一轮允许的最大步数。第 1 步模型调工具,工具(ack)执行后第 2 步产出总结文本;
 // 给足余量以容纳模型分几步写内容,但有上界以防它一直调工具不收尾。
@@ -34,14 +39,16 @@ const MAX_TURN_STEPS = 8;
 export function makeAiSdkProvider(resolve: ModelResolver): ModelProvider {
   return {
     async *streamTurn(input: StreamTurnInput): AsyncIterable<StreamChunk> {
-      const model = resolve('turn');
+      const resolved = resolve('turn');
       const result = streamText({
-        model,
+        model: resolved.model,
         // system 走 prompt caching;稳定的 system 命中缓存(见 prompt.ts)。
         system: input.system,
         prompt: input.prompt,
         tools: toCoreTools(input.tools),
         toolChoice: 'auto',
+        temperature: resolved.temperature,
+        providerOptions: resolved.providerOptions,
         // 多步:工具带 ack execute(见 toCoreTools),模型调完工具后 SDK 带着结果再生成一步——
         // 这一步才产出给用户的总结文本。单步会停在 finishReason: tool-calls、无 text。
         maxSteps: MAX_TURN_STEPS,
@@ -82,12 +89,13 @@ export function makeAiSdkProvider(resolve: ModelResolver): ModelProvider {
     },
 
     async completeLogline(input: CompleteLoglineInput): Promise<string> {
-      const model = resolve('logline');
+      const resolved = resolve('logline');
       const result = streamText({
-        model,
+        model: resolved.model,
         system: input.system,
         prompt: input.prompt,
-        temperature: input.temperature,
+        temperature: resolved.temperature,
+        providerOptions: resolved.providerOptions,
       });
       let text = '';
       for await (const delta of result.textStream) {
