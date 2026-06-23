@@ -211,7 +211,7 @@ test('up dry-run always restarts agent serve (stop edge runtime + all serves, th
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /重启 agent edge function/);
     assert.match(res.stdout, /\[dry-run\] docker stop supabase_edge_runtime_incipel/);
-    assert.match(res.stdout, /\[dry-run\] 停掉所有 agent serve 进程/);
+    assert.match(res.stdout, /停掉本项目各 worktree 的旧 agent serve/);
     assert.match(res.stdout, /\[dry-run\] detached: supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
   } finally {
     health.child.kill();

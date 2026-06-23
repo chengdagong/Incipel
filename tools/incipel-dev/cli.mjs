@@ -412,22 +412,27 @@ function stopEdgeRuntime(root) {
   return true;
 }
 
-// 停掉所有正在跑的 agent serve 宿主进程(跨 worktree,按启动命令匹配),不只当前 worktree pid 文件
-// 记的那个。共用栈只该有一个 serve;重起前清掉全部旧 serve,既保证跑最新代码,也清掉残留的重复进程。
-function stopAllAgentServe() {
-  const matcher = 'supabase functions serve agent';
-  if (DRY) {
-    log(`  [dry-run] 停掉所有 agent serve 进程(pkill -f ${JSON.stringify(matcher)})`);
-    return;
-  }
-  const res = run('pgrep', ['-f', matcher], { capture: true });
-  const pids = (res.stdout || '')
+// 停掉「本项目」所有 worktree 的 agent serve 宿主进程(共用栈只该有一个 serve)。
+// 只认本仓库 worktree(git worktree list)各自 pid 文件里记的 PID——不会误伤本机其它项目里同样跑
+// `supabase functions serve agent` 的进程(它们 cwd / pid 文件不同,不在本仓库 worktree 列表里)。
+function stopAllAgentServe(root) {
+  const res = run('git', ['worktree', 'list', '--porcelain'], { capture: true, mutate: false, cwd: root });
+  const roots = (res.stdout || '')
     .split('\n')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(Number)
-    .filter((n) => Number.isInteger(n) && n > 0 && n !== process.pid);
-  for (const pid of pids) {
+    .filter((l) => l.startsWith('worktree '))
+    .map((l) => l.slice('worktree '.length).trim())
+    .filter(Boolean);
+  if (!roots.includes(root)) roots.push(root); // 兜底:至少含当前 worktree
+  log(`  停掉本项目各 worktree 的旧 agent serve(${roots.length} 个 worktree)`);
+  for (const wtRoot of roots) {
+    const pidPath = join(tmpdir(), `incipel-agent-serve-${worktreeHash(wtRoot)}.pid`);
+    if (!existsSync(pidPath)) continue;
+    const pid = Number(readFileSync(pidPath, 'utf8').trim());
+    if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid) continue;
+    if (DRY) {
+      log(`  [dry-run] kill ${pid}  (${pidPath})`);
+      continue;
+    }
     try {
       process.kill(pid, 'SIGTERM');
       log(`  已停止 agent serve 进程(pid ${pid})`);
@@ -447,7 +452,7 @@ async function ensureAgentServe(root) {
   // 仍 serve 旧代码),也清掉跨 worktree 残留的多个 serve(共用栈只该有一个)。
   log('  重启 agent edge function(总是用最新代码 serve)');
   stopEdgeRuntime(root);
-  stopAllAgentServe();
+  stopAllAgentServe(root);
 
   const serveArgs = ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'];
   if (DRY) {
@@ -496,7 +501,7 @@ function dev(root) {
   // 撞端口(否则前台 serve 会因端口占用直接失败)。
   log('▸ 停掉旧 agent serve');
   stopEdgeRuntime(root);
-  stopAllAgentServe();
+  stopAllAgentServe(root);
   log('▸ serve agent(前台,网关不校验 JWT,鉴权由 app 内 authenticate 决定)');
   const r = run('supabase', ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'], {
     cwd: root,

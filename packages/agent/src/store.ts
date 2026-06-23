@@ -131,8 +131,10 @@ export class SupabaseStore implements Store {
     // 完整对话历史(ADR-0010):取该会话全部消息,按时间正序给 prompt;不再截断成「最近 N 条」。
     // 分页读完——PostgREST 单次返回受 supabase/config.toml 的 max_rows(=1000)限制,不分页会
     // 在长会话里只拿到前 1000 条(因升序读,丢的恰是最新消息);用 .range() 逐页读尽。
-    // 用 (created_at, id) 的全序排序保证翻页不漏不重。长会话的 token / 上下文窗口规模由 compact
-    // 机制约束(见 issue #49)。PAGE 须 ≤ max_rows,否则「满页 < PAGE」会提前判终。
+    // 排序键 (created_at, role↓, id):save_turn 在同一事务写入的 user/assistant 两条 created_at 相同
+    // (事务内 now() 恒定),仅靠时间无法定先后;role 降序让 user(>assistant)排在 assistant 前,
+    // 模型才看到「先问后答」;id 作全序兜底,保证翻页不漏不重。长会话的 token / 上下文窗口规模由
+    // compact 机制约束(见 issue #49)。PAGE 须 ≤ max_rows,否则「满页 < PAGE」会提前判终。
     const PAGE = 1000;
     const history: PromptMessage[] = [];
     for (let from = 0; ; from += PAGE) {
@@ -141,6 +143,7 @@ export class SupabaseStore implements Store {
         .select('role, text, created_at, id')
         .eq('session_id', threadId)
         .order('created_at', { ascending: true })
+        .order('role', { ascending: false })
         .order('id', { ascending: true })
         .range(from, from + PAGE - 1);
       if (mErr) throw new StoreError(`加载消息失败: ${mErr.message}`);
