@@ -11,6 +11,8 @@ build/
 
 # worktree 并行开发:每个 worktree 各持一份(见 docs/worktree-dev.md);.example 模板入库
 .worktree-dev.env
+# feature worktrees created for isolated implementation work
+.worktrees/
 
 # expo
 .expo/
