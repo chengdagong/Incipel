@@ -65,7 +65,7 @@ export default function ChatScreen() {
   // 带 sessionId(从历史 / 作品 / 抽屉打开已有会话)时恢复历史消息与剧本;
   // 新建创作(仅带 idea + 全新 threadId)无需恢复。
   const reopening = !!params.sessionId;
-  const { messages, screenplay, streamingText, options, isRunning, thinking, error, sendMessage, retry } =
+  const { messages, screenplay, streamingText, options, isRunning, thinking, error, hydratedBaseline, sendMessage, retry } =
     useScreenplayAgent(threadId, { hydrate: reopening });
 
   // 「作品」入口可带 view=doc 直接进文档视图。
@@ -91,23 +91,33 @@ export default function ChatScreen() {
   // 记录上一版剧本快照;每当 assistant 文本数 +1(本轮结束)时刷新基线。
   const prevScreenplayRef = useRef<Screenplay>(emptyScreenplay());
   const assistantCountRef = useRef(0);
-  const reopenBaselineDone = useRef(false);
+  // 恢复会话时记下「恢复那一刻的助手消息数」;为 null 表示尚未恢复 / 非续写。用于判断用户是否已在本次
+  // 打开后发起过新一轮(发起后改用实时卡片,不再用恢复卡片)。
+  const reopenAssistantCountRef = useRef<number | null>(null);
   const assistantCount = messages.filter((m) => m.role === 'assistant').length;
 
-  // 续写已有会话:恢复出历史消息与剧本后,把当前剧本设为「本轮新增」的对比基线。
-  // 否则既有的世界观 / 人物会被 diffCard 误判为本轮新增,在末条助手消息上错弹一张大卡片。
-  // 在渲染中惰性确立(仅一次),使紧接其后的 card 在同一渲染内即按正确基线计算。
-  if (reopening && !reopenBaselineDone.current && messages.length > 0) {
-    reopenBaselineDone.current = true;
+  // 续写已有会话:恢复出历史后,把实时「本轮新增」对比基线设为完整剧本——供之后真正的新一轮正确 diff,
+  // 也避免既有世界观 / 人物被误判为本轮新增。在渲染中惰性确立(仅一次),使紧接其后的 liveCard 同一渲染内即按正确基线计算。
+  if (reopening && reopenAssistantCountRef.current === null && messages.length > 0) {
     prevScreenplayRef.current = screenplay;
     assistantCountRef.current = assistantCount;
+    reopenAssistantCountRef.current = assistantCount;
   }
 
-  const card = useMemo(() => {
-    const c = diffCard(prevScreenplayRef.current, screenplay);
-    return c;
-    // 仅依赖 screenplay:其变化即本轮 STATE_DELTA 的累计结果。
-  }, [screenplay]);
+  // 实时「本轮新增」卡片:新发生的一轮用它(基线随每轮收尾刷新)。
+  const liveCard = useMemo(() => diffCard(prevScreenplayRef.current, screenplay), [screenplay]);
+  // 恢复卡片:用「最近一轮发生前」的基线与当前剧本 diff,还原最后一条助手消息那一轮的新增
+  // (实时对话里只有最新一条助手消息挂卡片,重开后同理)。新建会话 hydratedBaseline 为 null。
+  const hydratedCard = useMemo(
+    () => (hydratedBaseline ? diffCard(hydratedBaseline, screenplay) : null),
+    [hydratedBaseline, screenplay],
+  );
+  // 重开后、用户尚未发起新一轮时,末条助手消息用恢复卡片;一旦发生新一轮(助手消息数超过恢复时的数量),
+  // 改用实时卡片,与实时对话的「卡片只挂最新一条助手消息」一致。
+  const beforeNewTurn =
+    reopenAssistantCountRef.current !== null && assistantCount <= reopenAssistantCountRef.current;
+  const card = beforeNewTurn && hydratedCard ? hydratedCard : liveCard;
+
   useEffect(() => {
     // 本轮收尾(多了一条 assistant 消息且不再 running)时,把当前剧本设为下一轮的对比基线。
     if (assistantCount > assistantCountRef.current && !isRunning) {

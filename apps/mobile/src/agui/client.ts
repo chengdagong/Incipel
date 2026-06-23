@@ -21,6 +21,7 @@ import {
 } from '@incipel/shared';
 import { getAccessToken, supabase } from '../supabase';
 import { orderStoredMessages, type StoredMessageRow } from './order-messages';
+import { baselineBeforeLastTurn } from './reopen-baseline';
 
 const AGENT_URL = process.env.EXPO_PUBLIC_AGENT_URL;
 
@@ -58,38 +59,68 @@ export function newThreadId(): string {
 // 既不污染模型上下文,也只受这两条上限约束。
 const MAX_HYDRATE_MESSAGES = 100;
 
+// 恢复出的会话快照:权威剧本、对比基线、展示消息、最近一轮的可点选项。
+export type SessionSnapshot = {
+  // 当前权威剧本(documents.state,已归一)。
+  state: Screenplay;
+  // 「最近一轮发生前」的剧本基线:用于还原最后一条助手消息的「本轮新增」内联卡片(见 reopen-baseline.ts)。
+  prevState: Screenplay;
+  // 展示用历史消息(按时间升序、同轮 user 先于 assistant)。
+  messages: Message[];
+  // 最近一轮已保存的可点选项(瞬时,实时对话里轮末发出);恢复后挂在末条助手消息上。
+  options: string[];
+};
+
+// messages 行(含恢复内联卡片 / 选项所需的 deltas / options)。
+type StoredMessageRowFull = StoredMessageRow & { deltas?: unknown; options?: unknown };
+
+// 取 created_at 最大的 assistant 行(= 最近一轮的助手消息)。
+function pickLastAssistant(rows: readonly StoredMessageRowFull[]): StoredMessageRowFull | null {
+  let best: StoredMessageRowFull | null = null;
+  for (const r of rows) {
+    if (r.role !== 'assistant') continue;
+    if (!best || r.created_at > best.created_at) best = r;
+  }
+  return best;
+}
+
 /**
  * 打开已有会话时,直接从 Supabase 读它的权威剧本(documents.state)与历史消息(messages),
- * 用于在不触发模型调用、不发 /run 的前提下,把对话与文档面板恢复到界面上。
+ * 用于在不触发模型调用、不发 /run 的前提下,把对话、文档面板、最近一轮的内联卡片与可点选项恢复到界面上。
  *
  * 数据来源与抽屉 / 历史 / 作品屏一致:都用 supabase-js 直查、靠 RLS 按 user_id 归属隔离
- * (messages 的 SELECT 策略经 session 归属校验,见 supabase/migrations/0001_init.sql)。
+ * (messages 的 SELECT 策略经 session 归属校验,见 supabase/migrations/0001_init.sql、0004)。
  * 全新会话(threadId 尚未落库)查不到任何行,返回 null。
  */
-export async function loadSessionSnapshot(
-  threadId: string,
-): Promise<{ state: Screenplay; messages: Message[] } | null> {
+export async function loadSessionSnapshot(threadId: string): Promise<SessionSnapshot | null> {
   const [docRes, msgRes] = await Promise.all([
     supabase.from('documents').select('state').eq('session_id', threadId).maybeSingle(),
     supabase
       .from('messages')
-      .select('id, role, text, created_at')
+      .select('id, role, text, deltas, options, created_at')
       .eq('session_id', threadId)
-      .order('created_at', { ascending: true })
+      // 取「最近」N 条(倒序 + limit);长会话要展示近况而非开头,与 documents.state 的最新剧本一致。
+      // 展示顺序由 orderStoredMessages 再排成升序(同轮 user 先于 assistant)。
+      .order('created_at', { ascending: false })
       .limit(MAX_HYDRATE_MESSAGES),
   ]);
   if (docRes.error) console.warn('[agui] 读取会话剧本失败:', docRes.error.message);
   if (msgRes.error) console.warn('[agui] 读取会话消息失败:', msgRes.error.message);
 
   const rawState = (docRes.data?.state ?? null) as Screenplay | null;
-  // 排序与同轮 user/assistant 次序的处理见 order-messages.ts(created_at 在同一轮里相等)。
-  const messages = orderStoredMessages(
-    (msgRes.data ?? []) as StoredMessageRow[],
-  ) as unknown as Message[];
+  const rows = (msgRes.data ?? []) as StoredMessageRowFull[];
+  const messages = orderStoredMessages(rows) as unknown as Message[];
 
   if (!rawState && messages.length === 0) return null;
+
   // 归一旧结构(与服务端 store.loadSession 一致),避免残缺历史剧本让文档面板 / 卡片取属性而崩。
-  return { state: normalizeScreenplay(rawState ?? emptyScreenplay()), messages };
+  const state = normalizeScreenplay(rawState ?? emptyScreenplay());
+  const lastAssistant = pickLastAssistant(rows);
+  const prevState = baselineBeforeLastTurn(state, lastAssistant?.deltas);
+  const options = Array.isArray(lastAssistant?.options)
+    ? (lastAssistant!.options as unknown[]).map(String)
+    : [];
+  return { state, prevState, messages, options };
 }
 
 /**
@@ -125,6 +156,9 @@ export type ScreenplayAgentApi = {
   // retry 不追加 user 消息时也准确(见 #42 Codex 评审 P3)。
   thinking: boolean;
   error: string | null;
+  // 续写已有会话恢复出的「最近一轮发生前」剧本基线;新建会话为 null。
+  // 屏幕据此还原最后一条助手消息的「本轮新增」内联卡片(见 chat.tsx 的 hydratedCard)。
+  hydratedBaseline: Screenplay | null;
   sendMessage: (text: string) => Promise<void>;
   // 重试当前这一轮:沿用同一 runId,服务端据此幂等、不重复落库(见 KI-2)。
   // 失败后应调用它,而不是重新 sendMessage(后者会生成新 runId、绕开幂等键)。
@@ -162,6 +196,8 @@ export function useScreenplayAgent(
   // 仅凭「末条是否用户消息」会误判,故由 run 生命周期事件直接维护(见 #42 Codex 评审 P3)。
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 恢复已有会话时的「最近一轮发生前」剧本基线(供屏幕还原末条助手消息的内联卡片);新建会话保持 null。
+  const [hydratedBaseline, setHydratedBaseline] = useState<Screenplay | null>(null);
 
   // 一「逻辑轮」的 runId:重试沿用同一个,作 save_turn 的幂等键(见 KI-2)。完成后清空。
   const pendingRunIdRef = useRef<string | null>(null);
@@ -246,6 +282,10 @@ export function useScreenplayAgent(
       agent.setMessages(snapshot.messages);
       setScreenplay(agent.state as Screenplay);
       setMessages([...agent.messages]);
+      // 还原最近一轮的可点选项(否则重开刚生成选项的会话,选项会消失只能手输);
+      // 以及该轮发生前的剧本基线,供屏幕还原末条助手消息的「本轮新增」内联卡片。
+      setOptions(snapshot.options);
+      setHydratedBaseline(snapshot.prevState);
     })();
     return () => {
       alive = false;
@@ -291,5 +331,16 @@ export function useScreenplayAgent(
     await runWith(runId);
   }, [runWith]);
 
-  return { messages, screenplay, streamingText, options, isRunning, thinking, error, sendMessage, retry };
+  return {
+    messages,
+    screenplay,
+    streamingText,
+    options,
+    isRunning,
+    thinking,
+    error,
+    hydratedBaseline,
+    sendMessage,
+    retry,
+  };
 }
