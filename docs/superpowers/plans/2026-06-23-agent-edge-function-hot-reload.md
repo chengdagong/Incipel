@@ -472,11 +472,11 @@ CODEX_DOCS_REVIEWED=1 git commit -m "feat(dev): add explicit agent stop command"
 - Modify: `docs/worktree-dev.md`
 - Modify: `supabase/functions/README.md`
 
-- [ ] **Step 1: Update `CLAUDE.md`**
+- [x] **Step 1: Update `CLAUDE.md`**
 
 Change the `pnpm dev:ios` / `pnpm dev:android` bullets to say that `up` confirms the current `worktree`'s `agent` is being served and watched. Add `pnpm dx agent stop` as the explicit cleanup command.
 
-- [ ] **Step 2: Update `docs/worktree-dev.md`**
+- [x] **Step 2: Update `docs/worktree-dev.md`**
 
 In the Agent section, describe:
 
@@ -487,7 +487,7 @@ In the Agent section, describe:
 - `pnpm dx agent stop` stops current-`worktree` watcher/serve processes and leaves local Supabase database/auth/storage running.
 - stopping Edge Runtime affects the shared local function service.
 
-- [ ] **Step 3: Update `supabase/functions/README.md`**
+- [x] **Step 3: Update `supabase/functions/README.md`**
 
 Update the local run section to explain that `pnpm dx up` handles env and source changes for `agent`, and add:
 
@@ -497,7 +497,7 @@ pnpm dx agent stop
 
 as the explicit cleanup command.
 
-- [ ] **Step 4: Run text checks**
+- [x] **Step 4: Run text checks**
 
 Run:
 
@@ -507,7 +507,7 @@ bash /Users/chengdagong/.claude/skills/plain-chinese/scripts/lint-jargon.sh CLAU
 
 Expected: no unsuitable Chinese expressions remain, or any reported line is a literal command / existing project term that should stay.
 
-- [ ] **Step 5: Commit Task 5**
+- [x] **Step 5: Commit Task 5**
 
 ```bash
 git add CLAUDE.md docs/worktree-dev.md supabase/functions/README.md
