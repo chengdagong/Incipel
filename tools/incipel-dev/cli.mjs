@@ -67,9 +67,6 @@ function repoRoot() {
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
-function sha1Text(text) {
-  return createHash('sha1').update(text).digest('hex');
-}
 function isSensitiveEnvKey(key) {
   if (key.startsWith('EXPO_PUBLIC_')) return false;
   return key.includes('SECRET') || key.includes('TOKEN') || key.endsWith('_KEY');
@@ -395,9 +392,10 @@ async function agentHealthy(apiPort) {
   }
 }
 
-// 确保 agent serve 在跑:已在(/health 正常)则跳过;否则 detached 后台拉起一个
-// `supabase functions serve`(日志 / PID 落 tmp),再轮询 /health 几秒。轮询超时不阻断——
-// 首次要编译 npm 依赖图较慢,serve 仍在后台继续,调用方(dev:ios)可照常起 Metro。
+// agent serve 生命周期:每次 up / dev 都「停掉 edge runtime + 所有旧 serve,再起一个新 serve」,
+// 确保跑的是最新 edge function 代码(改了 agent 代码后不会再 serve 旧代码),也清掉跨 worktree
+// 残留的多个 serve(共用栈只该有一个)。新 serve detached 后台拉起(日志 / PID 落 tmp),再轮询
+// /health 几秒;轮询超时不阻断——首次编译 npm 依赖图较慢,serve 仍在后台继续,dev:ios 可照常起 Metro。
 function stopEdgeRuntime(root) {
   const container = `supabase_edge_runtime_${canonicalProjectId(root)}`;
   if (DRY) {
@@ -414,54 +412,47 @@ function stopEdgeRuntime(root) {
   return true;
 }
 
-function stopKnownAgentServe(pidPath) {
-  if (!existsSync(pidPath)) return false;
-  const pid = Number(readFileSync(pidPath, 'utf8').trim());
-  if (!Number.isFinite(pid) || pid <= 0) return false;
+// 停掉所有正在跑的 agent serve 宿主进程(跨 worktree,按启动命令匹配),不只当前 worktree pid 文件
+// 记的那个。共用栈只该有一个 serve;重起前清掉全部旧 serve,既保证跑最新代码,也清掉残留的重复进程。
+function stopAllAgentServe() {
+  const matcher = 'supabase functions serve agent';
   if (DRY) {
-    log(`  [dry-run] kill ${pid}  (${pidPath})`);
-    return true;
+    log(`  [dry-run] 停掉所有 agent serve 进程(pkill -f ${JSON.stringify(matcher)})`);
+    return;
   }
-  try {
-    process.kill(pid, 'SIGTERM');
-    log(`  已停止 agent serve 进程(pid ${pid})`);
-    return true;
-  } catch (err) {
-    if (err?.code !== 'ESRCH') {
-      log(`  注意:agent serve 进程(pid ${pid}) 未停止:${err.message}`);
-      return false;
+  const res = run('pgrep', ['-f', matcher], { capture: true });
+  const pids = (res.stdout || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0 && n !== process.pid);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, 'SIGTERM');
+      log(`  已停止 agent serve 进程(pid ${pid})`);
+    } catch (err) {
+      if (err?.code !== 'ESRCH') log(`  注意:agent serve 进程(pid ${pid}) 未停止:${err.message}`);
     }
-    return false;
   }
 }
 
-async function ensureAgentServe(root, { restart = false } = {}) {
+async function ensureAgentServe(root) {
   const apiPort = canonicalApiPort(root);
   const token = worktreeHash(root);
   const logPath = join(tmpdir(), `incipel-agent-serve-${token}.log`);
   const pidPath = join(tmpdir(), `incipel-agent-serve-${token}.pid`);
-  const envHashPath = join(tmpdir(), `incipel-agent-serve-${token}.env.sha1`);
-  const fnEnv = join(root, 'supabase', '.env');
-  const envHash = existsSync(fnEnv) ? sha1Text(readFileSync(fnEnv, 'utf8')) : '';
-  const prevEnvHash = existsSync(envHashPath) ? readFileSync(envHashPath, 'utf8').trim() : null;
-  const envFileChanged = prevEnvHash !== envHash;
-  const healthy = await agentHealthy(apiPort);
-  if (healthy && restart) {
-    log('  agent env 已更新,重启 agent edge runtime');
-    stopEdgeRuntime(root);
-    stopKnownAgentServe(pidPath);
-  } else if (healthy && envFileChanged) {
-    log('  agent env-file 内容已变化,重启 agent edge runtime');
-    stopEdgeRuntime(root);
-    stopKnownAgentServe(pidPath);
-  } else if (healthy) {
-    log('  agent edge function 已在 serve(/health 正常),跳过');
-    return;
-  }
+
+  // 总是「停掉 edge runtime + 所有旧 serve,再起新的」——不再「健康就跳过」(那会让改了 agent 代码后
+  // 仍 serve 旧代码),也清掉跨 worktree 残留的多个 serve(共用栈只该有一个)。
+  log('  重启 agent edge function(总是用最新代码 serve)');
+  stopEdgeRuntime(root);
+  stopAllAgentServe();
+
   const serveArgs = ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'];
   if (DRY) {
     log(`  [dry-run] detached: supabase ${serveArgs.join(' ')}`);
-    log(`  [dry-run] 日志 ${logPath} / pid ${pidPath} / env hash ${envHashPath}`);
+    log(`  [dry-run] 日志 ${logPath} / pid ${pidPath}`);
     return;
   }
   // detached + unref + stdio 重定向到日志文件:Node 退出后该 serve 仍继续跑。
@@ -485,7 +476,6 @@ async function ensureAgentServe(root, { restart = false } = {}) {
       fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'})——多半是 Deno 解析 / env / 端口问题;看日志:${logPath}`);
     }
     if (await agentHealthy(apiPort)) {
-      writeFileSync(envHashPath, `${envHash}\n`);
       log('  agent 已就绪(/health 正常)');
       return;
     }
@@ -502,6 +492,11 @@ function dev(root) {
   ensureStack(root);
   log('▸ 同步 env');
   envSync(root);
+  // 前台 serve 前也先停掉 edge runtime + 所有旧 serve:既保证用最新代码,也避免与已在跑的后台 serve
+  // 撞端口(否则前台 serve 会因端口占用直接失败)。
+  log('▸ 停掉旧 agent serve');
+  stopEdgeRuntime(root);
+  stopAllAgentServe();
   log('▸ serve agent(前台,网关不校验 JWT,鉴权由 app 内 authenticate 决定)');
   const r = run('supabase', ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'], {
     cwd: root,
@@ -516,9 +511,9 @@ async function up(root) {
   log('▸ 确保共用 Supabase 栈在运行');
   ensureStack(root);
   log('▸ 同步 env');
-  const synced = envSync(root);
-  log('▸ 确保 agent edge function 在 serve');
-  await ensureAgentServe(root, { restart: synced.agentEnvChanged });
+  envSync(root);
+  log('▸ 重新 serve agent edge function(总是用最新代码)');
+  await ensureAgentServe(root);
 }
 
 // ── E2E 隔离栈 ────────────────────────────────────────────────────────────────

@@ -152,7 +152,7 @@ test('env sync selects openrouter when only an OpenRouter key is configured', ()
   }
 });
 
-test('up dry-run restarts agent when env-file hash is missing despite healthy endpoint', async () => {
+test('up dry-run always restarts agent serve (stop edge runtime + all serves, then re-serve)', async () => {
   const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
   const health = await startHealthServer();
   const port = health.port;
@@ -209,8 +209,9 @@ test('up dry-run restarts agent when env-file hash is missing despite healthy en
       env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
     });
     assert.equal(res.status, 0, res.stderr);
-    assert.match(res.stdout, /agent env-file 内容已变化,重启 agent edge runtime/);
+    assert.match(res.stdout, /重启 agent edge function/);
     assert.match(res.stdout, /\[dry-run\] docker stop supabase_edge_runtime_incipel/);
+    assert.match(res.stdout, /\[dry-run\] 停掉所有 agent serve 进程/);
     assert.match(res.stdout, /\[dry-run\] detached: supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
   } finally {
     health.child.kill();
