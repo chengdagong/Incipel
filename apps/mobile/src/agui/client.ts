@@ -53,10 +53,11 @@ export function newThreadId(): string {
   return randomUUID();
 }
 
-// 续写已有会话时一次性恢复的历史消息上限。够展示近况;同时为续写时随 /run 回传的 messages
-// 数组留出服务端上限余量(见 packages/agent/src/app.ts 的 MAX_MESSAGES / 请求体字节上限)。
-// 注意:服务端只取 messages 里最后一条 user 文本,prompt 上下文另从数据库窗口重建,故回传历史
-// 既不污染模型上下文,也只受这两条上限约束。
+// 续写已有会话时一次性恢复的历史消息上限。恢复出的历史放进 agent.messages,会随后续 runAgent 的
+// 请求体发送;这里取 100 是权宜上限——低于服务端 MAX_MESSAGES=200 与请求体字节上限(见
+// packages/agent/src/app.ts),避免长会话续写直接 413。长会话的请求体 / 模型上下文问题留待 compact
+// 机制统一处理(见 issue #49)。注意:当前服务端只取 messages 里最后一条 user 文本,prompt 上下文
+// 另从数据库窗口重建,故发送的历史暂不进入模型上下文,仅作客户端展示与规范表示。
 const MAX_HYDRATE_MESSAGES = 100;
 
 // 恢复出的会话快照:权威剧本、对比基线、展示消息、最近一轮的可点选项。
@@ -159,6 +160,8 @@ export type ScreenplayAgentApi = {
   // 续写已有会话恢复出的「最近一轮发生前」剧本基线;新建会话为 null。
   // 屏幕据此还原最后一条助手消息的「本轮新增」内联卡片(见 chat.tsx 的 hydratedCard)。
   hydratedBaseline: Screenplay | null;
+  // 历史恢复进行中(reopening 且首次快照未返回);为真时屏幕应禁用发送,避免与恢复竞争。
+  hydrating: boolean;
   sendMessage: (text: string) => Promise<void>;
   // 重试当前这一轮:沿用同一 runId,服务端据此幂等、不重复落库(见 KI-2)。
   // 失败后应调用它,而不是重新 sendMessage(后者会生成新 runId、绕开幂等键)。
@@ -188,6 +191,8 @@ export function useScreenplayAgent(
   }
 
   const [messages, setMessages] = useState<Message[]>([]);
+  // 恢复进行中(reopening 且首次快照尚未返回):此间禁用发送,避免与历史恢复竞争(见评审 #2)。
+  const [hydrating, setHydrating] = useState(hydrate);
   const [screenplay, setScreenplay] = useState<Screenplay>(() => emptyScreenplay());
   const [streamingText, setStreamingText] = useState('');
   const [options, setOptions] = useState<string[]>([]);
@@ -272,20 +277,29 @@ export function useScreenplayAgent(
     let alive = true;
     void (async () => {
       const snapshot = await loadSessionSnapshot(threadId);
-      if (!alive || !snapshot) return;
+      if (!alive) return;
       const agent = agentRef.current;
-      if (!agent || agent.threadId !== threadId) return; // threadId 已切换,放弃这次恢复
-      if (agent.messages.length > 0 || agent.isRunning) return; // 已有内容 / 正在运行,不覆盖
-      // 先灌剧本再灌消息:即便两次 setState 未被批处理,messages 变非空时剧本也已是完整态,
-      // chat.tsx 的「本轮新增」对比基线据此不会把既有实体误判为本轮新增(见 chat.tsx 的 reopen 基线)。
-      agent.setState(snapshot.state as unknown as Record<string, unknown>);
-      agent.setMessages(snapshot.messages);
-      setScreenplay(agent.state as Screenplay);
-      setMessages([...agent.messages]);
-      // 还原最近一轮的可点选项(否则重开刚生成选项的会话,选项会消失只能手输);
-      // 以及该轮发生前的剧本基线,供屏幕还原末条助手消息的「本轮新增」内联卡片。
-      setOptions(snapshot.options);
-      setHydratedBaseline(snapshot.prevState);
+      // 仅在确实读到快照、且本会话尚无实时消息 / 未在运行时应用(发送在恢复期间被禁用,正常不会撞上)。
+      if (
+        snapshot &&
+        agent &&
+        agent.threadId === threadId &&
+        agent.messages.length === 0 &&
+        !agent.isRunning
+      ) {
+        // 先灌剧本再灌消息:即便两次 setState 未被批处理,messages 变非空时剧本也已是完整态。
+        // 历史消息放进 agent.messages(会随后续 runAgent 的请求体发送)——历史对会话连续性重要,
+        // 长会话的请求体 / 上下文上限留待 compact 机制处理(见 issue #49)。
+        agent.setState(snapshot.state as unknown as Record<string, unknown>);
+        agent.setMessages(snapshot.messages);
+        setScreenplay(agent.state as Screenplay);
+        setMessages([...agent.messages]);
+        // 还原最近一轮的可点选项(否则重开刚生成选项的会话,选项会消失只能手输);
+        // 以及该轮发生前的剧本基线,供屏幕还原末条助手消息的「本轮新增」内联卡片。
+        setOptions(snapshot.options);
+        setHydratedBaseline(snapshot.prevState);
+      }
+      setHydrating(false); // 恢复结束(无论是否应用),解除发送禁用
     })();
     return () => {
       alive = false;
@@ -310,6 +324,7 @@ export function useScreenplayAgent(
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      if (hydrating) return; // 历史恢复未完成前不发送,避免与恢复竞争(见评审 #2)
       const agent = agentRef.current!;
       if (agent.isRunning) return;
 
@@ -321,7 +336,7 @@ export function useScreenplayAgent(
       pendingRunIdRef.current = runId;
       await runWith(runId);
     },
-    [runWith],
+    [runWith, hydrating],
   );
 
   // 重试当前这一轮:沿用同一 runId、不再追加用户消息。服务端据此幂等,重发不重复落库(见 KI-2)。
@@ -340,6 +355,7 @@ export function useScreenplayAgent(
     thinking,
     error,
     hydratedBaseline,
+    hydrating,
     sendMessage,
     retry,
   };

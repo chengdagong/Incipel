@@ -65,7 +65,7 @@ export default function ChatScreen() {
   // 带 sessionId(从历史 / 作品 / 抽屉打开已有会话)时恢复历史消息与剧本;
   // 新建创作(仅带 idea + 全新 threadId)无需恢复。
   const reopening = !!params.sessionId;
-  const { messages, screenplay, streamingText, options, isRunning, thinking, error, hydratedBaseline, sendMessage, retry } =
+  const { messages, screenplay, streamingText, options, isRunning, thinking, error, hydratedBaseline, hydrating, sendMessage, retry } =
     useScreenplayAgent(threadId, { hydrate: reopening });
 
   // 「作品」入口可带 view=doc 直接进文档视图。
@@ -97,8 +97,9 @@ export default function ChatScreen() {
   const assistantCount = messages.filter((m) => m.role === 'assistant').length;
 
   // 续写已有会话:恢复出历史后,把实时「本轮新增」对比基线设为完整剧本——供之后真正的新一轮正确 diff,
-  // 也避免既有世界观 / 人物被误判为本轮新增。在渲染中惰性确立(仅一次),使紧接其后的 liveCard 同一渲染内即按正确基线计算。
-  if (reopening && reopenAssistantCountRef.current === null && messages.length > 0) {
+  // 也避免既有世界观 / 人物被误判为本轮新增。仅在恢复完成后(!hydrating)惰性确立(仅一次):恢复期间
+  // 禁用发送,故此时 messages 必为恢复出的历史、screenplay 必为完整剧本,基线一次到位(见评审 #2)。
+  if (reopening && !hydrating && reopenAssistantCountRef.current === null && messages.length > 0) {
     prevScreenplayRef.current = screenplay;
     assistantCountRef.current = assistantCount;
     reopenAssistantCountRef.current = assistantCount;
@@ -222,7 +223,7 @@ export default function ChatScreen() {
 
       <Composer
         ref={composerRef}
-        busy={isRunning}
+        busy={isRunning || hydrating}
         onSend={sendComposed}
         chips={chips}
         onRemoveChip={removeChip}
