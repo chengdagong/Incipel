@@ -479,25 +479,11 @@ function stopEdgeRuntime(root) {
   return true;
 }
 
-function stopKnownAgentServe(pidPath) {
+async function stopKnownAgentServe(pidPath) {
   if (!existsSync(pidPath)) return false;
   const pid = Number(readFileSync(pidPath, 'utf8').trim());
   if (!Number.isFinite(pid) || pid <= 0) return false;
-  if (DRY) {
-    log(`  [dry-run] kill ${pid}  (${pidPath})`);
-    return true;
-  }
-  try {
-    process.kill(pid, 'SIGTERM');
-    log(`  已停止 agent serve 进程(pid ${pid})`);
-    return true;
-  } catch (err) {
-    if (err?.code !== 'ESRCH') {
-      log(`  注意:agent serve 进程(pid ${pid}) 未停止:${err.message}`);
-      return false;
-    }
-    return false;
-  }
+  return stopPid(pid, 'agent serve');
 }
 
 function processAlive(pid) {
@@ -600,8 +586,8 @@ async function ensureAgentServe(root, { restart = false } = {}) {
 
     if (reason) {
       log(`  ${reason}`);
+      await stopKnownAgentServe(paths.servePid);
       stopEdgeRuntime(root);
-      stopKnownAgentServe(paths.servePid);
     } else {
       log('  agent edge function 已在 serve(/health 正常),跳过');
       return;
