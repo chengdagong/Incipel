@@ -27,7 +27,7 @@
 - Modify: `tools/incipel-dev/cli.test.mjs`
 - Modify: `tools/incipel-dev/cli.mjs`
 
-- [ ] **Step 1: Add failing tests for source snapshot and metadata mismatch**
+- [x] **Step 1: Add failing tests for source snapshot and metadata mismatch**
 
 Add tests near the existing `up dry-run restarts agent when env-file hash is missing despite healthy endpoint` test:
 
@@ -59,7 +59,7 @@ packages/agent/model.config.json
 packages/shared/src/tools.ts
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -69,7 +69,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: the two new tests fail because no JSON metadata helpers, source hashing, or current-`worktree` metadata validation exist.
 
-- [ ] **Step 3: Implement metadata paths and source/env snapshot helpers**
+- [x] **Step 3: Implement metadata paths and source/env snapshot helpers**
 
 In `tools/incipel-dev/cli.mjs`, add helpers after `sha1Text`:
 
@@ -160,7 +160,7 @@ function agentSnapshot(root) {
 }
 ```
 
-- [ ] **Step 4: Use metadata in dry-run serve readiness**
+- [x] **Step 4: Use metadata in dry-run serve readiness**
 
 Update `ensureAgentServe` to compute `paths = agentPaths(root)` and `snapshot = agentSnapshot(root)`. When `/health` is healthy, skip only if `readJson(paths.serveMeta)` has matching `repoRoot`, `functionName`, `sourceHash`, and `envHash`.
 
@@ -171,7 +171,7 @@ agent serve metadata does not match current worktree, restarting
 agent source/env changed, restarting agent edge runtime
 ```
 
-- [ ] **Step 5: Run tests and verify GREEN**
+- [x] **Step 5: Run tests and verify GREEN**
 
 Run:
 
@@ -181,7 +181,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: new metadata and source-hash tests pass, existing env-hash test still passes.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add tools/incipel-dev/cli.mjs tools/incipel-dev/cli.test.mjs

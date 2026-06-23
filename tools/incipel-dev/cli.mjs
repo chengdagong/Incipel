@@ -21,9 +21,9 @@
 
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 // 管道被下游(如 `| head`)提前关闭时,别让 EPIPE 把进程打成未捕获异常。
 process.stdout.on('error', (e) => {
@@ -69,6 +69,77 @@ function worktreeHash(root) {
 }
 function sha1Text(text) {
   return createHash('sha1').update(text).digest('hex');
+}
+const AGENT_FUNCTION = 'agent';
+
+function agentPaths(root) {
+  const token = worktreeHash(root);
+  return {
+    serveLog: join(tmpdir(), `incipel-agent-serve-${token}.log`),
+    servePid: join(tmpdir(), `incipel-agent-serve-${token}.pid`),
+    serveMeta: join(tmpdir(), `incipel-agent-serve-${token}.json`),
+    serveEnvHash: join(tmpdir(), `incipel-agent-serve-${token}.env.sha1`),
+    watcherLog: join(tmpdir(), `incipel-agent-watcher-${token}.log`),
+    watcherMeta: join(tmpdir(), `incipel-agent-watcher-${token}.json`),
+  };
+}
+
+function readJson(file) {
+  if (!existsSync(file)) return null;
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(file, data) {
+  writeFileSync(file, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function collectFiles(dir, predicate, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const file = join(dir, entry.name);
+    if (entry.isDirectory()) collectFiles(file, predicate, out);
+    else if (entry.isFile() && predicate(file)) out.push(file);
+  }
+  return out;
+}
+
+function agentSourceFiles(root) {
+  const files = [
+    join(root, 'supabase', 'functions', AGENT_FUNCTION, 'index.ts'),
+    join(root, 'supabase', 'functions', AGENT_FUNCTION, 'deno.json'),
+    join(root, 'supabase', 'functions', AGENT_FUNCTION, 'deno.lock'),
+    join(root, 'packages', 'agent', 'model.config.json'),
+  ];
+  collectFiles(join(root, 'packages', 'agent', 'src'), (file) => file.endsWith('.ts'), files);
+  collectFiles(join(root, 'packages', 'shared', 'src'), (file) => file.endsWith('.ts'), files);
+  return files.filter(existsSync).map((file) => relative(root, file)).sort();
+}
+
+function hashFiles(root, files) {
+  const hash = createHash('sha1');
+  for (const file of files) {
+    hash.update(file);
+    hash.update('\0');
+    hash.update(readFileSync(join(root, file)));
+    hash.update('\0');
+  }
+  return hash.digest('hex');
+}
+
+function agentSnapshot(root) {
+  const sourceFiles = agentSourceFiles(root);
+  const fnEnv = join(root, 'supabase', '.env');
+  const envHash = existsSync(fnEnv) ? sha1Text(readFileSync(fnEnv, 'utf8')) : '';
+  return {
+    sourceFiles,
+    sourceHash: hashFiles(root, sourceFiles),
+    watchedPathsHash: sha1Text(sourceFiles.join('\n')),
+    envHash,
+  };
 }
 function isSensitiveEnvKey(key) {
   if (key.startsWith('EXPO_PUBLIC_')) return false;
@@ -429,35 +500,43 @@ function stopKnownAgentServe(pidPath) {
 
 async function ensureAgentServe(root, { restart = false } = {}) {
   const apiPort = canonicalApiPort(root);
-  const token = worktreeHash(root);
-  const logPath = join(tmpdir(), `incipel-agent-serve-${token}.log`);
-  const pidPath = join(tmpdir(), `incipel-agent-serve-${token}.pid`);
-  const envHashPath = join(tmpdir(), `incipel-agent-serve-${token}.env.sha1`);
-  const fnEnv = join(root, 'supabase', '.env');
-  const envHash = existsSync(fnEnv) ? sha1Text(readFileSync(fnEnv, 'utf8')) : '';
-  const prevEnvHash = existsSync(envHashPath) ? readFileSync(envHashPath, 'utf8').trim() : null;
-  const envFileChanged = prevEnvHash !== envHash;
+  const paths = agentPaths(root);
+  const snapshot = agentSnapshot(root);
+  const meta = readJson(paths.serveMeta);
+  const prevEnvHash = existsSync(paths.serveEnvHash) ? readFileSync(paths.serveEnvHash, 'utf8').trim() : null;
+  const envFileChanged = prevEnvHash !== snapshot.envHash;
   const healthy = await agentHealthy(apiPort);
-  if (healthy && restart) {
-    log('  agent env 已更新,重启 agent edge runtime');
-    stopEdgeRuntime(root);
-    stopKnownAgentServe(pidPath);
-  } else if (healthy && envFileChanged) {
-    log('  agent env-file 内容已变化,重启 agent edge runtime');
-    stopEdgeRuntime(root);
-    stopKnownAgentServe(pidPath);
-  } else if (healthy) {
-    log('  agent edge function 已在 serve(/health 正常),跳过');
-    return;
+  if (healthy) {
+    let reason = null;
+    if (meta) {
+      if (meta.repoRoot !== root || meta.functionName !== AGENT_FUNCTION) {
+        reason = 'agent serve metadata does not match current worktree, restarting';
+      } else if (restart || meta.sourceHash !== snapshot.sourceHash || meta.envHash !== snapshot.envHash) {
+        reason = 'agent source/env changed, restarting agent edge runtime';
+      }
+    } else if (restart || envFileChanged) {
+      reason = 'agent env-file 内容已变化,重启 agent edge runtime';
+    } else {
+      reason = 'agent serve metadata does not match current worktree, restarting';
+    }
+
+    if (reason) {
+      log(`  ${reason}`);
+      stopEdgeRuntime(root);
+      stopKnownAgentServe(paths.servePid);
+    } else {
+      log('  agent edge function 已在 serve(/health 正常),跳过');
+      return;
+    }
   }
   const serveArgs = ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'];
   if (DRY) {
     log(`  [dry-run] detached: supabase ${serveArgs.join(' ')}`);
-    log(`  [dry-run] 日志 ${logPath} / pid ${pidPath} / env hash ${envHashPath}`);
+    log(`  [dry-run] 日志 ${paths.serveLog} / pid ${paths.servePid} / metadata ${paths.serveMeta}`);
     return;
   }
   // detached + unref + stdio 重定向到日志文件:Node 退出后该 serve 仍继续跑。
-  const fd = openSync(logPath, 'a');
+  const fd = openSync(paths.serveLog, 'a');
   const child = spawn('supabase', serveArgs, { cwd: root, detached: true, stdio: ['ignore', fd, fd] });
   // 监听早退:serve 因 Deno 解析 / env / 端口错误立刻退出时,别让健康检查超时后还谎报「仍在编译」、
   // 把 Metro 指向一个根本没在跑的 agent(评审 A)。父进程(本 CLI)存活期间 'exit' 照常触发。
@@ -468,22 +547,22 @@ async function ensureAgentServe(root, { restart = false } = {}) {
     serveExitCode = code;
   });
   child.unref();
-  if (child.pid) writeFileSync(pidPath, `${child.pid}\n`);
-  log(`  已后台启动 agent serve(pid ${child.pid ?? '?'});日志 ${logPath}`);
-  log(`  停止它:kill \$(cat ${pidPath})  (停整个栈:supabase stop)`);
+  if (child.pid) writeFileSync(paths.servePid, `${child.pid}\n`);
+  log(`  已后台启动 agent serve(pid ${child.pid ?? '?'});日志 ${paths.serveLog}`);
+  log(`  停止它:kill \$(cat ${paths.servePid})  (停整个栈:supabase stop)`);
   for (let i = 0; i < 20; i++) {
     await sleep(500);
     if (serveExited) {
-      fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'})——多半是 Deno 解析 / env / 端口问题;看日志:${logPath}`);
+      fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'})——多半是 Deno 解析 / env / 端口问题;看日志:${paths.serveLog}`);
     }
     if (await agentHealthy(apiPort)) {
-      writeFileSync(envHashPath, `${envHash}\n`);
+      writeFileSync(paths.serveEnvHash, `${snapshot.envHash}\n`);
       log('  agent 已就绪(/health 正常)');
       return;
     }
   }
   if (serveExited) {
-    fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'});看日志:${logPath}`);
+    fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'});看日志:${paths.serveLog}`);
   }
   log('  agent 仍在后台编译启动(首次较慢),稍候即可;有问题看上面的日志。');
 }

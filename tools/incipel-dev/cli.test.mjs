@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -22,6 +23,75 @@ function mustRun(bin, args, cwd) {
   const res = run(bin, args, cwd);
   assert.equal(res.status, 0, `${bin} ${args.join(' ')}\n${res.stdout}\n${res.stderr}`);
   return res;
+}
+
+function sha1(text) {
+  return createHash('sha1').update(text).digest('hex');
+}
+
+function metadataPaths(root) {
+  const token = sha1(root).slice(0, 8);
+  return {
+    serveMeta: path.join(tmpdir(), `incipel-agent-serve-${token}.json`),
+  };
+}
+
+function cleanupMetadata(root) {
+  rmSync(metadataPaths(root).serveMeta, { force: true });
+}
+
+function writeAgentFixture(root, port) {
+  mkdirSync(path.join(root, 'apps', 'mobile'), { recursive: true });
+  mkdirSync(path.join(root, 'supabase', 'functions', 'agent'), { recursive: true });
+  mkdirSync(path.join(root, 'packages', 'agent', 'src'), { recursive: true });
+  mkdirSync(path.join(root, 'packages', 'shared', 'src'), { recursive: true });
+  mkdirSync(path.join(root, 'bin'), { recursive: true });
+
+  writeFileSync(path.join(root, 'supabase', 'config.toml'), ['project_id = "incipel"', '', '[api]', `port = ${port}`, ''].join('\n'));
+  writeFileSync(
+    path.join(root, 'apps', 'mobile', '.env'),
+    [
+      `EXPO_PUBLIC_SUPABASE_URL=http://127.0.0.1:${port}`,
+      'EXPO_PUBLIC_SUPABASE_ANON_KEY=anon',
+      `EXPO_PUBLIC_AGENT_URL=http://127.0.0.1:${port}/functions/v1/agent`,
+      'EXPO_PUBLIC_DEV_NO_AUTH=',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(
+    path.join(root, 'supabase', '.env'),
+    [
+      'MODEL_PROVIDER=openrouter',
+      'OPENROUTER_API_KEY=sk-test',
+      `INCIPEL_SUPABASE_JWT_ISS=http://127.0.0.1:${port}/auth/v1`,
+      'INCIPEL_SUPABASE_JWT_AUD=authenticated',
+      'INCIPEL_SUPABASE_JWT_SECRET=secret',
+      '',
+    ].join('\n'),
+  );
+  writeFileSync(path.join(root, 'supabase', 'functions', 'agent', 'index.ts'), 'Deno.serve(() => new Response("ok"));\n');
+  writeFileSync(path.join(root, 'supabase', 'functions', 'agent', 'deno.json'), '{"imports":{}}\n');
+  writeFileSync(path.join(root, 'packages', 'agent', 'src', 'app.ts'), 'export const app = "agent";\n');
+  writeFileSync(path.join(root, 'packages', 'agent', 'model.config.json'), '{"provider":"stub"}\n');
+  writeFileSync(path.join(root, 'packages', 'shared', 'src', 'tools.ts'), 'export const tools = [];\n');
+  writeFileSync(
+    path.join(root, 'bin', 'supabase'),
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "status" ]; then',
+      '  if [ "$2" = "-o" ] && [ "$3" = "json" ]; then',
+      `    printf '%s\\n' '{"API_URL":"http://127.0.0.1:${port}","ANON_KEY":"anon","JWT_SECRET":"secret"}'`,
+      '  else',
+      '    printf "%s\\n" "supabase local development setup is running."',
+      '  fi',
+      '  exit 0',
+      'fi',
+      'printf "%s\\n" "unexpected supabase command: $*" >&2',
+      'exit 1',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
 }
 
 async function startHealthServer() {
@@ -213,6 +283,85 @@ test('up dry-run restarts agent when env-file hash is missing despite healthy en
     assert.match(res.stdout, /\[dry-run\] docker stop supabase_edge_runtime_incipel/);
     assert.match(res.stdout, /\[dry-run\] detached: supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
   } finally {
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up dry-run restarts agent when healthy serve metadata belongs to another worktree', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+
+  try {
+    writeAgentFixture(tmp, port);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify(
+        {
+          repoRoot: `${root}-other`,
+          functionName: 'agent',
+          pid: 12345,
+          sourceHash: 'same-source',
+          envHash: 'same-env',
+          status: 'ready',
+        },
+        null,
+        2,
+      ),
+    );
+
+    const res = run('node', [cli, 'up', '--dry-run'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /agent serve metadata does not match current worktree, restarting/);
+    assert.match(res.stdout, /\[dry-run\] detached: supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up dry-run restarts agent when source hash changes despite healthy endpoint', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+
+  try {
+    writeAgentFixture(tmp, port);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify(
+        {
+          repoRoot: root,
+          functionName: 'agent',
+          pid: 12345,
+          sourceHash: 'stale-source',
+          envHash: 'stale-env',
+          status: 'ready',
+        },
+        null,
+        2,
+      ),
+    );
+
+    const res = run('node', [cli, 'up', '--dry-run'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /agent source\/env changed, restarting agent edge runtime/);
+    assert.match(res.stdout, /\[dry-run\] docker stop supabase_edge_runtime_incipel/);
+    assert.match(res.stdout, /\[dry-run\] detached: supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
     health.child.kill();
     rmSync(tmp, { recursive: true, force: true });
   }
