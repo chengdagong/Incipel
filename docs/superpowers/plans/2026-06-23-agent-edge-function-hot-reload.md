@@ -519,7 +519,7 @@ CODEX_DOCS_REVIEWED=1 git commit -m "docs(dev): document agent watcher lifecycle
 **Files:**
 - Verify only; no planned edits unless tests reveal a defect.
 
-- [ ] **Step 1: Run focused CLI tests**
+- [x] **Step 1: Run focused CLI tests**
 
 ```bash
 node --test tools/incipel-dev/cli.test.mjs
@@ -527,7 +527,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: all CLI tests pass.
 
-- [ ] **Step 2: Run monorepo tests**
+- [x] **Step 2: Run monorepo tests**
 
 ```bash
 pnpm test
@@ -535,7 +535,7 @@ pnpm test
 
 Expected: all tests pass.
 
-- [ ] **Step 3: Run typecheck**
+- [x] **Step 3: Run typecheck**
 
 ```bash
 pnpm typecheck
@@ -543,7 +543,7 @@ pnpm typecheck
 
 Expected: all packages pass type checking.
 
-- [ ] **Step 4: Run diff checks**
+- [x] **Step 4: Run diff checks**
 
 ```bash
 git diff --check
@@ -552,7 +552,7 @@ git status --short
 
 Expected: no whitespace errors; only intentional files are modified before the final commit.
 
-- [ ] **Step 5: Final commit if needed**
+- [x] **Step 5: Final commit if needed**
 
 If verification required small fixes after earlier commits:
 
