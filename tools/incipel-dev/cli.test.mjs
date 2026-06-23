@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,11 +33,24 @@ function metadataPaths(root) {
   const token = sha1(root).slice(0, 8);
   return {
     serveMeta: path.join(tmpdir(), `incipel-agent-serve-${token}.json`),
+    servePid: path.join(tmpdir(), `incipel-agent-serve-${token}.pid`),
   };
 }
 
 function cleanupMetadata(root) {
-  rmSync(metadataPaths(root).serveMeta, { force: true });
+  const paths = metadataPaths(root);
+  if (existsSync(paths.servePid)) {
+    const pid = Number(readFileSync(paths.servePid, 'utf8').trim());
+    if (Number.isFinite(pid) && pid > 0) {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // Process may have already exited.
+      }
+    }
+  }
+  rmSync(paths.serveMeta, { force: true });
+  rmSync(paths.servePid, { force: true });
 }
 
 function writeAgentFixture(root, port) {
@@ -85,6 +98,39 @@ function writeAgentFixture(root, port) {
       '    printf "%s\\n" "supabase local development setup is running."',
       '  fi',
       '  exit 0',
+      'fi',
+      'printf "%s\\n" "unexpected supabase command: $*" >&2',
+      'exit 1',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+}
+
+function writeFakeDocker(root) {
+  writeFileSync(
+    path.join(root, 'bin', 'docker'),
+    ['#!/bin/sh', 'printf "%s\\n" "docker $*" >> "$INC_TEST_DOCKER_LOG"', 'exit 0', ''].join('\n'),
+    { mode: 0o755 },
+  );
+}
+
+function makeFakeSupabaseServe(root, port) {
+  writeFileSync(
+    path.join(root, 'bin', 'supabase'),
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "status" ]; then',
+      '  if [ "$2" = "-o" ] && [ "$3" = "json" ]; then',
+      `    printf '%s\\n' '{"API_URL":"http://127.0.0.1:${port}","ANON_KEY":"anon","JWT_SECRET":"secret"}'`,
+      '  else',
+      '    printf "%s\\n" "supabase local development setup is running."',
+      '  fi',
+      '  exit 0',
+      'fi',
+      'if [ "$1" = "functions" ] && [ "$2" = "serve" ]; then',
+      '  printf "%s\\n" "supabase $*" >> "$INC_TEST_SERVE_LOG"',
+      `  exec "${process.execPath}" -e 'setInterval(() => {}, 1000)'`,
       'fi',
       'printf "%s\\n" "unexpected supabase command: $*" >&2',
       'exit 1',
@@ -359,6 +405,48 @@ test('up dry-run restarts agent when source hash changes despite healthy endpoin
     assert.match(res.stdout, /agent source\/env changed, restarting agent edge runtime/);
     assert.match(res.stdout, /\[dry-run\] docker stop supabase_edge_runtime_incipel/);
     assert.match(res.stdout, /\[dry-run\] detached: supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up writes current-worktree serve metadata when starting detached agent', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+  const serveLog = path.join(tmp, 'serve.log');
+  const dockerLog = path.join(tmp, 'docker.log');
+
+  try {
+    writeAgentFixture(tmp, port);
+    makeFakeSupabaseServe(tmp, port);
+    writeFakeDocker(tmp);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+
+    const res = run('node', [cli, 'up'], tmp, {
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(readFileSync(serveLog, 'utf8'), /supabase functions serve agent --env-file supabase\/\.env --no-verify-jwt/);
+
+    const meta = JSON.parse(readFileSync(metadataPaths(root).serveMeta, 'utf8'));
+    assert.equal(meta.repoRoot, root);
+    assert.equal(meta.functionName, 'agent');
+    assert.equal(meta.command, 'supabase functions serve agent --env-file supabase/.env --no-verify-jwt');
+    assert.equal(typeof meta.pid, 'number');
+    assert.equal(meta.logPath.endsWith(`incipel-agent-serve-${sha1(root).slice(0, 8)}.log`), true);
+    assert.match(meta.sourceHash, /^[a-f0-9]{40}$/);
+    assert.match(meta.envHash, /^[a-f0-9]{40}$/);
+    assert.equal(meta.status, 'ready');
   } finally {
     const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
     cleanupMetadata(root);

@@ -548,6 +548,19 @@ async function ensureAgentServe(root, { restart = false } = {}) {
   });
   child.unref();
   if (child.pid) writeFileSync(paths.servePid, `${child.pid}\n`);
+  writeJson(paths.serveMeta, {
+    repoRoot: root,
+    functionName: AGENT_FUNCTION,
+    pid: child.pid ?? null,
+    command: `supabase ${serveArgs.join(' ')}`,
+    logPath: paths.serveLog,
+    sourceHash: snapshot.sourceHash,
+    envHash: snapshot.envHash,
+    watchedPathsHash: snapshot.watchedPathsHash,
+    sourceFiles: snapshot.sourceFiles,
+    status: 'pending',
+    updatedAt: new Date().toISOString(),
+  });
   log(`  已后台启动 agent serve(pid ${child.pid ?? '?'});日志 ${paths.serveLog}`);
   log(`  停止它:kill \$(cat ${paths.servePid})  (停整个栈:supabase stop)`);
   for (let i = 0; i < 20; i++) {
@@ -557,6 +570,19 @@ async function ensureAgentServe(root, { restart = false } = {}) {
     }
     if (await agentHealthy(apiPort)) {
       writeFileSync(paths.serveEnvHash, `${snapshot.envHash}\n`);
+      writeJson(paths.serveMeta, {
+        repoRoot: root,
+        functionName: AGENT_FUNCTION,
+        pid: child.pid ?? null,
+        command: `supabase ${serveArgs.join(' ')}`,
+        logPath: paths.serveLog,
+        sourceHash: snapshot.sourceHash,
+        envHash: snapshot.envHash,
+        watchedPathsHash: snapshot.watchedPathsHash,
+        sourceFiles: snapshot.sourceFiles,
+        status: 'ready',
+        updatedAt: new Date().toISOString(),
+      });
       log('  agent 已就绪(/health 正常)');
       return;
     }

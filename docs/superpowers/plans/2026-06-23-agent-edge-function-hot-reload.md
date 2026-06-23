@@ -194,7 +194,7 @@ CODEX_DOCS_REVIEWED=1 git commit -m "feat(dev): validate agent serve metadata"
 - Modify: `tools/incipel-dev/cli.test.mjs`
 - Modify: `tools/incipel-dev/cli.mjs`
 
-- [ ] **Step 1: Add failing tests for written serve metadata**
+- [x] **Step 1: Add failing tests for written serve metadata**
 
 Add a test with fake `supabase` and fake `docker` commands. The fake `supabase functions serve` script should stay alive long enough for the CLI to write metadata. The test should assert that `incipel-agent-serve-<hash>.json` contains:
 
@@ -208,7 +208,7 @@ Add a test with fake `supabase` and fake `docker` commands. The fake `supabase f
 }
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run:
 
@@ -218,7 +218,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: the metadata-file assertion fails because serve metadata is not written.
 
-- [ ] **Step 3: Write serve metadata when starting detached serve**
+- [x] **Step 3: Write serve metadata when starting detached serve**
 
 After spawning detached `supabase functions serve`, write pending metadata:
 
@@ -240,11 +240,11 @@ writeJson(paths.serveMeta, {
 
 When health check succeeds, update `status` to `ready`.
 
-- [ ] **Step 4: Preserve existing PID compatibility**
+- [x] **Step 4: Preserve existing PID compatibility**
 
 Continue writing `paths.servePid` so existing manual `kill $(cat ...)` instructions still work during transition. Use the JSON metadata as the authoritative state for new logic.
 
-- [ ] **Step 5: Run tests and verify GREEN**
+- [x] **Step 5: Run tests and verify GREEN**
 
 Run:
 
@@ -254,7 +254,7 @@ node --test tools/incipel-dev/cli.test.mjs
 
 Expected: serve metadata is written and existing tests pass.
 
-- [ ] **Step 6: Commit Task 2**
+- [x] **Step 6: Commit Task 2**
 
 ```bash
 git add tools/incipel-dev/cli.mjs tools/incipel-dev/cli.test.mjs
