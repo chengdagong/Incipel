@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +60,31 @@ function normalizeRoot(root) {
 
 function agentPort() {
   return TEST_AGENT_PORT;
+}
+
+async function portAvailable(port) {
+  return await new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', (error) => {
+      if (error?.code === 'EADDRINUSE') {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    });
+    server.listen({ host: '127.0.0.1', port }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function findAvailablePortPair() {
+  const start = 20000 + (process.pid % 20000);
+  for (let offset = 0; offset < 1000; offset += 1) {
+    const port = start + offset * 2;
+    if ((await portAvailable(port)) && (await portAvailable(port + 1))) return port;
+  }
+  throw new Error('could not find two adjacent free ports');
 }
 
 function e2eAgentPort(root) {
@@ -240,6 +266,24 @@ function makeFakeAgentServe(root, port) {
       'if [ "$1" = "--filter" ] && [ "$2" = "@incipel/agent" ] && { [ "$3" = "dev" ] || [ "$3" = "start" ]; }; then',
       '  printf "%s\\n" "pnpm $*" >> "$INC_TEST_SERVE_LOG"',
       `  exec "${process.execPath}" -e 'setInterval(() => {}, 1000)' pnpm --filter @incipel/agent "$3"`,
+      'fi',
+      'printf "%s\\n" "unexpected pnpm command: $*" >&2',
+      'exit 1',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+}
+
+function makeFakeAgentDevExit(root) {
+  writeFileSync(
+    path.join(root, 'bin', 'pnpm'),
+    [
+      '#!/bin/sh',
+      'if [ "$1" = "--filter" ] && [ "$2" = "@incipel/agent" ] && [ "$3" = "dev" ]; then',
+      '  printf "%s\\n" "pnpm $*" >> "$INC_TEST_SERVE_LOG"',
+      '  printf "%s\\n" "AGENT_PORT=$AGENT_PORT" >> "$INC_TEST_SERVE_LOG"',
+      '  exit 0',
       'fi',
       'printf "%s\\n" "unexpected pnpm command: $*" >&2',
       'exit 1',
@@ -454,6 +498,79 @@ test('env sync honors the INCIPEL_DEV_AGENT_PORT override for the dev agent port
     assert.match(mobileEnv, /^EXPO_PUBLIC_AGENT_URL=http:\/\/127\.0\.0\.1:49876$/m);
     assert.match(agentEnv, /^AGENT_PORT=49876$/m);
   } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('dev asks to start the foreground agent on the next port when the configured port is occupied', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const occupiedPort = await findAvailablePortPair();
+  const nextPort = occupiedPort + 1;
+  const blocker = await startHealthServer(occupiedPort);
+  const serveLog = path.join(tmp, 'serve.log');
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    makeFakeAgentDevExit(tmp);
+    mustRun('git', ['init'], tmp);
+
+    const res = spawnSync(process.execPath, [cli, 'dev'], {
+      cwd: tmp,
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INCIPEL_DEV_AGENT_PORT: String(occupiedPort),
+        INCIPEL_DEV_PROMPT_STDIN: '1',
+      },
+      input: 'y\n',
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, new RegExp(`agent 端口 ${occupiedPort} 已被占用`));
+    assert.match(res.stdout, new RegExp(`本次 agent 改用端口 ${nextPort}`));
+
+    const mobileEnv = readFileSync(path.join(tmp, 'apps', 'mobile', '.env'), 'utf8');
+    const agentEnv = readFileSync(path.join(tmp, 'supabase', '.env'), 'utf8');
+    const loggedServe = readFileSync(serveLog, 'utf8');
+    assert.match(mobileEnv, new RegExp(`^EXPO_PUBLIC_AGENT_URL=http://127\\.0\\.0\\.1:${nextPort}$`, 'm'));
+    assert.match(agentEnv, new RegExp(`^AGENT_PORT=${nextPort}$`, 'm'));
+    assert.match(loggedServe, /pnpm --filter @incipel\/agent dev/);
+    assert.match(loggedServe, new RegExp(`^AGENT_PORT=${nextPort}$`, 'm'));
+  } finally {
+    blocker.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('dev exits instead of waiting when the configured agent port is occupied outside an interactive prompt', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const occupiedPort = await findAvailablePortPair();
+  const blocker = await startHealthServer(occupiedPort);
+  const serveLog = path.join(tmp, 'serve.log');
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    makeFakeAgentDevExit(tmp);
+    mustRun('git', ['init'], tmp);
+
+    const res = spawnSync(process.execPath, [cli, 'dev'], {
+      cwd: tmp,
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INCIPEL_DEV_AGENT_PORT: String(occupiedPort),
+      },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    assert.equal(res.status, 1);
+    assert.match(res.stderr, new RegExp(`agent 端口 ${occupiedPort} 已被占用`));
+    assert.equal(existsSync(serveLog), false);
+  } finally {
+    blocker.child.kill();
     rmSync(tmp, { recursive: true, force: true });
   }
 });

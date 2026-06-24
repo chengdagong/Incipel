@@ -35,8 +35,10 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 
 // 管道被下游(如 `| head`)提前关闭时,别让 EPIPE 把进程打成未捕获异常。
@@ -92,6 +94,67 @@ function worktreeHash(root) {
 function agentPort() {
   const override = Number(process.env.INCIPEL_DEV_AGENT_PORT);
   return Number.isInteger(override) && override > 0 ? override : DEV_AGENT_PORT;
+}
+function setDevAgentPort(port) {
+  process.env.INCIPEL_DEV_AGENT_PORT = String(port);
+}
+async function portAvailable(port) {
+  return await new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', (error) => {
+      if (error?.code === 'EADDRINUSE') {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    });
+    server.listen({ host: '127.0.0.1', port }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+async function nextAvailablePort(start) {
+  for (let port = start; port < start + 100; port += 1) {
+    if (await portAvailable(port)) return port;
+  }
+  fail(`未找到可用的 agent 端口(已检查 ${start}..${start + 99})`);
+}
+function canAskPortQuestion() {
+  return process.stdin.isTTY || process.env.INCIPEL_DEV_PROMPT_STDIN === '1';
+}
+async function askYesNo(question) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = (await rl.question(`${question} [y/N] `)).trim().toLowerCase();
+    return answer === 'y' || answer === 'yes' || answer === '是';
+  } finally {
+    rl.close();
+  }
+}
+async function chooseDevAgentPort() {
+  const preferredPort = agentPort();
+  if (DRY) return preferredPort;
+  let available = false;
+  try {
+    available = await portAvailable(preferredPort);
+  } catch (error) {
+    fail(`无法检查 agent 端口 ${preferredPort}: ${error?.message ?? error}`);
+  }
+  if (available) return preferredPort;
+
+  const fallbackPort = await nextAvailablePort(preferredPort + 1);
+  const message =
+    `agent 端口 ${preferredPort} 已被占用。` +
+    `是否改用端口 ${fallbackPort} 启动本次 agent?`;
+  if (!canAskPortQuestion()) {
+    fail(`${message} 当前运行环境不能询问用户;请停止占用端口的进程,或设置 INCIPEL_DEV_AGENT_PORT 后重试`);
+  }
+  if (!(await askYesNo(`  ${message}`))) {
+    fail(`agent 端口 ${preferredPort} 已被占用;已取消启动`);
+  }
+  setDevAgentPort(fallbackPort);
+  log(`  本次 agent 改用端口 ${fallbackPort}`);
+  return fallbackPort;
 }
 function e2eAgentPort(root) {
   return E2E_AGENT_PORT_BASE + (parseInt(worktreeHash(root).slice(0, 4), 16) % 2000);
@@ -1016,7 +1079,9 @@ async function watchAgent(root) {
 }
 
 // ── dev:起共用栈(若未起)+ env sync + 前台 agent server(带热重载日志)──────────
-function dev(root) {
+async function dev(root) {
+  log('▸ 检查 agent 端口');
+  await chooseDevAgentPort();
   log('▸ 检查共用 Supabase 栈');
   ensureStack(root);
   log('▸ 同步 env');
@@ -1180,7 +1245,7 @@ function help() {
 const root = cmd && cmd !== 'help' ? repoRoot() : null;
 switch (cmd) {
   case 'dev':
-    dev(root);
+    await dev(root);
     break;
   case 'up':
     await up(root);
