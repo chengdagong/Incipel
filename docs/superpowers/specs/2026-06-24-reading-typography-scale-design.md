@@ -200,3 +200,69 @@ export function ReaderText({ style, ...rest }: TextProps) {
 3. 重启 app 后档位保留。
 4. 默认安装(未调过)时,阅读表面与改动前像素一致。
 5. `readingScale.test.ts` 全部通过,`tsc --noEmit` 无报错。
+
+---
+
+## 增补:段落间距(第三档)
+
+日期:2026-06-24(同分支后续增量)。在已有字号 / 行距两档之上,加第三个独立分档「段落间距」。
+
+### 目标 / 范围
+
+- 调整剧本阅读正文里**段落 / 块之间**的竖向间距:节拍之间、世界观段落之间、对白 / 动作块之间、场与场、幕与幕。
+- 默认标准档倍率 1.0,升级零变化。
+- **不含**:卡片与卡片之间(分面卡、节拍卡、内联卡片之间)、结构性内边距(头部 / 页脚 / 标签到正文 / 徽标 / 标签 chip)。
+
+### 机制
+
+段落间距落在 `View` 的 margin / gap 上,`ReaderText`(只缩 fontSize / lineHeight)管不到,故另起一维 `paraScale`。
+
+`readingScale.ts` 增:
+- `type ParaLevel = 'compact' | 'standard' | 'loose'`
+- `PARA_SCALES: Record<ParaLevel, number> = { compact: 0.6, standard: 1, loose: 1.6 }`
+- `normalizeParaLevel(v: unknown): ParaLevel`(未知 / 损坏回落 `standard`)
+- `scaleGap(base: number, paraScale: number): number = Math.round(base * paraScale)`(间距为整数像素)
+
+`readingPrefs.tsx` 增 `paraLevel / setParaLevel / paraScale`(`paraScale = PARA_SCALES[paraLevel]`),AsyncStorage 键 `scn_read_para_v1`,默认 `standard`。
+
+### 参与缩放的间距点(共 8 处)
+
+`InlineCard.tsx`:
+- 世界观段落 `bodyPara` 的 `marginBottom`(8)
+- 幕间 `outlineActGap` 的 `marginTop`(16)
+- 节拍间 `outlineBeatGap` 的 `marginTop`(9)
+- 场间 `scene` 的 `marginBottom`(14)
+
+`DocPanel.tsx`:
+- 节拍间 `beatTextGap` 的 `marginTop`(9)
+- 场间 script 包裹 `View` 的 `gap`(30;`marginTop: 18` 是顶部偏移,结构性,不动)
+- 动作块 `action` 的 `marginBottom`(12)
+- 对白块 `cueBlock` 的 `marginBottom`(12)
+
+做法:把上述静态 margin / gap 换成组件内读 `paraScale` 算出的值(`scaleGap(base, paraScale)`),以内联样式覆盖。`bodyPara` 等同时被 `ReaderText` 缩放的节点,内联 margin 经 `ReaderText` 的 `style={[flat, scaled]}` 透传(`scaled` 只覆盖 font / line,不动 margin)。
+
+### 设置界面
+
+设置页「阅读」节加第三个分档行「段落间距」(紧凑 / 标准 / 宽松),沿用同一 `Segmented` 控件。预览卡改为「幕名 + 两条节拍」,使节拍之间的段间距在预览里随档实时可见。
+
+### i18n
+
+`READING_I18N` 加行标签 `paraSpacing`(段落间距 / Paragraph spacing / 段落間隔 / 段落間距),四语言齐全。档名复用现有 `紧凑 / 标准 / 宽松`(与行距同词,不另造词条)。
+
+### 测试
+
+`readingScale.test.ts` 增:
+- `PARA_SCALES` 取值(`{ compact: 0.6, standard: 1, loose: 1.6 }`)。
+- `normalizeParaLevel` 回落标准档。
+- `scaleGap` 取整:`scaleGap(9, 0.6) = 5`、`scaleGap(16, 1.6) = 26`、`scaleGap(30, 0.6) = 18`、`scaleGap(10, 1) = 10`。
+
+### 涉及文件
+
+改:`readingScale.ts`、`readingPrefs.tsx`、`app/(app)/settings.tsx`、`InlineCard.tsx`、`DocPanel.tsx`、`i18n.tsx`、`readingScale.test.ts`。无新文件。
+
+### 验收
+
+1. 设置页出现第三档「段落间距」,当前档高亮;预览随选择实时变化(两条节拍间距可见)。
+2. 改段落间距后,内联卡片与文档里节拍 / 段落 / 对白 / 场 / 幕之间的间距随之变化;卡片之间、结构性内边距不变。
+3. 重启保留;标准档与改动前像素一致。
+4. `readingScale.test.ts` 全部通过,`tsc --noEmit` 无报错。
