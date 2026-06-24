@@ -5,6 +5,7 @@
 // 也就是说:本主题在「布局 / 间距 / 字号字重行高 / 圆角 / 表面底色 / 描边 / 投影」上与原型一致,
 // 仅在「品牌色」与「正文文字灰阶」上保留可读性更高的取值。
 
+import { Platform } from 'react-native';
 import { ACCENT_OPTIONS } from '@incipel/shared';
 
 // 默认主色(用户可在设置里改 accent)。原型默认色为亮陶土 #C2724E,但白字 CTA / 小字链接均不达 AA,
@@ -90,7 +91,9 @@ export const palette = {
 //(原生 expo-font / web Google Fonts);原型本身亦只加载 ≤600 字重,故各处衬线落在同一字重。
 export const fonts = {
   serifTitle: 'Noto Serif SC' as string,
-  mono: 'ui-monospace' as string, // 分场 slug / 正文用等宽(原型 ui-monospace,Menlo)
+  // 分场 slug / 正文用等宽。原生端 'ui-monospace' 是 CSS 通用族名、非已注册 RN 字体,
+  // 直接传 fontFamily 会触发「Unrecognized font family」/ 回退异常,故按平台选已注册等宽族。
+  mono: (Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace' }) ?? 'ui-monospace') as string,
   body: undefined as string | undefined, // 正文用系统默认
 } as const;
 
