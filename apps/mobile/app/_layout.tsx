@@ -29,8 +29,8 @@ function RootNavigator() {
   const fontsLoaded = useAppFonts();
   const ready = authReady && fontsLoaded;
 
-  // I18nProvider 包住一切(含抽屉),任意屏用 useT() 取界面文案(见 issue #13);
-  // 它只切界面文案,不影响 AI 回复语言(见 ADR-0004 / i18n.tsx 的 langDesc)。
+  // I18nProvider + ReadingPrefsProvider 包住一切(含抽屉):前者切界面文案(见 issue #13),
+  // 后者持久化阅读区字号 / 行距偏好(见 src/readingPrefs);两者都不影响 AI 回复语言(见 ADR-0004)。
   return (
     <I18nProvider>
       <ReadingPrefsProvider>{ready ? <AppShell /> : <Preparing />}</ReadingPrefsProvider>

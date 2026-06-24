@@ -35,6 +35,11 @@ describe('readingScale', () => {
     expect(scaleReaderStyle({ fontSize: 20, lineHeight: 20 }, 1, 1.15)).toEqual({ fontSize: 20, lineHeight: 23 });
   });
 
+  it('非整数结果保留两位小数', () => {
+    // 13 ×1.15 = 14.95;23 ×1.15 ×1.15 = 30.4175 → 30.42(验证 round2 对小数结果生效)
+    expect(scaleReaderStyle({ fontSize: 13, lineHeight: 23 }, 1.15, 1.15)).toEqual({ fontSize: 14.95, lineHeight: 30.42 });
+  });
+
   it('只有 fontSize 时不凭空造 lineHeight', () => {
     expect(scaleReaderStyle({ fontSize: 10 }, 1.3, 1.15)).toEqual({ fontSize: 13 });
   });
