@@ -22,10 +22,11 @@ import { useI18n } from '../src/i18n';
 import { signInAnonymously, signInWithApple } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
 
-// 占位法务地址。TODO(ADR-0005):上架前替换为真实「服务条款 / 隐私政策」URL——
-// App Store 强制要求一个可用的隐私政策 URL。
-const TERMS_URL = 'https://incipel.app/terms';
-const PRIVACY_URL = 'https://incipel.app/privacy';
+// 法务地址:由 website/ 下的静态页面经 GitHub Pages 发布(见 .github/workflows/deploy-legal-pages.yml)。
+// 正文按当前实现撰写;联系邮箱 / 生效日期 / 适用法律等可变信息见 website/README.md,数据做法变化时同步更新。
+// 日后绑定自有域名 incipel.app 后,把下面两个常量改成自有域名地址即可。
+const TERMS_URL = 'https://chengdagong.github.io/Incipel/legal/terms/';
+const PRIVACY_URL = 'https://chengdagong.github.io/Incipel/legal/privacy/';
 
 export default function LoginScreen() {
   const { session } = useAuth();

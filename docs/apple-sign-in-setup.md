@@ -68,9 +68,6 @@ ADR-0005 把 Google / 邮箱与非 iOS 平台的第三方登录推迟。日后�
 
 ## 已知限制
 
-- **隐私政策 URL 仍是占位地址**([`login.tsx`](../apps/mobile/app/login.tsx) 的 `TERMS_URL` /
-  `PRIVACY_URL` 指向 `incipel.app/terms`、`incipel.app/privacy`)。App Store 上架强制要有可用的真实
-  隐私政策 URL,是上架前必补项(ADR-0005「后果」)。
 - **未保存用户姓名。** Apple 只在**首次**登录返回用户姓名,且 identity token 本身不含姓名;当前
   `signInWithApple` 请求了 `FULL_NAME` scope 但未持久化 `credential.fullName`。v1 没有展示用户名的
   需求,故暂不处理;日后若要,需在 `signInWithApple` 捕获 `credential.fullName` 并经

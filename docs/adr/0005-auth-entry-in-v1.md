@@ -31,5 +31,5 @@
 
 - **取代** system-design §13(「匿名登录 + 事后可选升级」那条权衡)、§15(v1 范围)、§16(账号默认匿名)在认证入场时机上的表述;那几处已指向本 ADR。
 - Apple Sign-In 可用需前置配置:`app.json` 加 `expo-apple-authentication` 插件(已就位)、Apple Developer 给 App ID 开 Sign in with Apple capability、Supabase 后台开 Apple provider 并在 Client IDs 登记 Bundle ID。配齐前 Apple 按钮在 UI 上可见,但点击后无法换到会话。逐条配法见交付说明 [`docs/apple-sign-in-setup.md`](../apple-sign-in-setup.md)(原生 iOS 路径不需要 Service ID / `.p8` key,那是日后 web / Android OAuth 才用到的)。
-- 底部「服务条款 / 隐私政策」v1 先指占位地址;**App Store 上架强制要有真实隐私政策 URL**,是上架前必补项。
+- 底部「服务条款 / 隐私政策」已指向真实页面:正文按当前实现撰写,放在 `website/` 下并经 GitHub Pages 发布(见 [issue #29](https://github.com/chengdagong/Incipel/issues/29) 与 [`website/README.md`](../../website/README.md))。**App Store 上架强制要有真实隐私政策 URL**,该项已满足(联系邮箱 / 生效日期 / 适用法律均已填入,见 [`website/README.md`](../../website/README.md))。
 - Android 在 ADR-0008 前实际只有匿名可用;Google 进入 v1 后,该不对称已成为历史背景。
