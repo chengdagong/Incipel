@@ -20,6 +20,67 @@ export const LANGS = [
 ] as const;
 export type Lang = (typeof LANGS)[number]['code'];
 
+// 题材选择(欢迎页)。取自原型 T.genreTitle / T.genres。
+// 单列于 DICT 之外:t() 只返回字符串,而 genres 是数组;欢迎页按当前 lang 直接读这里。
+export const GENRE_I18N: Record<Lang, { title: string; list: string[] }> = {
+  zh: {
+    title: '想写哪种类型？',
+    list: ['科幻', '赛博朋克', '犯罪', '爱情', '悬疑', '奇幻', '恐怖', '喜剧', '武侠', '年代'],
+  },
+  en: {
+    title: 'What genre?',
+    list: ['Sci-Fi', 'Cyberpunk', 'Crime', 'Romance', 'Mystery', 'Fantasy', 'Horror', 'Comedy', 'Thriller', 'Period'],
+  },
+  ja: {
+    title: 'どんなジャンル？',
+    list: ['SF', 'サイバーパンク', '犯罪', '恋愛', 'ミステリー', 'ファンタジー', 'ホラー', 'コメディ', 'スリラー', '時代劇'],
+  },
+  zhHant: {
+    title: '想寫哪種類型？',
+    list: ['科幻', '賽博龐克', '犯罪', '愛情', '懸疑', '奇幻', '恐怖', '喜劇', '武侠', '年代'],
+  },
+};
+
+// 对话屏头部的「阶段」副标题。取自原型 T.stagePrefix / stageIdea…;同样独立于 DICT。
+export const STAGE_I18N: Record<Lang, { prefix: string; idea: string; world: string; chars: string; outline: string; scenes: string }> = {
+  zh: { prefix: '阶段 · ', idea: '灵感', world: '世界观', chars: '人物', outline: '大纲', scenes: '分场 · 对白' },
+  en: { prefix: 'Stage · ', idea: 'Idea', world: 'World', chars: 'Characters', outline: 'Outline', scenes: 'Scenes · Dialogue' },
+  ja: { prefix: 'ステージ · ', idea: 'ひらめき', world: '世界観', chars: '登場人物', outline: 'アウトライン', scenes: 'シーン · セリフ' },
+  zhHant: { prefix: '階段 · ', idea: '靈感', world: '世界觀', chars: '人物', outline: '大綱', scenes: '分場 · 對白' },
+};
+
+// 输入栏「思考」模式 pill 的档位文案。取自原型 T.thinkFast/Balanced/Deep;独立于 DICT。
+// 注:当前仅作本地 UI 档位(快速 / 平衡 / 深入),尚未接进 agent 生成参数。
+export const THINK_I18N: Record<Lang, { fast: string; balanced: string; deep: string }> = {
+  zh: { fast: '快速', balanced: '平衡', deep: '深入' },
+  en: { fast: 'Fast', balanced: 'Balanced', deep: 'Deep' },
+  ja: { fast: '高速', balanced: '標準', deep: '熟考' },
+  zhHant: { fast: '快速', balanced: '平衡', deep: '深入' },
+};
+
+// 卷名 + 「打开…」页脚文案(内联卡片页脚 / 文档目录)。取自原型 T.openVol / volWorld…;独立于 DICT。
+export const VOL_I18N: Record<
+  Lang,
+  { openTmpl: string; charCard: string; world: string; chars: string; beats: string; script: string }
+> = {
+  zh: { openTmpl: '打开{x} →', charCard: '打开人物卡片 →', world: '世界设定', chars: '人物表', beats: '故事节拍', script: '剧本正文' },
+  en: { openTmpl: 'Open {x} →', charCard: 'Open character card →', world: 'World', chars: 'Characters', beats: 'Beats', script: 'Script' },
+  ja: { openTmpl: '{x}を開く →', charCard: 'キャラクターを開く →', world: '世界設定', chars: '登場人物', beats: 'ビート', script: '本編' },
+  zhHant: { openTmpl: '開啟{x} →', charCard: '開啟人物卡片 →', world: '世界設定', chars: '人物表', beats: '故事節拍', script: '劇本正文' },
+};
+
+// 文档面板目录(扉页 + 目录 + 卷号 + 计量单位)。取自原型 T.docCover / tocNums…;独立于 DICT。
+// tocUnits 顺序对齐原型:[0]=世界观「条」 [1]=节拍「幕」 [2]=分场「场」 [3]=人物「位」。
+export const DOC_I18N: Record<
+  Lang,
+  { cover: string; contents: string; tocNums: string[]; tocUnits: string[]; tocEmpty: string; bioLabel: string }
+> = {
+  zh: { cover: '原创剧本', contents: '目录', tocNums: ['一', '二', '三', '四'], tocUnits: ['条', '幕', '场', '位'], tocEmpty: '待建立', bioLabel: '人物小传' },
+  en: { cover: 'Original Screenplay', contents: 'Contents', tocNums: ['I', 'II', 'III', 'IV'], tocUnits: ['', 'acts', 'scenes', 'chars'], tocEmpty: '—', bioLabel: 'Bio' },
+  ja: { cover: 'オリジナル脚本', contents: '目次', tocNums: ['一', '二', '三', '四'], tocUnits: ['項', '幕', '場', '人'], tocEmpty: '未作成', bioLabel: '人物紹介' },
+  zhHant: { cover: '原創劇本', contents: '目錄', tocNums: ['一', '二', '三', '四'], tocUnits: ['條', '幕', '場', '位'], tocEmpty: '待建立', bioLabel: '人物小傳' },
+};
+
 const LANG_STORAGE_KEY = 'scn_lang_v1';
 
 // 四语言文案表(由原型 T 生成,勿手改本块;改文案改原型或此生成块)。
