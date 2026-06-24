@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -17,15 +18,20 @@ import { Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DEV_NO_AUTH, useAuth } from '../src/auth';
 import { googleAuthLogDetailsForDebug, googleAuthMessageKey, signInWithGoogle } from '../src/google-auth';
-import { useI18n } from '../src/i18n';
+import { TERMS_I18N, useI18n } from '../src/i18n';
 import { signInAnonymously, signInWithApple } from '../src/supabase';
 import { defaultTheme } from '../src/theme';
 
 const { palette, accent, fonts, shadows } = defaultTheme;
 
+// 占位法务地址。TODO(ADR-0005):上架前替换为真实「服务条款 / 隐私政策」URL——
+// App Store 强制要求一个可用的隐私政策 URL。
+const TERMS_URL = 'https://incipel.app/terms';
+const PRIVACY_URL = 'https://incipel.app/privacy';
+
 export default function LoginScreen() {
   const { session } = useAuth();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const insets = useSafeAreaInsets();
 
   const [busy, setBusy] = useState(false);
@@ -185,7 +191,24 @@ export default function LoginScreen() {
           </Text>
         )}
 
-        <Text style={[styles.terms, { color: palette.placeholder }]}>{t('splashTerms')}</Text>
+        {/* 法务行:服务条款 / 隐私政策可点开(App Store 要求隐私政策 URL 可达,ADR-0005)。 */}
+        <Text style={[styles.terms, { color: palette.placeholder }]}>
+          {TERMS_I18N[lang].pre}
+          <Text
+            style={[styles.termsLink, { color: palette.textSecondary }]}
+            onPress={() => Linking.openURL(TERMS_URL)}
+          >
+            {TERMS_I18N[lang].terms}
+          </Text>
+          {TERMS_I18N[lang].mid}
+          <Text
+            style={[styles.termsLink, { color: palette.textSecondary }]}
+            onPress={() => Linking.openURL(PRIVACY_URL)}
+          >
+            {TERMS_I18N[lang].privacy}
+          </Text>
+          {TERMS_I18N[lang].post}
+        </Text>
       </View>
     </View>
   );
@@ -235,4 +258,5 @@ const styles = StyleSheet.create({
   browse: { paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
   browseLabel: { fontSize: 14, fontWeight: '600' },
   terms: { textAlign: 'center', fontSize: 11, lineHeight: 17.6, paddingHorizontal: 16, paddingTop: 2 },
+  termsLink: { textDecorationLine: 'underline' },
 });

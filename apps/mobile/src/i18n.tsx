@@ -22,23 +22,38 @@ export type Lang = (typeof LANGS)[number]['code'];
 
 // 题材选择(欢迎页)。取自原型 T.genreTitle / T.genres。
 // 单列于 DICT 之外:t() 只返回字符串,而 genres 是数组;欢迎页按当前 lang 直接读这里。
-export const GENRE_I18N: Record<Lang, { title: string; list: string[] }> = {
+// marker:选了题材后折进首条消息的标记({x} 为题材名)。按 lang 本地化,避免给
+// 非中文界面注入中文、污染聊天显示与模型判语言(对齐「（聚焦：…）」也随用户语言的约定)。
+export const GENRE_I18N: Record<Lang, { title: string; list: string[]; marker: string }> = {
   zh: {
     title: '想写哪种类型？',
     list: ['科幻', '赛博朋克', '犯罪', '爱情', '悬疑', '奇幻', '恐怖', '喜剧', '武侠', '年代'],
+    marker: '（类型：{x}）',
   },
   en: {
     title: 'What genre?',
     list: ['Sci-Fi', 'Cyberpunk', 'Crime', 'Romance', 'Mystery', 'Fantasy', 'Horror', 'Comedy', 'Thriller', 'Period'],
+    marker: '(Genre: {x})',
   },
   ja: {
     title: 'どんなジャンル？',
     list: ['SF', 'サイバーパンク', '犯罪', '恋愛', 'ミステリー', 'ファンタジー', 'ホラー', 'コメディ', 'スリラー', '時代劇'],
+    marker: '（ジャンル：{x}）',
   },
   zhHant: {
     title: '想寫哪種類型？',
     list: ['科幻', '賽博龐克', '犯罪', '愛情', '懸疑', '奇幻', '恐怖', '喜劇', '武侠', '年代'],
+    marker: '（類型：{x}）',
   },
+};
+
+// 登录页法务行:拆成可点片段,让「服务条款 / 隐私政策」可点开(App Store 要求隐私政策
+// URL 可达,见 ADR-0005)。pre+terms+mid+privacy+post 拼起来即原整句,视觉不变。
+export const TERMS_I18N: Record<Lang, { pre: string; terms: string; mid: string; privacy: string; post: string }> = {
+  zh: { pre: '继续即表示同意', terms: '服务条款', mid: '与', privacy: '隐私政策', post: '' },
+  en: { pre: 'By continuing you agree to the ', terms: 'Terms', mid: ' & ', privacy: 'Privacy Policy', post: '.' },
+  ja: { pre: '続行すると', terms: '利用規約', mid: 'と', privacy: 'プライバシーポリシー', post: 'に同意したものとみなされます。' },
+  zhHant: { pre: '繼續即表示同意', terms: '服務條款', mid: '與', privacy: '隱私政策', post: '' },
 };
 
 // 对话屏头部的「阶段」副标题。取自原型 T.stagePrefix / stageIdea…;同样独立于 DICT。

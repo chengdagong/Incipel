@@ -72,7 +72,7 @@ export default function WelcomeScreen() {
   function start() {
     const trimmed = idea.trim();
     if (!trimmed) return;
-    const firstMsg = selectedGenre ? `${trimmed}\n（类型：${selectedGenre}）` : trimmed;
+    const firstMsg = selectedGenre ? `${trimmed}\n${genre.marker.replace('{x}', selectedGenre)}` : trimmed;
     router.push({ pathname: '/chat', params: { idea: firstMsg, threadId: newThreadId() } });
   }
 
