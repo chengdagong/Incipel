@@ -64,9 +64,46 @@ function cleanupMetadata(root) {
       }
     }
   }
+  for (const file of [paths.serveMeta, paths.watcherMeta]) {
+    if (!existsSync(file)) continue;
+    try {
+      const meta = JSON.parse(readFileSync(file, 'utf8'));
+      const pid = Number(meta.pid);
+      if (Number.isFinite(pid) && pid > 0) {
+        try {
+          process.kill(pid, 'SIGTERM');
+        } catch {
+          // Process may have already exited.
+        }
+      }
+    } catch {
+      // Ignore malformed test metadata.
+    }
+  }
   rmSync(paths.serveMeta, { force: true });
   rmSync(paths.servePid, { force: true });
   rmSync(paths.watcherMeta, { force: true });
+}
+
+function isProcessAlive(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function stopChild(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  child.kill('SIGTERM');
+  try {
+    await waitFor(() => child.exitCode !== null || child.signalCode !== null, { timeoutMs: 1000, intervalMs: 50 });
+    return;
+  } catch {
+    child.kill('SIGKILL');
+  }
 }
 
 function sourceFiles(root) {
@@ -184,7 +221,7 @@ function makeFakeSupabaseServe(root, port) {
       'fi',
       'if [ "$1" = "functions" ] && [ "$2" = "serve" ]; then',
       '  printf "%s\\n" "supabase $*" >> "$INC_TEST_SERVE_LOG"',
-      `  exec "${process.execPath}" -e 'setInterval(() => {}, 1000)'`,
+      `  exec "${process.execPath}" -e 'setInterval(() => {}, 1000)' supabase functions serve agent`,
       'fi',
       'printf "%s\\n" "unexpected supabase command: $*" >&2',
       'exit 1',
@@ -734,6 +771,149 @@ test('agent stop dry-run ignores metadata from another worktree', () => {
   } finally {
     const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
     cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('agent stop does not signal an unrelated process even when metadata points to current worktree', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const dockerLog = path.join(tmp, 'docker.log');
+  let unrelated;
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    writeFakeDocker(tmp);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    unrelated = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    await waitFor(() => isProcessAlive(unrelated.pid));
+
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: unrelated.pid, logPath: '/tmp/serve.log' }, null, 2),
+    );
+
+    const res = run('node', [cli, 'agent', 'stop'], tmp, {
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.equal(unrelated.exitCode, null);
+    assert.equal(unrelated.signalCode, null);
+    assert.equal(isProcessAlive(unrelated.pid), true);
+    assert.equal(existsSync(dockerLog), false);
+  } finally {
+    await stopChild(unrelated);
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up stops the old watcher before replacing stale watcher metadata', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+  let oldWatcher;
+  let fakeServe;
+
+  try {
+    writeAgentFixture(tmp, port);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+
+    oldWatcher = spawn(process.execPath, [cli, 'agent', 'watch'], {
+      cwd: tmp,
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    await waitFor(() => existsSync(metadataPaths(root).watcherMeta));
+    const oldPid = oldWatcher.pid;
+
+    const staleWatcherMeta = JSON.parse(readFileSync(metadataPaths(root).watcherMeta, 'utf8'));
+    staleWatcherMeta.watchedPathsHash = 'stale-watched-paths';
+    writeFileSync(metadataPaths(root).watcherMeta, JSON.stringify(staleWatcherMeta, null, 2));
+
+    fakeServe = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'supabase', 'functions', 'serve', 'agent'], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    await waitFor(() => isProcessAlive(fakeServe.pid));
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: fakeServe.pid }, null, 2),
+    );
+
+    const res = run('node', [cli, 'up'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    await waitFor(() => !isProcessAlive(oldPid), { timeoutMs: 3000, intervalMs: 100 });
+  } finally {
+    await stopChild(oldWatcher);
+    await stopChild(fakeServe);
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up stops stale serve using metadata pid when pid file is missing', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer();
+  const port = health.port;
+  const serveLog = path.join(tmp, 'serve.log');
+  const dockerLog = path.join(tmp, 'docker.log');
+  let oldPid;
+
+  try {
+    writeAgentFixture(tmp, port);
+    makeFakeSupabaseServe(tmp, port);
+    writeFakeDocker(tmp);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+
+    const first = run('node', [cli, 'up'], tmp, {
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+    });
+    assert.equal(first.status, 0, first.stderr);
+    oldPid = JSON.parse(readFileSync(metadataPaths(root).serveMeta, 'utf8')).pid;
+    assert.equal(isProcessAlive(oldPid), true);
+
+    rmSync(metadataPaths(root).servePid, { force: true });
+    writeFileSync(path.join(tmp, 'packages', 'agent', 'src', 'app.ts'), 'export const app = "changed";\n');
+
+    const second = run('node', [cli, 'up'], tmp, {
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+    });
+    assert.equal(second.status, 0, second.stderr);
+    await waitFor(() => !isProcessAlive(oldPid), { timeoutMs: 3000, intervalMs: 100 });
+  } finally {
+    if (oldPid && isProcessAlive(oldPid)) {
+      try {
+        process.kill(oldPid, 'SIGTERM');
+      } catch {
+        // Process may have already exited.
+      }
+    }
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
     rmSync(tmp, { recursive: true, force: true });
   }
 });

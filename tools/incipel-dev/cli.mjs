@@ -479,13 +479,6 @@ function stopEdgeRuntime(root) {
   return true;
 }
 
-async function stopKnownAgentServe(pidPath) {
-  if (!existsSync(pidPath)) return false;
-  const pid = Number(readFileSync(pidPath, 'utf8').trim());
-  if (!Number.isFinite(pid) || pid <= 0) return false;
-  return stopPid(pid, 'agent serve');
-}
-
 function processAlive(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
   try {
@@ -496,11 +489,44 @@ function processAlive(pid) {
   }
 }
 
-async function stopPid(pid, label) {
+function processCommand(pid) {
+  if (!Number.isFinite(pid) || pid <= 0) return null;
+  const res = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8' });
+  if (res.status !== 0) return null;
+  const command = res.stdout.trim();
+  return command || null;
+}
+
+function commandHasWords(command, words) {
+  return words.every((word) => command.includes(word));
+}
+
+function commandLooksLikeAgentServe(command) {
+  return commandHasWords(command, ['supabase', 'functions', 'serve', AGENT_FUNCTION]);
+}
+
+function commandLooksLikeAgentWatcher(command) {
+  return commandHasWords(command, ['cli.mjs', 'agent', 'watch']);
+}
+
+function pidMatches(pid, matcher) {
+  if (!processAlive(pid)) return false;
+  const command = processCommand(pid);
+  return Boolean(command && matcher(command));
+}
+
+async function stopPid(pid, label, { commandMatches } = {}) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
   if (DRY) {
     log(`  [dry-run] kill ${pid} (${label})`);
     return true;
+  }
+  if (commandMatches) {
+    const command = processCommand(pid);
+    if (!command || !commandMatches(command)) {
+      log(`  注意:${label} metadata 指向的 pid ${pid} 不是预期进程,跳过停止`);
+      return false;
+    }
   }
   try {
     process.kill(pid, 'SIGTERM');
@@ -534,6 +560,26 @@ function isCurrentAgentMeta(meta, root) {
   return meta?.repoRoot === root && meta?.functionName === AGENT_FUNCTION;
 }
 
+function readPidFile(pidPath) {
+  if (!existsSync(pidPath)) return null;
+  const pid = Number(readFileSync(pidPath, 'utf8').trim());
+  return Number.isFinite(pid) && pid > 0 ? pid : null;
+}
+
+async function stopKnownAgentServe(paths, meta = null) {
+  const candidates = [];
+  const metaPid = Number(meta?.pid);
+  if (Number.isFinite(metaPid) && metaPid > 0) candidates.push(metaPid);
+  const filePid = readPidFile(paths.servePid);
+  if (filePid && !candidates.includes(filePid)) candidates.push(filePid);
+
+  let stopped = false;
+  for (const pid of candidates) {
+    stopped = (await stopPid(pid, 'agent serve', { commandMatches: commandLooksLikeAgentServe })) || stopped;
+  }
+  return stopped;
+}
+
 async function stopAgent(root) {
   const paths = agentPaths(root);
   const watcherMeta = readJson(paths.watcherMeta);
@@ -543,13 +589,15 @@ async function stopAgent(root) {
 
   if (isCurrentAgentMeta(watcherMeta, root)) {
     if (watcherMeta.logPath) log(`  agent watcher 日志:${watcherMeta.logPath}`);
-    stoppedAny = (await stopPid(Number(watcherMeta.pid), 'agent watcher')) || stoppedAny;
+    stoppedAny =
+      (await stopPid(Number(watcherMeta.pid), 'agent watcher', { commandMatches: commandLooksLikeAgentWatcher })) ||
+      stoppedAny;
     if (!DRY) rmSync(paths.watcherMeta, { force: true });
   }
 
   if (isCurrentAgentMeta(serveMeta, root)) {
     if (serveMeta.logPath) log(`  agent serve 日志:${serveMeta.logPath}`);
-    stoppedServe = await stopPid(Number(serveMeta.pid), 'agent serve');
+    stoppedServe = await stopKnownAgentServe(paths, serveMeta);
     stoppedAny = stoppedServe || stoppedAny;
     if (!DRY) {
       rmSync(paths.serveMeta, { force: true });
@@ -577,6 +625,8 @@ async function ensureAgentServe(root, { restart = false } = {}) {
         reason = 'agent serve metadata does not match current worktree, restarting';
       } else if (restart || meta.sourceHash !== snapshot.sourceHash || meta.envHash !== snapshot.envHash) {
         reason = 'agent source/env changed, restarting agent edge runtime';
+      } else if (!DRY && !pidMatches(Number(meta.pid), commandLooksLikeAgentServe)) {
+        reason = 'agent serve metadata pid is stale, restarting agent edge runtime';
       }
     } else if (restart || envFileChanged) {
       reason = 'agent env-file 内容已变化,重启 agent edge runtime';
@@ -586,7 +636,7 @@ async function ensureAgentServe(root, { restart = false } = {}) {
 
     if (reason) {
       log(`  ${reason}`);
-      await stopKnownAgentServe(paths.servePid);
+      await stopKnownAgentServe(paths, isCurrentAgentMeta(meta, root) ? meta : null);
       stopEdgeRuntime(root);
     } else {
       log('  agent edge function 已在 serve(/health 正常),跳过');
@@ -665,7 +715,7 @@ async function ensureAgentWatcher(root) {
     meta?.repoRoot === root &&
     meta?.functionName === AGENT_FUNCTION &&
     meta?.watchedPathsHash === snapshot.watchedPathsHash &&
-    processAlive(Number(meta.pid))
+    (DRY || pidMatches(Number(meta.pid), commandLooksLikeAgentWatcher))
   ) {
     log('  agent watcher 已在监控当前 worktree,跳过');
     return;
@@ -679,6 +729,10 @@ async function ensureAgentWatcher(root) {
     log('  agent watcher 进程不在,重新启动');
   } else {
     log('  agent watcher metadata missing, starting');
+  }
+
+  if (!DRY && isCurrentAgentMeta(meta, root)) {
+    await stopPid(Number(meta.pid), 'agent watcher', { commandMatches: commandLooksLikeAgentWatcher });
   }
 
   const cliPath = fileURLToPath(import.meta.url);
@@ -863,7 +917,7 @@ function e2eUp(root) {
     }
     copyDirFresh(join(root, 'supabase', 'functions'), join(sb, 'functions'));
     replaceDirSymlink(join(root, 'packages'), join(workdir, 'packages'));
-    // workdir 不该入库:写一份 .gitignore 兜底(根 .gitignore 也已忽略)。
+    // workdir 不该入库:再写一份 .gitignore 作为额外保护(根 .gitignore 也已忽略)。
     writeFileSync(join(workdir, '.gitignore'), '*\n');
   }
 
