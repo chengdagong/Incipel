@@ -16,6 +16,7 @@
 //   env [sync]       起共用栈(若未起)+ 同步 env:写 apps/mobile/.env 的 EXPO_PUBLIC_*、
 //                    确保 supabase/.env 有本地 JWT 校验配置
 //   agent stop       停止当前 worktree 的后台 agent watcher / server(不停止数据库 / auth / storage)
+//   agent stop --all 停止本机所有 worktree 的 Incipel agent watcher / server(含元数据已丢失的孤儿)
 //   e2e up           生成隔离 workdir + supabase start --workdir,打印该栈的 URL
 //   e2e down         supabase stop --workdir + 清理 workdir
 //   help
@@ -46,7 +47,8 @@ process.stdout.on('error', (e) => {
 
 const argv = process.argv.slice(2);
 const DRY = argv.includes('--dry-run');
-const args = argv.filter((a) => a !== '--dry-run');
+const ALL = argv.includes('--all');
+const args = argv.filter((a) => a !== '--dry-run' && a !== '--all');
 const [cmd, sub] = args;
 
 // ── 小工具 ────────────────────────────────────────────────────────────────────
@@ -85,8 +87,11 @@ const E2E_AGENT_PORT_BASE = 6111;
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
+// 日常 dev agent 端口固定为 DEV_AGENT_PORT(见 ADR-0011);INCIPEL_DEV_AGENT_PORT 是覆盖钩子,
+// 主要给测试用——让测试套件能用本机临时端口,不必占用真 dev 的 4111,从而可与在跑的 dev 共存。
 function agentPort() {
-  return DEV_AGENT_PORT;
+  const override = Number(process.env.INCIPEL_DEV_AGENT_PORT);
+  return Number.isInteger(override) && override > 0 ? override : DEV_AGENT_PORT;
 }
 function e2eAgentPort(root) {
   return E2E_AGENT_PORT_BASE + (parseInt(worktreeHash(root).slice(0, 4), 16) % 2000);
@@ -501,7 +506,7 @@ async function agentHealthy(root) {
 }
 
 // 确保 agent server 在跑:已在(/health 正常)则跳过;否则 detached 后台拉起一个
-// `pnpm --filter @incipel/agent dev`(日志 / PID 写入 tmp),再轮询 /health 几秒。
+// `pnpm --filter @incipel/agent start`(日志 / PID 写入 tmp),再轮询 /health 几秒。
 // 首次要编译 npm 依赖图较慢,server 仍在后台继续,调用方(dev:ios)可照常起 Metro。
 
 function processAlive(pid) {
@@ -570,6 +575,7 @@ function commandHasWords(command, words) {
 function commandLooksLikeAgentServe(command) {
   return (
     commandHasWords(command, ['pnpm', '@incipel/agent', 'dev']) ||
+    commandHasWords(command, ['pnpm', '@incipel/agent', 'start']) ||
     commandHasWords(command, ['tsx', 'src/index.ts'])
   );
 }
@@ -707,10 +713,104 @@ async function stopAgent(root) {
   if (!stoppedAny) log('  没有可安全停止的当前 worktree agent 进程');
 }
 
+// 本仓库所有 git worktree 的根路径(含主工作区),用于界定「哪些 cwd 算 Incipel agent」。
+function listWorktreeRoots(root) {
+  const res = spawnSync('git', ['worktree', 'list', '--porcelain'], { cwd: root, encoding: 'utf8' });
+  if (res.status !== 0) return [normalizePath(root)];
+  const roots = [];
+  for (const line of res.stdout.split('\n')) {
+    if (line.startsWith('worktree ')) roots.push(normalizePath(line.slice('worktree '.length).trim()));
+  }
+  return roots.length ? roots : [normalizePath(root)];
+}
+
+// cwd 是否落在本仓库任一 worktree 内(含 worktree 根本身或其子目录)。pnpm --filter 起的
+// agent 实际 cwd 是 <worktree>/packages/agent,故必须容许子目录;worktree 之间存在嵌套
+// (如 .claude/worktrees/* 在主仓库之下),所以这里只判「是否落在某个内」,不区分归属哪个。
+// 本工具仅在 POSIX 平台运行,分隔符固定为 /。
+function cwdWithinAnyRoot(cwd, roots) {
+  if (!cwd) return false;
+  const c = normalizePath(cwd);
+  return roots.some((wt) => c === wt || c.startsWith(`${wt}/`));
+}
+
+// 扫描本机所有进程,挑出命令像 agent watcher / serve 的(pid + 命令行)。
+function listAgentProcesses() {
+  const res = spawnSync('ps', ['-Ao', 'pid=,command='], { encoding: 'utf8' });
+  if (res.status !== 0) return [];
+  const out = [];
+  for (const line of res.stdout.split('\n')) {
+    const trimmed = line.trim();
+    const sp = trimmed.indexOf(' ');
+    if (sp <= 0) continue;
+    const pid = Number(trimmed.slice(0, sp));
+    const command = trimmed.slice(sp + 1).trim();
+    if (Number.isFinite(pid) && pid > 0 && command) out.push({ pid, command });
+  }
+  return out;
+}
+
+// agent stop --all:停掉本机所有 worktree 的 Incipel agent 进程(watcher + serve),含元数据
+// 已丢失的孤儿。安全边界:只动「命令匹配 agent 特征」且「cwd 落在本仓库某个 git worktree 内」
+// 的进程;agent stop(无 --all)那条当前 worktree + 双重校验的路径保持不变。
+async function stopAllAgents(root) {
+  const roots = listWorktreeRoots(root);
+  const seen = new Set();
+  const targets = [];
+  const addTarget = (pid, label, ownerRoot, matcher) => {
+    if (!Number.isFinite(pid) || pid <= 0 || seen.has(pid)) return;
+    seen.add(pid);
+    targets.push({ pid, label, ownerRoot, matcher });
+  };
+
+  // 1. 各 worktree 元数据里记录的 watcher / serve。
+  for (const wt of roots) {
+    const paths = agentPaths(wt);
+    addTarget(Number(readJson(paths.watcherMeta)?.pid), 'agent watcher', wt, commandLooksLikeAgentWatcher);
+    addTarget(Number(readJson(paths.serveMeta)?.pid), 'agent serve', wt, commandLooksLikeAgentServe);
+    addTarget(readPidFile(paths.servePid), 'agent serve', wt, commandLooksLikeAgentServe);
+  }
+
+  // 2. 进程扫描:命令像 agent 且 cwd 落在某 worktree 内的孤儿(元数据已被覆盖而追踪不到)。
+  // 这里已校验「命令匹配 + cwd 在本仓库 worktree 内」两道安全条件,故 stopPid 的 cwd 守卫传 null:
+  // agent 实际 cwd 多为 worktree 子目录(packages/agent),exact 守卫会把它们误判为「不属于当前 worktree」。
+  for (const { pid, command } of listAgentProcesses()) {
+    if (seen.has(pid)) continue;
+    const isWatcher = commandLooksLikeAgentWatcher(command);
+    const isServe = commandLooksLikeAgentServe(command);
+    if (!isWatcher && !isServe) continue;
+    if (!cwdWithinAnyRoot(processCwd(pid), roots)) continue;
+    addTarget(pid, isWatcher ? 'agent watcher' : 'agent serve', null, isWatcher ? commandLooksLikeAgentWatcher : commandLooksLikeAgentServe);
+  }
+
+  let stopped = false;
+  for (const t of targets) {
+    stopped =
+      (await stopPid(t.pid, t.label, { commandMatches: t.matcher, cwd: t.ownerRoot, killGroup: true })) || stopped;
+  }
+
+  if (!DRY) {
+    for (const wt of roots) {
+      const paths = agentPaths(wt);
+      rmSync(paths.watcherMeta, { force: true });
+      rmSync(paths.serveMeta, { force: true });
+      rmSync(paths.servePid, { force: true });
+      rmSync(paths.serveEnvHash, { force: true });
+    }
+  }
+
+  if (!stopped) log('  没有找到可停止的 Incipel agent 进程');
+}
+
 async function ensureAgentServe(root, { restart = false } = {}) {
   const paths = agentPaths(root);
   const snapshot = agentSnapshot(root);
   const meta = readJson(paths.serveMeta);
+  // 后台 serve 用不带 watch 的 start(tsx src/index.ts):避免再起一个 chokidar/FSEvents
+  // 文件监听——源码热重载由本 CLI 的 agent watcher(轮询)负责,二者职责不重叠。
+  // 前台 dev:agent(dev() 里的 `dev`)仍用 tsx watch,保留它的快速热重载与日志。
+  const serveArgs = ['--filter', '@incipel/agent', 'start'];
+  const serveCommand = `pnpm ${serveArgs.join(' ')}`;
   const prevEnvHash = existsSync(paths.serveEnvHash) ? readFileSync(paths.serveEnvHash, 'utf8').trim() : null;
   const envFileChanged = prevEnvHash !== snapshot.envHash;
   const healthy = await agentHealthy(root);
@@ -721,6 +821,9 @@ async function ensureAgentServe(root, { restart = false } = {}) {
         reason = 'agent serve metadata does not match current worktree, restarting';
       } else if (restart || meta.sourceHash !== snapshot.sourceHash || meta.envHash !== snapshot.envHash) {
         reason = 'agent source/env changed, restarting agent server';
+      } else if (meta.command && meta.command !== serveCommand) {
+        // 升级前用旧命令(如 `dev` / tsx watch)起的后台 serve,即便源码/env 未变也要换成新命令。
+        reason = 'agent serve 启动命令已变化,重启 agent server';
       } else if (!DRY && !pidMatches(Number(meta.pid), commandLooksLikeAgentServe, root)) {
         reason = 'agent serve metadata pid is stale, restarting agent server';
       }
@@ -738,8 +841,6 @@ async function ensureAgentServe(root, { restart = false } = {}) {
       return;
     }
   }
-  const serveArgs = ['--filter', '@incipel/agent', 'dev'];
-  const serveCommand = `pnpm ${serveArgs.join(' ')}`;
   if (DRY) {
     log(`  [dry-run] detached: ${serveCommand}`);
     log(`  [dry-run] 日志 ${paths.serveLog} / pid ${paths.servePid} / metadata ${paths.serveMeta}`);
@@ -1097,9 +1198,9 @@ switch (cmd) {
     else fail('用法: e2e up | e2e down');
     break;
   case 'agent':
-    if (sub === 'stop') await stopAgent(root);
+    if (sub === 'stop') await (ALL ? stopAllAgents(root) : stopAgent(root));
     else if (sub === 'watch') await watchAgent(root);
-    else fail('用法: agent stop | agent watch');
+    else fail('用法: agent stop [--all] | agent watch');
     break;
   case 'help':
   case undefined:
