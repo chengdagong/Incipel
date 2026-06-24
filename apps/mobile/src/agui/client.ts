@@ -178,11 +178,13 @@ export type ScreenplayAgentApi = {
  */
 export function useScreenplayAgent(
   threadId: string,
-  opts?: { hydrate?: boolean },
+  opts?: { hydrate?: boolean; genre?: string },
 ): ScreenplayAgentApi {
   // hydrate:打开已有会话(路由带 sessionId)时为真,挂载即从数据库恢复历史消息与剧本。
   // 新建创作(欢迎页带 idea 的全新 threadId)为假:无可恢复内容,免一次必空的查询。
   const hydrate = opts?.hydrate ?? false;
+  // genre:欢迎屏选定的题材,经 /run 的 forwardedProps 传给 agent 作首轮定调;不拼进用户消息。
+  const genre = opts?.genre;
 
   // 每个 threadId 一个 agent 实例;threadId 变了就重建。
   const agentRef = useRef<HttpAgent | null>(null);
@@ -311,13 +313,14 @@ export function useScreenplayAgent(
     const agent = agentRef.current!;
     if (agent.isRunning) return; // 一轮未结束不并发下一轮
     try {
-      await agent.runAgent({ runId }, undefined);
+      // 题材经 forwardedProps 传给服务端;agent 仅首轮注入定调提示,后续轮忽略(见 buildPrompt)。
+      await agent.runAgent({ runId, forwardedProps: genre ? { genre } : undefined }, undefined);
     } catch (e) {
       setIsRunning(false);
       setThinking(false);
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [genre]);
 
   // 发消息 / 点选项:追加一条用户消息,为这一逻辑轮生成稳定 runId,触发一次 run(system-design §6.2 / §10)。
   const sendMessage = useCallback(

@@ -22,6 +22,9 @@ export const DEFAULT_ASSISTANT_NAME = '主管编剧';
 // 助手名最长字符数。这是 display name,不需要长;超出即截断。
 const ASSISTANT_NAME_MAX = 24;
 
+// 题材最长字符数。题材是短标签(最长如「サイバーパンク」),给足余量即可;超出即截断。
+const GENRE_MAX = 24;
+
 // 助手名来自客户端(/run 的 forwardedProps.assistantName),会被插进 system 角色的提示里。
 // 必须当「数据」而非「指令」处理:去掉换行 / 控制字符、去掉用作名字边界的「」、折叠空白并截断;
 // 清洗后为空则回落默认名。否则带换行或额外指令的名字会成为高优先级的 system 文本,
@@ -35,6 +38,19 @@ export function sanitizeAssistantName(name?: string): string {
     .trim()
     .slice(0, ASSISTANT_NAME_MAX);
   return cleaned.length > 0 ? cleaned : DEFAULT_ASSISTANT_NAME;
+}
+
+// 题材同样来自客户端 forwardedProps,可被任意构造。注入 prompt 前必须当「数据」清洗:
+// 控制字符 / 换行 → 空格、去掉用作边界的「」、折叠空白并截到短长度——杜绝长文本或指令式
+// 内容绕过 MAX_USER_MESSAGE_CHARS 与固定题材列表做 prompt injection。空 / 非字符串 → 空串(不注入)。
+export function sanitizeGenre(genre?: string): string {
+  if (typeof genre !== 'string') return '';
+  return genre
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/[「」]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, GENRE_MAX);
 }
 
 // 助手的人格与硬约束。同一助手名下稳定不变,作为 prompt caching 的命中前缀。
@@ -68,7 +84,12 @@ export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): str
 - set_meta(title?, logline?):设定/更新标题与 logline(一句话故事,经典结构:反差身份的主角 + 触发事件 + 具体目标 + 明确阻力)。
 - add_world_section / update_world_section / remove_world_section:世界观按小节管理,每节有标题与正文。
 - add_character / update_character / remove_character:人物,含名字(name)、一句话定位(role)。**新建人物时把已知的外貌/性格等设定一并放进 add_character 的 attrs:[{label,value}] 里一次带齐**(尤其首次创建「有外貌/性格的人物」时)——刚建的人物,其 id 在本次工具枚举里还不存在,add_character_attr 这次加不上,所以别等下一次。
-- add_character_attr / update_character_attr / remove_character_attr:**对已存在人物**增删改结构化属性(每条 label + value,如 外貌 / 性格 / 身份 / 目标)。新增给 characterId;改/删用全局唯一的 attrId(只能引用现有属性)。人物设定写成属性,不要堆进一段长文本。
+- add_character_attr / update_character_attr / remove_character_attr:**对已存在人物**增删改结构化属性(每条 label + value,如 外貌 / 性格 / 目标)。新增给 characterId;改/删用全局唯一的 attrId(只能引用现有属性)。人物设定写成属性,不要堆进一段长文本。
+- 人物属性有几个**保留 label**,客户端按它们专门呈现,务必用对:
+  - 「身份」:只填角色定位**类别**,在「主角」「配角」「群像」三者中三选一。**绝不**把「这人是谁」的整段描述写进「身份」(那会被当成徽标撑成一大块方框)。
+  - 「背景」:人物小传 / 来历介绍这类成段文字写这里(这才是承载一段话的地方)。
+  - 「年龄」/「性别」:各自单填一小段(如「25 岁」「女」)。
+  - 其余设定用自定义 label(外貌 / 性格 / 目标 / 习惯…),会以标签形式呈现。
 - add_act / update_act / remove_act:三幕大纲的一幕,含幕名与该幕节拍。
 - add_scene / update_scene / remove_scene:分场;slug 为标准场景标题(内景/外景 地点 — 时间),content 为对白,写成「角色（提示）：台词」逐行。
 - propose_options(options):本次回复可点选项,最多 3 个。
@@ -139,6 +160,9 @@ export type BuildPromptInput = {
   userMessage: string;
   // 助手显示名;缺省「主管编剧」。为日后「用户自定义助手名」预留:调用方可按会话/用户传入。
   assistantName?: string;
+  // 用户在欢迎屏选的题材(如「科幻」)。仅首轮注入一行定调提示;不进用户消息,故不影响判
+  // 语言(设置页承诺「界面语言不影响 AI 回复语言」)。
+  genre?: string;
 };
 
 export type BuiltPrompt = {
@@ -154,9 +178,17 @@ export type BuiltPrompt = {
  */
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   const assistantName = sanitizeAssistantName(input.assistantName);
+  // 题材偏好只在首轮(还没有历史)注入,作低调的定调提示——单列成段,不混进用户消息正文。
+  // 客户端传来的题材先清洗(防 prompt injection),清洗后为空则不注入。
+  const genre = sanitizeGenre(input.genre);
+  const genreHint =
+    genre && input.history.length === 0
+      ? `# 用户选定题材\n${genre}\n（界面注入的题材偏好,仅用于定调;不代表用户语言,回复语言仍只跟随用户自己写的正文。）`
+      : '';
   const parts = [
     serializeScreenplay(input.state),
     serializeHistory(input.history, assistantName),
+    genreHint,
     `# 本次用户消息\n${input.userMessage}`,
   ].filter((p) => p.length > 0);
 

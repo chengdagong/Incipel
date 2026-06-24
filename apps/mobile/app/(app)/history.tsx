@@ -1,12 +1,17 @@
 // 历史会话:全屏会话列表;续写、删除;空状态引导(system-design §2.1「历史会话」/ §10)。
+// 视觉对齐最新 handoff 原型「HISTORY SCREEN」:自带顶栏(返回 + 标题 + 新建)、卡片 + ✕ 删除、空态。
 // 列表直接用 supabase-js 查 sessions(RLS 按 user_id 隔离,见 §8)。
 
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { timeAgo } from '../../src/components/Drawer';
 import { useT } from '../../src/i18n';
 import { supabase } from '../../src/supabase';
-import { defaultTheme } from '../../src/theme';
+import { defaultTheme, palette } from '../../src/theme';
+
+const { accent } = defaultTheme;
 
 // sessions 行的子集(见 system-design §8 数据模型)。
 type SessionRow = {
@@ -20,13 +25,12 @@ type SessionRow = {
 export default function HistoryScreen() {
   const router = useRouter();
   const t = useT();
-  const { palette } = defaultTheme;
+  const insets = useSafeAreaInsets();
   const [rows, setRows] = useState<SessionRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
-    // RLS 已把结果限定在当前(匿名)用户;无需手动加 user_id 过滤。
     const { data, error } = await supabase
       .from('sessions')
       .select('id, title, accent, starred, updated_at')
@@ -40,7 +44,6 @@ export default function HistoryScreen() {
     setLoading(false);
   }, []);
 
-  // 进入屏幕时刷新。
   useFocusEffect(
     useCallback(() => {
       load();
@@ -50,13 +53,17 @@ export default function HistoryScreen() {
     load();
   }, [load]);
 
-  // 续写:打开该会话。会话 id 即 AG-UI 的 threadId —— 传给 chat,chat 用它建 HttpAgent;
-  // agent 端据 threadId 载入 documents.state + 最近 messages 续写(system-design §6.2 / §10)。
+  function back() {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }
+  function startNew() {
+    router.replace('/');
+  }
   function resume(id: string) {
     router.push({ pathname: '/chat', params: { sessionId: id } });
   }
 
-  // 删除会话(直接 delete sessions 行,RLS 保护;关联表按外键级联,见 §10）。
   async function remove(id: string) {
     const { error } = await supabase.from('sessions').delete().eq('id', id);
     if (error) {
@@ -66,16 +73,11 @@ export default function HistoryScreen() {
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
-  // 删除是破坏性且不可恢复的:先二次确认(与设置页登出一致),用户确认后再删。
-  // 注意:react-native-web 的 Alert.alert 是空实现——既不弹窗也不回调 onPress,
-  // 在 Expo Web 上会让「删除」点了毫无反应。故 Web 走浏览器原生 confirm,原生端走 Alert。
-  // 用 globalThis 取 confirm(不依赖 DOM lib 类型);取不到时按「未确认」处理,绝不静默删除。
+  // 删除不可恢复:先二次确认。react-native-web 的 Alert 是空实现,Web 走浏览器 confirm。
   function confirmRemove(id: string) {
     if (Platform.OS === 'web') {
       const g = globalThis as unknown as { confirm?: (message: string) => boolean };
-      const ok = typeof g.confirm === 'function'
-        ? g.confirm(`${t('deleteConfirm')}\n\n${t('deleteConfirmSub')}`)
-        : false;
+      const ok = typeof g.confirm === 'function' ? g.confirm(`${t('deleteConfirm')}\n\n${t('deleteConfirmSub')}`) : false;
       if (ok) void remove(id);
       return;
     }
@@ -85,86 +87,100 @@ export default function HistoryScreen() {
     ]);
   }
 
-  if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
-        <Stack.Screen options={{ title: t('historyTitle') }} />
-        <ActivityIndicator color={defaultTheme.accent} />
-      </View>
-    );
-  }
-
-  if (rows.length === 0) {
-    return (
-      <View style={[styles.center, { backgroundColor: palette.pageBg }]}>
-        <Stack.Screen options={{ title: t('historyTitle') }} />
-        <Text style={[styles.emptyTitle, { color: palette.textPrimary }]}>{t('noHistoryTitle')}</Text>
-        <Text style={[styles.emptySub, { color: palette.textSecondary }]}>{t('noHistoryDesc')}</Text>
-        <Pressable
-          style={[styles.cta, { backgroundColor: defaultTheme.accent }]}
-          onPress={() => router.replace('/')}
-        >
-          <Text style={styles.ctaLabel}>{t('startNew')}</Text>
+  return (
+    <View style={[styles.screen, { backgroundColor: palette.pageBg, paddingTop: insets.top }]}>
+      {/* 顶栏:返回 + 标题 + 新建 */}
+      <View style={styles.header}>
+        <Pressable onPress={back} hitSlop={8} accessibilityRole="button" accessibilityLabel="返回" testID="history-back">
+          <Text style={[styles.back, { color: palette.textSecondary }]}>‹</Text>
+        </Pressable>
+        <Text style={[styles.title, { color: palette.textPrimary }]}>{t('historyTitle')}</Text>
+        <Pressable onPress={startNew} hitSlop={8} accessibilityRole="button">
+          <Text style={[styles.headerAction, { color: accent }]}>{t('newShort')}</Text>
         </Pressable>
       </View>
-    );
-  }
 
-  return (
-    <ScrollView
-      style={{ backgroundColor: palette.pageBg }}
-      contentContainerStyle={styles.list}
-    >
-      <Stack.Screen options={{ title: t('historyTitle') }} />
-      {rows.map((r) => (
-        <View
-          key={r.id}
-          style={[styles.item, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
-        >
-          <Pressable style={styles.itemMain} onPress={() => resume(r.id)} testID={`history-row-${r.id}`}>
-            <Text style={[styles.itemTitle, { color: palette.textPrimary }]} numberOfLines={1}>
-              {r.starred ? '★ ' : ''}
-              {r.title || t('untitled')}
-            </Text>
-            <Text style={[styles.itemMeta, { color: palette.textSecondary }]}>
-              {new Date(r.updated_at).toLocaleString()}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() => confirmRemove(r.id)}
-            accessibilityRole="button"
-            accessibilityLabel={t('deleteWork')}
-            hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-            style={styles.deleteBtn}
-            testID={`history-delete-${r.id}`}
-          >
-            <Text style={[styles.delete, { color: palette.textSecondary }]}>{t('deleteWork')}</Text>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={accent} />
+        </View>
+      ) : rows.length === 0 ? (
+        <View style={styles.empty}>
+          <View style={[styles.emptyIcon, { borderColor: palette.border }]}>
+            <Text style={styles.emptyGlyph}>✎</Text>
+          </View>
+          <Text style={[styles.emptyTitle, { color: palette.textSecondary }]}>{t('noHistoryTitle')}</Text>
+          <Text style={[styles.emptyDesc, { color: palette.textSecondary }]}>{t('noHistoryDesc')}</Text>
+          <Pressable style={[styles.cta, { backgroundColor: accent }]} onPress={startNew}>
+            <Text style={styles.ctaLabel}>{t('startNew')}</Text>
           </Pressable>
         </View>
-      ))}
-    </ScrollView>
+      ) : (
+        <ScrollView contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 24 }]}>
+          {rows.map((r) => (
+            <View key={r.id} style={[styles.item, { backgroundColor: palette.cardBg, borderColor: palette.borderAlt }]}>
+              <Pressable style={styles.itemMain} onPress={() => resume(r.id)} testID={`history-row-${r.id}`}>
+                <Text style={[styles.itemTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+                  {r.title || t('untitled')}
+                </Text>
+                <Text style={[styles.itemMeta, { color: palette.textSecondary }]}>{timeAgo(r.updated_at, t)}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => confirmRemove(r.id)}
+                accessibilityRole="button"
+                accessibilityLabel={t('deleteWork')}
+                style={[styles.deleteBtn, { borderLeftColor: palette.dividerSoft }]}
+                testID={`history-delete-${r.id}`}
+              >
+                <Text style={[styles.deleteGlyph, { color: palette.placeholder }]}>✕</Text>
+              </Pressable>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', fontFamily: defaultTheme.fonts.serifTitle },
-  emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  cta: { borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, marginTop: 8 },
-  ctaLabel: { color: '#fff', fontWeight: '600' },
-  list: { padding: 16, gap: 12 },
-  item: {
+  screen: { flex: 1 },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    gap: 12,
+    paddingTop: 6,
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.divider,
   },
-  itemMain: { flex: 1, gap: 4 },
-  itemTitle: { fontSize: 16, fontWeight: '600', fontFamily: defaultTheme.fonts.serifTitle },
-  itemMeta: { fontSize: 12 },
-  deleteBtn: { paddingVertical: 10, paddingHorizontal: 6 },
-  delete: { fontSize: 13, fontWeight: '600' },
+  back: { fontSize: 22, lineHeight: 22, paddingVertical: 4, paddingHorizontal: 6 },
+  title: { fontSize: 15, fontWeight: '600' },
+  headerAction: { fontSize: 13, fontWeight: '600', paddingVertical: 4, paddingHorizontal: 6 },
+
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  list: { padding: 18, paddingTop: 16, gap: 10 },
+  item: { flexDirection: 'row', alignItems: 'stretch', borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
+  itemMain: { flex: 1, minWidth: 0, paddingVertical: 14, paddingHorizontal: 16 },
+  itemTitle: { fontSize: 15, fontWeight: '600', fontFamily: defaultTheme.fonts.serifTitle, marginBottom: 7 },
+  itemMeta: { fontSize: 11 },
+  deleteBtn: { width: 46, alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1 },
+  deleteGlyph: { fontSize: 16 },
+
+  empty: { flex: 1, alignItems: 'center', paddingTop: 70, paddingHorizontal: 30 },
+  emptyIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  emptyGlyph: { fontSize: 22, color: '#CFC9BF' },
+  emptyTitle: { fontSize: 15, fontWeight: '500', marginBottom: 8 },
+  emptyDesc: { fontSize: 13, lineHeight: 22, textAlign: 'center' },
+  cta: { marginTop: 24, borderRadius: 14, paddingHorizontal: 26, paddingVertical: 13 },
+  ctaLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

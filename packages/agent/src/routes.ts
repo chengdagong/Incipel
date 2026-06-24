@@ -150,8 +150,10 @@ function createAgentRouteHandlers(): AgentRouteHandlers {
         accent?: string;
         title?: string;
         assistantName?: string;
+        genre?: string;
       };
       const assistantName = typeof fp.assistantName === 'string' ? fp.assistantName : undefined;
+      const genre = typeof fp.genre === 'string' ? fp.genre : undefined;
 
       const store = getStore();
       try {
@@ -178,6 +180,7 @@ function createAgentRouteHandlers(): AgentRouteHandlers {
             userMessage,
             newConnection: true,
             assistantName,
+            genre,
           },
           { store },
         )) {

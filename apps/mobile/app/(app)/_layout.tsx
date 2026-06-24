@@ -30,13 +30,11 @@ export default function ProtectedLayout() {
           contentStyle: { backgroundColor: defaultTheme.palette.pageBg },
         }}
       >
-        {/* 欢迎屏自带页内顶栏(左上汉堡唤抽屉),隐藏原生 Stack 顶栏。 */}
+        {/* 各屏均自带页内定制顶栏(对齐 handoff 原型),统一隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        {/* 对话屏自带定制顶栏(返回 + 标题 + 文档),隐藏原生 Stack 顶栏。 */}
         <Stack.Screen name="chat" options={{ headerShown: false }} />
-        <Stack.Screen name="history" options={{ title: '历史会话' }} />
-        <Stack.Screen name="works" options={{ title: '作品' }} />
-        {/* 设置屏自带顶栏(返回 + 标题)。 */}
+        <Stack.Screen name="history" options={{ headerShown: false }} />
+        <Stack.Screen name="works" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
       </Stack>
     </DrawerProvider>

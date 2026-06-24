@@ -345,11 +345,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: DRAWER.panelBg,
-    shadowColor: '#28241E',
-    shadowOffset: { width: 8, height: 0 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    elevation: 16,
+    // 原型 box-shadow:8px 0 40px -16px rgba(40,36,32,.45)。
+    ...defaultTheme.shadows.drawer,
     flexDirection: 'column',
   },
 
@@ -377,7 +374,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 
-  nav: { paddingHorizontal: 12, paddingTop: 6, gap: 2 },
+  nav: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 4, gap: 2 },
   navRow: {
     flexDirection: 'row',
     alignItems: 'center',

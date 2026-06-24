@@ -151,7 +151,8 @@ export default function SettingsScreen() {
         {/* 账号区:正式账号按 provider 显示;匿名账号可在此绑定 Google。 */}
         {isSignedIn ? (
           <View style={styles.accountRow}>
-            <View style={[styles.avatar, { backgroundColor: accent }]}>
+            {/* 已登录头像用品牌深色(对齐原型 #2A2825),与抽屉 / 对话头像一致;非主色。 */}
+            <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
               <Text style={[styles.avatarText, { color: '#fff' }]}>{accountInitial}</Text>
             </View>
             <View style={styles.accountMain}>
