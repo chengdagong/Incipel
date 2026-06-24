@@ -23,6 +23,7 @@ import { defaultTheme, palette, type Theme } from '../theme';
 import { DOC_I18N, useI18n, VOL_I18N } from '../i18n';
 import { badgeBox, charView, splitBeat } from '../charView';
 import { PortraitThumb } from './PortraitThumb';
+import { ReaderText } from './ReaderText';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace' });
 const DOTTED = '#D6CFC3'; // 目录点线引导色
@@ -176,10 +177,10 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
                     {!!w.title && (
                       <View style={styles.facetLabelRow}>
                         <View style={[styles.facetDot, { backgroundColor: accent }]} />
-                        <Text style={[styles.facetLabel, { color: palette.textPrimary }]}>{w.title}</Text>
+                        <ReaderText style={[styles.facetLabel, { color: palette.textPrimary }]}>{w.title}</ReaderText>
                       </View>
                     )}
-                    <Text style={[styles.facetBody, { color: palette.textBody }]}>{w.text}</Text>
+                    <ReaderText style={[styles.facetBody, { color: palette.textBody }]}>{w.text}</ReaderText>
                   </View>
                 ))}
               </View>
@@ -206,8 +207,8 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
                     accessibilityRole="button"
                     testID={`doc-char-${c.id}`}
                   >
-                    <Text style={[styles.rosterName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</Text>
-                    {!!c.role && <Text style={[styles.rosterRole, { color: palette.textSecondary }]}>{c.role}</Text>}
+                    <ReaderText style={[styles.rosterName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</ReaderText>
+                    {!!c.role && <ReaderText style={[styles.rosterRole, { color: palette.textSecondary }]}>{c.role}</ReaderText>}
                     <View style={[styles.leader, { borderBottomColor: DOTTED }]} />
                     {!!identity && (
                       <View style={[styles.badge, badge.box]}>
@@ -242,11 +243,11 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
               <View style={{ gap: 12 }}>
                 {outline.map((a) => (
                   <View key={a.id} style={[styles.beatCard, { backgroundColor: palette.cardBg, borderColor: palette.borderCard }]}>
-                    <Text style={[styles.beatAct, { color: palette.textPrimary }]}>{a.act}</Text>
+                    <ReaderText style={[styles.beatAct, { color: palette.textPrimary }]}>{a.act}</ReaderText>
                     {splitBeat(a.beat).map((para, j) => (
-                      <Text key={j} style={[styles.beatText, { color: palette.textBody }, j > 0 && styles.beatTextGap]}>
+                      <ReaderText key={j} style={[styles.beatText, { color: palette.textBody }, j > 0 && styles.beatTextGap]}>
                         {para}
-                      </Text>
+                      </ReaderText>
                     ))}
                   </View>
                 ))}
@@ -304,7 +305,7 @@ function Contents({
         <Text style={[styles.coverEyebrow, { color: palette.placeholder }]}>{doc.cover}</Text>
         <Text style={[styles.coverTitle, { color: palette.textPrimary }]}>《{title}》</Text>
         {logline ? (
-          <Text style={[styles.coverLogline, { color: palette.textSecondary }]}>{logline}</Text>
+          <ReaderText style={[styles.coverLogline, { color: palette.textSecondary }]}>{logline}</ReaderText>
         ) : (
           <Text style={[styles.coverPending, { color: palette.placeholder }]}>{t('loglinePending')}</Text>
         )}
@@ -375,9 +376,9 @@ function CharDetail({
             ) : (
               <Text style={[styles.noIdentity, { color: palette.placeholder }]}>{t('secChars')}</Text>
             )}
-            <Text style={[styles.detailName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</Text>
-            {!!c.role && <Text style={[styles.detailRole, { color: palette.textSecondary }]}>{c.role}</Text>}
-            {!!ageGender && <Text style={[styles.detailAge, { color: palette.textSecondary }]}>{ageGender}</Text>}
+            <ReaderText style={[styles.detailName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</ReaderText>
+            {!!c.role && <ReaderText style={[styles.detailRole, { color: palette.textSecondary }]}>{c.role}</ReaderText>}
+            {!!ageGender && <ReaderText style={[styles.detailAge, { color: palette.textSecondary }]}>{ageGender}</ReaderText>}
           </View>
           <PortraitThumb character={c} variant="detail" />
         </View>
@@ -385,7 +386,7 @@ function CharDetail({
           {!!bio && (
             <>
               <Text style={[styles.bioLabel, { color: palette.textSecondary }]}>{bioLabel}</Text>
-              <Text style={[styles.bio, { color: palette.textPrimaryAlt }]}>{bio}</Text>
+              <ReaderText style={[styles.bio, { color: palette.textPrimaryAlt }]}>{bio}</ReaderText>
             </>
           )}
           {tags.length > 0 && (
@@ -404,9 +405,9 @@ function CharDetail({
                     ]}
                     accessibilityRole="button"
                   >
-                    <Text style={[styles.tagText, { color: on ? accent : palette.textSecondary, fontWeight: on ? '600' : '500' }]}>
+                    <ReaderText style={[styles.tagText, { color: on ? accent : palette.textSecondary, fontWeight: on ? '600' : '500' }]}>
                       {tg.label}
-                    </Text>
+                    </ReaderText>
                   </Pressable>
                 );
               })}
@@ -417,7 +418,7 @@ function CharDetail({
             <View style={[styles.attrPanel, { backgroundColor: palette.noteBg, borderColor: palette.borderControl }]}>
               <Text style={[styles.attrPanelLabel, { color: accent }]}>{activeTag.label}</Text>
               {activeTag.value.trim() ? (
-                <Text style={[styles.attrPanelValue, { color: palette.textPrimaryAlt }]}>{activeTag.value}</Text>
+                <ReaderText style={[styles.attrPanelValue, { color: palette.textPrimaryAlt }]}>{activeTag.value}</ReaderText>
               ) : (
                 <Text style={[styles.attrPanelEmpty, { color: palette.placeholder }]}>{t('attrEmpty')}</Text>
               )}
@@ -443,18 +444,18 @@ function ScriptView({ scenes, accent }: { scenes: Screenplay['scenes']; accent: 
         return (
           <View key={s.id}>
             <Text style={[styles.sceneMark, { color: accent }]}>{`— ${i + 1} —`}</Text>
-            <Text style={[styles.scriptSlug, { color: palette.textSecondary }]}>{s.slug}</Text>
+            <ReaderText style={[styles.scriptSlug, { color: palette.textSecondary }]}>{s.slug}</ReaderText>
             {blocks.map((b, j) =>
               b.isCue ? (
                 <View key={j} style={styles.cueBlock}>
-                  <Text style={[styles.cueName, { color: palette.textPrimary }]}>{b.cue}</Text>
-                  {b.hasParen && <Text style={[styles.cueParen, { color: palette.textSecondary }]}>（{b.paren}）</Text>}
-                  <Text style={[styles.cueText, { color: palette.textPrimaryAlt }]}>{b.text}</Text>
+                  <ReaderText style={[styles.cueName, { color: palette.textPrimary }]}>{b.cue}</ReaderText>
+                  {b.hasParen && <ReaderText style={[styles.cueParen, { color: palette.textSecondary }]}>（{b.paren}）</ReaderText>}
+                  <ReaderText style={[styles.cueText, { color: palette.textPrimaryAlt }]}>{b.text}</ReaderText>
                 </View>
               ) : (
-                <Text key={j} style={[styles.action, { color: palette.textPrimaryAlt }]}>
+                <ReaderText key={j} style={[styles.action, { color: palette.textPrimaryAlt }]}>
                   {b.text}
-                </Text>
+                </ReaderText>
               ),
             )}
           </View>
