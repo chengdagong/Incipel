@@ -46,6 +46,7 @@ agent 当前运行时是 Mastra application,通过 Hono server adapter 在 Node 
 
 `pnpm dev:ios` / `dev:android` 经 `tools/incipel-dev up` 在**后台**启动 `pnpm --filter @incipel/agent dev`(detached,日志/PID/metadata 写入 `os.tmpdir()`),并启动 watcher 监控当前 worktree 的 agent 输入文件。想在前台看 agent 日志就单独 `pnpm dev:agent`。`up` 不只探 `/health`:还会读取 `os.tmpdir()/incipel-agent-serve-<worktree-hash>.json` 和 `os.tmpdir()/incipel-agent-watcher-<worktree-hash>.json`,确认其中的 `repoRoot` 等于当前 worktree,并核对源码 hash、`supabase/.env` hash 与 watcher 监控路径。watcher 监控 `packages/agent/src/**/*.ts`、`packages/agent/model.config.json`、`packages/shared/src/**/*.ts` 与 `supabase/.env`;这些文件变化后会重启当前 worktree 的 agent server。
 
+- **Mastra Studio 本地 Screenplay tools**:Mastra Studio 里用于手工调试工具的 Agent 是 `studio-screenwriter`。它使用与生产 `screenwriter` 相同的静态 instructions 和 screenplay tool schema,但工具结果只写入 `packages/agent/.mastra-studio-screenplay.json`。使用 `read_studio_screenplay` 查看这份本地调试状态,使用 `reset_studio_screenplay` 重置为空 Screenplay。生产 `/run` 继续使用 `screenwriter` 和每轮动态生成的 `toolsets`,不会读写这份本地文件。
 - `pnpm dx agent stop` 只停止当前 worktree metadata 记录的 agent watcher / server;它不会停止本地 Supabase 数据库、auth、storage 等其它容器。
 - 日常共用 dev 走 **Supabase anonymous auth**:无 session 时显示登录页,点击「先随便逛逛」创建 anonymous user;agent 校验 JWT 后使用 SupabaseStore 保存会话数据。不要把这条路径称作“免登录”;它仍有用户身份。
 - 主工作区的 `supabase/.env` 是日常 dev 的模型 secret 和 Google provider secret 来源。新 worktree 第一次启动时复制整份文件;如果已有旧模板但缺模型密钥或 `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET`,`tools/incipel-dev` 只补这些项,不会覆盖已经写好的本地 JWT 校验变量。

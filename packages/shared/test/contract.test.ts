@@ -3,6 +3,8 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  TOOL_NAMES,
+  buildStudioToolSchemas,
   buildToolSchemas,
   idSetsOf,
   emptyScreenplay,
@@ -14,6 +16,23 @@ import {
   OPTIONS_EVENT_NAME,
   type Screenplay,
 } from '../src/index';
+
+describe('buildStudioToolSchemas', () => {
+  it('exposes every screenplay tool even when the Screenplay is empty', () => {
+    const tools = buildStudioToolSchemas();
+    expect(Object.keys(tools).sort()).toEqual([...TOOL_NAMES].sort());
+  });
+
+  it('uses string ids for Studio update/remove tools', () => {
+    const tools = buildStudioToolSchemas();
+    expect(() => tools.update_character.parse({ id: 'char_any', role: '主角' })).not.toThrow();
+    expect(() => tools.remove_world_section.parse({ id: 'world_any' })).not.toThrow();
+    expect(() =>
+      tools.add_character_attr.parse({ characterId: 'char_any', label: '身份', value: '测试' }),
+    ).not.toThrow();
+    expect(() => tools.update_character_attr.parse({ attrId: 'cattr_any', value: '测试' })).not.toThrow();
+  });
+});
 
 describe('buildToolSchemas — id 枚举门控', () => {
   it('某类实体为空时,不暴露其 update_/remove_', () => {

@@ -1,4 +1,4 @@
-import { Agent } from '@mastra/core/agent';
+import { Agent, type ToolsInput } from '@mastra/core/agent';
 import { Mastra } from '@mastra/core/mastra';
 import { InMemoryStore } from '@mastra/core/storage';
 import { fileURLToPath } from 'node:url';
@@ -8,21 +8,34 @@ import {
   type ModelUseConfig,
 } from './model/config.ts';
 import { buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } from './prompt.ts';
+import { createStudioScreenplayTools } from './studio-screenplay-tools.ts';
 
-export type IncipelAgentName = 'screenwriter' | 'logline';
+export type IncipelAgentName = 'screenwriter' | 'studio-screenwriter' | 'logline';
 
 export const SCREENWRITING_MASTER_SKILL_PATH = fileURLToPath(
   new URL('../skills/screenwriting-master', import.meta.url),
 );
 
 export function createMastraAgents(config: ModelRuntimeConfig) {
+  const screenwriterInstructions = buildScreenwriterInstructions();
+
   return {
     screenwriter: createAgent(
       'incipel-screenwriter',
       'Incipel Screenwriter',
       config.turn,
-      buildScreenwriterInstructions(),
-      [SCREENWRITING_MASTER_SKILL_PATH],
+      screenwriterInstructions,
+      { skills: [SCREENWRITING_MASTER_SKILL_PATH] },
+    ),
+    'studio-screenwriter': createAgent(
+      'incipel-studio-screenwriter',
+      'Incipel Studio Screenwriter',
+      config.turn,
+      screenwriterInstructions,
+      {
+        skills: [SCREENWRITING_MASTER_SKILL_PATH],
+        tools: createStudioScreenplayTools(),
+      },
     ),
     logline: createAgent('incipel-logline', 'Incipel Logline', config.logline, LOGLINE_INSTRUCTIONS),
   };
@@ -50,14 +63,16 @@ function createAgent(
   name: string,
   useConfig: ModelUseConfig,
   instructions: string,
-  skills?: string[],
+  options: { skills?: string[]; tools?: ToolsInput } = {},
 ): Agent {
+  const { skills, tools } = options;
   return new Agent({
     id,
     name,
     instructions,
-    skills,
     model: mastraModelId(useConfig.model),
+    ...(skills ? { skills } : {}),
+    ...(tools ? { tools } : {}),
   });
 }
 

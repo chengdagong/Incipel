@@ -96,6 +96,28 @@ function config(overrides: Partial<ModelRuntimeConfig> = {}): ModelRuntimeConfig
   };
 }
 
+describe('createScreenplayMastraTools', () => {
+  it('把 Mastra execute 的第一个参数传给 screenplay tool 执行器', async () => {
+    const { createScreenplayMastraTools } = await import('../src/screenplay-mastra-tools');
+    const executeTool = vi.fn(async () => ({ ok: true }));
+
+    const tools = createScreenplayMastraTools({
+      schemas: { add_character: z.object({ name: z.string() }) },
+      executeTool,
+    });
+
+    const addCharacter = tools.add_character as {
+      execute: (args?: unknown, context?: unknown) => Promise<unknown>;
+    };
+    await addCharacter.execute({ name: '林岑' }, {});
+
+    expect(executeTool).toHaveBeenCalledWith({
+      toolName: 'add_character',
+      args: { name: '林岑' },
+    });
+  });
+});
+
 describe('createMastraProvider.streamTurn', () => {
   it('把 Mastra fullStream 翻译成现有 StreamChunk,并透传 prompt、tools 与调用配置', async () => {
     const { createMastraProvider } = await import('../src/model/mastra');
@@ -140,7 +162,7 @@ describe('createMastraProvider.streamTurn', () => {
     expect(h.lastStreamOptions.clientTools).toBeUndefined();
     expect(h.createdTools[0]).toMatchObject({
       id: 'add_character',
-      description: 'Incipel internal screenplay tool: add_character',
+      description: 'Incipel screenplay tool: add_character',
     });
     await expect(h.createdTools[0].execute()).resolves.toEqual({ ok: true });
   });

@@ -59,15 +59,16 @@ function config(): ModelRuntimeConfig {
 }
 
 describe('createMastraAgents', () => {
-  it('把静态 instructions 注册到 screenwriter 与 logline agent', async () => {
+  it('把静态 instructions 注册到 screenwriter、studio-screenwriter 与 logline agent', async () => {
     const { createMastraAgents } = await import('../src/mastra-app');
     const { buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } = await import('../src/prompt');
 
     const agents = createMastraAgents(config());
 
     expect(agents).toHaveProperty('screenwriter');
+    expect(agents).toHaveProperty('studio-screenwriter');
     expect(agents).toHaveProperty('logline');
-    expect(h.agentConfigs).toHaveLength(2);
+    expect(h.agentConfigs).toHaveLength(3);
 
     const screenwriter = h.agentConfigs.find((agent) => agent.id === 'incipel-screenwriter')!;
     expect(screenwriter).toMatchObject({
@@ -78,6 +79,25 @@ describe('createMastraAgents', () => {
     });
     expect(screenwriter.instructions).toContain('可点选项只通过 propose_options 发出');
     expect(screenwriter.instructions).not.toContain('主管编剧');
+    expect(screenwriter.tools).toBeUndefined();
+
+    const studioScreenwriter = h.agentConfigs.find(
+      (agent) => agent.id === 'incipel-studio-screenwriter',
+    )!;
+    expect(studioScreenwriter).toMatchObject({
+      id: 'incipel-studio-screenwriter',
+      name: 'Incipel Studio Screenwriter',
+      model: 'openrouter/openai/gpt-test',
+      instructions: buildScreenwriterInstructions(),
+    });
+    expect(studioScreenwriter.tools).toEqual(
+      expect.objectContaining({
+        add_character: expect.anything(),
+        update_character: expect.anything(),
+        read_studio_screenplay: expect.anything(),
+        reset_studio_screenplay: expect.anything(),
+      }),
+    );
 
     const logline = h.agentConfigs.find((agent) => agent.id === 'incipel-logline')!;
     expect(logline).toMatchObject({
@@ -89,13 +109,17 @@ describe('createMastraAgents', () => {
     expect(logline.instructions).toContain('只输出这句 logline 本身');
   });
 
-  it('只给 screenwriter agent 挂载山音编剧 skill,不影响 logline agent', async () => {
+  it('给 screenwriter 与 studio-screenwriter agent 挂载山音编剧 skill,不影响 logline agent', async () => {
     const { createMastraAgents, SCREENWRITING_MASTER_SKILL_PATH } = await import('../src/mastra-app');
 
     createMastraAgents(config());
 
     const screenwriter = h.agentConfigs.find((agent) => agent.id === 'incipel-screenwriter')!;
     expect(screenwriter.skills).toEqual([SCREENWRITING_MASTER_SKILL_PATH]);
+    const studioScreenwriter = h.agentConfigs.find(
+      (agent) => agent.id === 'incipel-studio-screenwriter',
+    )!;
+    expect(studioScreenwriter.skills).toEqual([SCREENWRITING_MASTER_SKILL_PATH]);
     expect(SCREENWRITING_MASTER_SKILL_PATH).toMatch(/packages\/agent\/skills\/screenwriting-master$/);
     await expect(readFile(join(SCREENWRITING_MASTER_SKILL_PATH, 'SKILL.md'), 'utf8')).resolves.toContain(
       'Designed by @山音',
