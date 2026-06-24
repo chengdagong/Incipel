@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyScreenplay } from '@incipel/shared';
-import { applyScreenplayTitle, normalizeSessionTitle, sessionTitleForDisplay } from './session-title';
+import { applyScreenplayTitle, canEditSessionTitle, normalizeSessionTitle, sessionTitleForDisplay } from './session-title';
 
 describe('normalizeSessionTitle', () => {
   it('去掉首尾空白并限制为 80 个字符', () => {
@@ -32,5 +32,13 @@ describe('sessionTitleForDisplay', () => {
     expect(sessionTitleForDisplay(' 用户标题 ', '剧本标题', '无题')).toBe('用户标题');
     expect(sessionTitleForDisplay('', ' 剧本标题 ', '无题')).toBe('剧本标题');
     expect(sessionTitleForDisplay('', '', '无题')).toBe('无题');
+  });
+});
+
+describe('canEditSessionTitle', () => {
+  it('运行中或恢复历史中都不允许编辑标题', () => {
+    expect(canEditSessionTitle({ isRunning: false, hydrating: false })).toBe(true);
+    expect(canEditSessionTitle({ isRunning: true, hydrating: false })).toBe(false);
+    expect(canEditSessionTitle({ isRunning: false, hydrating: true })).toBe(false);
   });
 });

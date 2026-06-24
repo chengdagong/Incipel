@@ -23,7 +23,7 @@ import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } 
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
 import { useT } from '../../src/i18n';
 import { supabase } from '../../src/supabase';
-import { normalizeSessionTitle } from '../../src/session-title';
+import { canEditSessionTitle, normalizeSessionTitle } from '../../src/session-title';
 import { defaultTheme } from '../../src/theme';
 
 // 助手正文行内 **加粗** 渲染(对齐原型 parseInline:**…** → 加粗、主色)。
@@ -112,6 +112,7 @@ export default function ChatScreen() {
 
   const rawTitle = screenplay.meta.title?.trim() || '';
   const title = rawTitle || t('untitled');
+  const titleEditingDisabled = !canEditSessionTitle({ isRunning, hydrating });
   const saveTitle = useCallback(
     async (input: string) => {
       const nextTitle = normalizeSessionTitle(input);
@@ -230,6 +231,7 @@ export default function ChatScreen() {
       <Header
         title={title}
         rawTitle={rawTitle}
+        titleEditingDisabled={titleEditingDisabled}
         docOpen={docOpen}
         onBack={() => router.back()}
         onSaveTitle={saveTitle}
@@ -329,6 +331,7 @@ export default function ChatScreen() {
 function Header({
   title,
   rawTitle,
+  titleEditingDisabled,
   docOpen,
   onBack,
   onSaveTitle,
@@ -336,6 +339,7 @@ function Header({
 }: {
   title: string;
   rawTitle: string;
+  titleEditingDisabled: boolean;
   docOpen: boolean;
   onBack: () => void;
   onSaveTitle: (title: string) => Promise<void>;
@@ -353,8 +357,15 @@ function Header({
     if (!editing) setDraft(rawTitle);
   }, [editing, rawTitle]);
 
+  useEffect(() => {
+    if (titleEditingDisabled && editing) {
+      setDraft(rawTitle);
+      setEditing(false);
+    }
+  }, [editing, rawTitle, titleEditingDisabled]);
+
   const commitTitle = useCallback(async () => {
-    if (committingRef.current || saving) return;
+    if (committingRef.current || saving || titleEditingDisabled) return;
     committingRef.current = true;
     const next = normalizeSessionTitle(draft);
     const current = normalizeSessionTitle(rawTitle);
@@ -378,7 +389,7 @@ function Header({
       setSaving(false);
       committingRef.current = false;
     }
-  }, [draft, onSaveTitle, rawTitle, saving, t]);
+  }, [draft, onSaveTitle, rawTitle, saving, t, titleEditingDisabled]);
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6, borderColor: palette.divider }]}>
@@ -390,7 +401,7 @@ function Header({
         {editing ? (
           <TextInput
             autoFocus
-            editable={!saving}
+            editable={!saving && !titleEditingDisabled}
             maxLength={80}
             returnKeyType="done"
             selectTextOnFocus
@@ -407,11 +418,14 @@ function Header({
           <Pressable
             style={styles.headerCenter}
             onPress={() => {
+              if (titleEditingDisabled) return;
               setDraft(rawTitle);
               setEditing(true);
             }}
             accessibilityRole="button"
             accessibilityLabel={t('renameTitle')}
+            accessibilityState={{ disabled: titleEditingDisabled }}
+            disabled={titleEditingDisabled}
             testID="chat-title-edit"
           >
             <Text style={[styles.headerTitle, { color: palette.textSecondary }]} numberOfLines={1}>

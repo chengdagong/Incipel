@@ -20,3 +20,7 @@ export function applyScreenplayTitle(screenplay: Screenplay, title: string, upda
 export function sessionTitleForDisplay(sessionTitle: string | null | undefined, screenplayTitle: string | null | undefined, fallback: string): string {
   return sessionTitle?.trim() || screenplayTitle?.trim() || fallback;
 }
+
+export function canEditSessionTitle({ isRunning, hydrating }: { isRunning: boolean; hydrating: boolean }): boolean {
+  return !isRunning && !hydrating;
+}
