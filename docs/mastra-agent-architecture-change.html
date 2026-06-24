@@ -520,8 +520,8 @@
             <span class="tag">Changed</span>
             <h3>agent runtime 改为 Node server</h3>
             <p>
-              <code>packages/agent/src/mastra-app.ts</code> 注册 Mastra application、
-              agents 和 custom API routes，<code>@mastra/hono</code> 负责把它接到 Hono app。
+              <code>packages/agent/src/mastra-app.ts</code> 注册 Mastra application 和
+              agents；AG-UI HTTP routes 直接注册到外层 Hono app，再由 <code>@mastra/hono</code> 初始化。
             </p>
           </article>
 
@@ -586,11 +586,11 @@
             <div class="lane-body">
               <div class="box">
                 <strong>agent 行为放在 agent 层</strong>
-                <p>Mastra application 负责注册 <code>Agent</code>、custom API routes、tool 注册、streaming chunk 和模型调用。</p>
+                <p>Mastra application 负责注册 <code>Agent</code>、tool 注册、streaming chunk 和模型调用；AG-UI HTTP routes 仍由 Incipel 的 Hono handlers 承载。</p>
               </div>
               <div class="box">
                 <strong>协议边界仍由项目控制</strong>
-                <p>Mastra custom API routes 继续输出 AG-UI SSE，不让 Mastra 接管移动端协议。</p>
+                <p>外层 Hono routes 继续输出 AG-UI SSE，不让 Mastra 接管移动端协议。</p>
               </div>
               <div class="box">
                 <strong>为后续机制保留空间</strong>
@@ -652,7 +652,7 @@
               <div class="arrow">↓ HTTPS + JWT</div>
               <div class="box">
                 <strong>Mastra application + Hono adapter</strong>
-                <p><code>@mastra/hono</code> 初始化 Hono app，注册 <code>/run</code>、<code>/logline</code> 和 <code>/health</code> custom API routes；<code>@hono/node-server</code> 只负责监听 HTTP。</p>
+                <p>Incipel 先把 <code>/run</code>、<code>/logline</code> 和 <code>/health</code> 直接注册到 Hono app，<code>@mastra/hono</code> 再初始化同一个 app；<code>@hono/node-server</code> 只负责监听 HTTP。</p>
               </div>
               <div class="arrow">↓ Mastra Agent.stream</div>
               <div class="box">
@@ -674,7 +674,7 @@
           <h2>4. 运行流程</h2>
           <p>
             外层 run orchestration 仍由 Incipel 实现。Mastra application 接管 agent registry、
-            custom API routes 和模型调用的 framework 部分，AG-UI 事件生成、数据库事务和产品状态更新仍在项目代码内完成。
+            模型调用的 framework 部分，AG-UI routes、事件生成、数据库事务和产品状态更新仍在项目代码内完成。
           </p>
         </div>
 
@@ -684,7 +684,7 @@
             <div class="flow" aria-label="/run 时序">
               <div class="flow-step">
                 <div class="flow-num">1</div>
-                <p>Mastra custom API route 校验客户端 JWT，并确认用户可以访问目标 session。</p>
+                <p>外层 Hono route 校验客户端 JWT，并确认用户可以访问目标 session。</p>
               </div>
               <div class="flow-step">
                 <div class="flow-num">2</div>
@@ -759,11 +759,11 @@
           </div>
           <div class="file-row">
             <strong>packages/agent/src/mastra-app.ts</strong>
-            <span>Mastra application registry。注册 <code>screenwriter</code>、<code>logline</code> agents，配置 custom API routes 和 Mastra framework storage。</span>
+            <span>Mastra application registry。注册 <code>screenwriter</code>、<code>logline</code> agents，并配置 Mastra framework storage。</span>
           </div>
           <div class="file-row">
             <strong>packages/agent/src/routes.ts</strong>
-            <span>Custom API route handlers。负责 <code>/run</code>、<code>/logline</code>、<code>/health</code>、authentication、SSE response 和 store 注入。</span>
+            <span>Hono route handlers。负责 <code>/run</code>、<code>/logline</code>、<code>/health</code>、authentication、SSE response 和 store 注入。</span>
           </div>
           <div class="file-row">
             <strong>packages/agent/src/app.ts</strong>
@@ -810,7 +810,7 @@
             <tr>
               <td>新增</td>
               <td><code>@mastra/core</code></td>
-              <td>提供 Mastra application、<code>Agent</code>、tool registration、custom API routes 和 streaming runtime。</td>
+              <td>提供 Mastra application、<code>Agent</code>、tool registration 和 streaming runtime。</td>
             </tr>
             <tr>
               <td>新增</td>

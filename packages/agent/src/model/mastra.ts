@@ -50,7 +50,7 @@ export function createMastraProvider(
       const stream = await agent.stream(input.prompt, {
         system: input.system,
         maxSteps: MAX_TURN_STEPS,
-        clientTools: toMastraTools(input.tools),
+        toolsets: { screenplay: toMastraTools(input.tools) },
         toolChoice: 'auto',
         modelSettings: modelSettings(config.turn),
         providerOptions: providerOptionsForUse(config.provider, config.turn),

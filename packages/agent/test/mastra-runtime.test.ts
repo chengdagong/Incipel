@@ -137,8 +137,8 @@ describe('createMastraProvider.streamTurn', () => {
       modelSettings: { temperature: 0.2 },
       providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
     });
-    expect(Object.keys(h.lastStreamOptions.clientTools)).toEqual(['add_character']);
-    expect(h.lastStreamOptions.tools).toBeUndefined();
+    expect(Object.keys(h.lastStreamOptions.toolsets.screenplay)).toEqual(['add_character']);
+    expect(h.lastStreamOptions.clientTools).toBeUndefined();
     expect(h.createdTools[0]).toMatchObject({
       id: 'add_character',
       description: 'Incipel internal screenplay tool: add_character',

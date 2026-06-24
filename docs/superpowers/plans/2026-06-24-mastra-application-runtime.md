@@ -4,7 +4,7 @@
 
 **Goal:** Convert the agent runtime into a Mastra application that owns agents and server adapter initialization while preserving the Incipel AG-UI routes.
 
-**Architecture:** Create a single Mastra application with registered `screenwriter` and `logline` agents. Register `/run`, `/logline`, and `/health` as Mastra custom API routes, then initialize a Hono app through `@mastra/hono` before starting the Node server.
+**Architecture:** Create a single Mastra application with registered `screenwriter` and `logline` agents. Register `/run`, `/logline`, and `/health` directly on the outer Hono app, then initialize the same app through `@mastra/hono` before starting the Node server.
 
 **Tech Stack:** TypeScript, Mastra, `@mastra/hono`, Hono, AG-UI, Supabase, Vitest, Node test runner.
 
@@ -71,9 +71,9 @@ Expected: tests fail because the entrypoint still imports `createApp()` directly
 - Modify: `packages/agent/src/model/mastra.ts`
 - Modify: `packages/agent/src/index.ts`
 
-- [ ] **Step 1: Extract custom API routes**
+- [ ] **Step 1: Extract Hono route handlers**
 
-Move `/health`, `/run`, and `/logline` route handlers from `createApp()` into route definitions built with `registerApiRoute`. Preserve the body reading, authentication, store creation, and SSE behavior.
+Move `/health`, `/run`, and `/logline` route handlers from `createApp()` into `registerAgentHonoRoutes(app)`. Preserve capped body reading, authentication, store creation, and SSE behavior.
 
 - [ ] **Step 2: Create Mastra application**
 
@@ -84,9 +84,6 @@ export const mastra = new Mastra({
   agents: {
     screenwriter: createAgent('incipel-screenwriter', 'Incipel Screenwriter', config.turn),
     logline: createAgent('incipel-logline', 'Incipel Logline', config.logline),
-  },
-  server: {
-    apiRoutes: createAgentApiRoutes(),
   },
 });
 ```
@@ -102,11 +99,11 @@ const agent = mastra.getAgent('screenwriter');
 const loglineAgent = mastra.getAgent('logline');
 ```
 
-Keep `clientTools`, model settings, provider options, and chunk translation behavior.
+Keep model settings, provider options, and chunk translation behavior. Pass screenplay tools through server-side `toolsets`.
 
 - [ ] **Step 4: Initialize MastraServer in Node entrypoint**
 
-Create Hono, pass it to `new MastraServer({ app, mastra })`, await `server.init()`, then call `serve({ fetch: app.fetch, hostname, port })`.
+Create Hono, register AG-UI routes directly on it, pass it to `new MastraServer({ app, mastra })`, await `server.init()`, then call `serve({ fetch: app.fetch, hostname, port })`.
 
 ### Task 4: Docs And Verification
 

@@ -4,6 +4,8 @@ const h = vi.hoisted(() => ({
   mastra: { id: 'test-mastra-app' },
   serveOptions: null as any,
   serverConfig: null as any,
+  agentRoutesApp: null as any,
+  agentRoutesCalls: 0,
   initCalls: 0,
   initCompleted: false,
   initCompletedAtServe: false,
@@ -34,10 +36,19 @@ vi.mock('../src/mastra-app.ts', () => ({
   getMastraApp: () => h.mastra,
 }));
 
+vi.mock('../src/routes.ts', () => ({
+  registerAgentHonoRoutes: (app: any) => {
+    h.agentRoutesApp = app;
+    h.agentRoutesCalls += 1;
+  },
+}));
+
 beforeEach(() => {
   vi.resetModules();
   h.serveOptions = null;
   h.serverConfig = null;
+  h.agentRoutesApp = null;
+  h.agentRoutesCalls = 0;
   h.initCalls = 0;
   h.initCompleted = false;
   h.initCompletedAtServe = false;
@@ -51,6 +62,8 @@ describe('Node agent server entry', () => {
     await import('../src/index');
 
     expect(h.serverConfig?.mastra).toBe(h.mastra);
+    expect(h.agentRoutesApp).toBe(h.serverConfig.app);
+    expect(h.agentRoutesCalls).toBe(1);
     expect(h.initCalls).toBe(1);
     expect(h.initCompletedAtServe).toBe(true);
     expect(h.serveOptions).toMatchObject({

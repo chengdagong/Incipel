@@ -3,6 +3,7 @@ import { MastraServer } from '@mastra/hono';
 import { Hono } from 'hono';
 import { env } from './env.ts';
 import { getMastraApp } from './mastra-app.ts';
+import { registerAgentHonoRoutes } from './routes.ts';
 
 const host = env('HOST') || '127.0.0.1';
 const rawPort = env('AGENT_PORT') || env('PORT') || '4111';
@@ -13,6 +14,7 @@ if (!Number.isInteger(port) || port <= 0) {
 }
 
 const app = new Hono();
+registerAgentHonoRoutes(app);
 const mastra = getMastraApp();
 const server = new MastraServer({ app, mastra });
 await server.init();

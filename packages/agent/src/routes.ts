@@ -1,5 +1,4 @@
 import type { Message, RunAgentInput } from '@ag-ui/core';
-import { registerApiRoute, type ApiRoute } from '@mastra/core/server';
 import { sse } from '@incipel/shared';
 import type { Context, Hono } from 'hono';
 import { stream } from 'hono/streaming';
@@ -224,25 +223,4 @@ export function registerAgentHonoRoutes(app: Hono): void {
   app.get('/health', handlers.health);
   app.post('/run', handlers.run);
   app.post('/logline', handlers.logline);
-}
-
-export function createAgentApiRoutes(): ApiRoute[] {
-  const handlers = createAgentRouteHandlers();
-  return [
-    registerApiRoute('/health', {
-      method: 'GET',
-      requiresAuth: false,
-      handler: handlers.health as any,
-    }),
-    registerApiRoute('/run', {
-      method: 'POST',
-      requiresAuth: false,
-      handler: handlers.run as any,
-    }),
-    registerApiRoute('/logline', {
-      method: 'POST',
-      requiresAuth: false,
-      handler: handlers.logline as any,
-    }),
-  ];
 }

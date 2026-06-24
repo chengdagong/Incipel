@@ -6,7 +6,6 @@ import {
   type ModelRuntimeConfig,
   type ModelUseConfig,
 } from './model/config.ts';
-import { createAgentApiRoutes } from './routes.ts';
 
 export type IncipelAgentName = 'screenwriter' | 'logline';
 
@@ -24,9 +23,6 @@ export function createMastraApp(config: ModelRuntimeConfig = getModelConfig()): 
   return new Mastra({
     agents: createMastraAgents(config),
     storage: new InMemoryStore({ id: 'incipel-mastra-runtime' }),
-    server: {
-      apiRoutes: createAgentApiRoutes(),
-    },
   });
 }
 

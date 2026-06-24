@@ -270,6 +270,44 @@ async function startHealthServer(port = 0) {
   return { child, port: listeningPort };
 }
 
+async function startAgentLikeHealthServer(root, port = agentPort(root)) {
+  const child = spawn(
+    process.execPath,
+    [
+      '-e',
+      [
+        'const http = require("node:http");',
+        'const server = http.createServer((req, res) => {',
+        '  if (req.url === "/health") {',
+        '    res.writeHead(200, { "Content-Type": "application/json" });',
+        '    res.end("{\\"ok\\":true}");',
+        '    return;',
+        '  }',
+        '  res.writeHead(404);',
+        '  res.end();',
+        '});',
+        `server.listen(${port}, "127.0.0.1", () => console.log(server.address().port));`,
+      ].join('\n'),
+      'tsx',
+      'src/index.ts',
+    ],
+    { cwd: root, stdio: ['ignore', 'pipe', 'inherit'] },
+  );
+  const listeningPort = await new Promise((resolve, reject) => {
+    child.stdout.once('data', (buf) => resolve(Number(String(buf).trim())));
+    child.once('error', reject);
+    child.once('exit', (code) => {
+      if (code !== null && code !== 0) reject(new Error(`agent-like health server exited with ${code}`));
+    });
+  });
+  return { child, port: listeningPort };
+}
+
+function hasLsof() {
+  const res = spawnSync('lsof', ['-v'], { stdio: 'ignore' });
+  return res.status === 0;
+}
+
 test('env sync copies Google env from the primary worktree when a child worktree already has env files', () => {
   const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
   try {
@@ -941,6 +979,44 @@ test('agent stop does not signal agent-looking processes from another cwd', asyn
     cleanupMetadata(root);
     rmSync(tmp, { recursive: true, force: true });
     rmSync(other, { recursive: true, force: true });
+  }
+});
+
+test('agent stop cleans current-worktree agent listener when metadata pid is stale', { skip: !hasLsof() }, async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const dockerLog = path.join(tmp, 'docker.log');
+  let listener;
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    writeFakeDocker(tmp);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    listener = await startAgentLikeHealthServer(root);
+    assert.equal(listener.port, agentPort(root));
+
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: 999999, logPath: '/tmp/serve.log' }, null, 2),
+    );
+
+    const res = run('node', [cli, 'agent', 'stop'], tmp, {
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    await waitFor(() => listener.child.exitCode !== null || listener.child.signalCode !== null, {
+      timeoutMs: 3000,
+      intervalMs: 100,
+    });
+  } finally {
+    await stopChild(listener?.child);
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
   }
 });
 

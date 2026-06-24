@@ -545,6 +545,18 @@ function processCwdMatches(pid, cwd) {
   return Boolean(actual && normalizePath(actual) === normalizePath(cwd));
 }
 
+function listenPidsOnPort(port) {
+  if (!Number.isFinite(port) || port <= 0) return [];
+  const res = spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' });
+  if (res.status !== 0) return [];
+  return [...new Set(
+    res.stdout
+      .split(/\s+/)
+      .map((item) => Number(item))
+      .filter((pid) => Number.isFinite(pid) && pid > 0),
+  )];
+}
+
 function commandHasWords(command, words) {
   return words.every((word) => command.includes(word));
 }
@@ -566,7 +578,7 @@ function pidMatches(pid, matcher, cwd) {
   return Boolean(command && matcher(command) && processCwdMatches(pid, cwd));
 }
 
-async function stopPid(pid, label, { commandMatches, cwd } = {}) {
+async function stopPid(pid, label, { commandMatches, cwd, killGroup = false } = {}) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
   if (DRY) {
     log(`  [dry-run] kill ${pid} (${label})`);
@@ -583,13 +595,23 @@ async function stopPid(pid, label, { commandMatches, cwd } = {}) {
     log(`  注意:${label} metadata 指向的 pid ${pid} 不属于当前 worktree,跳过停止`);
     return false;
   }
+  const termTargets = killGroup && process.platform !== 'win32' ? [-pid, pid] : [pid];
+  let signaled = false;
   try {
-    process.kill(pid, 'SIGTERM');
-  } catch (err) {
-    if (err?.code === 'ESRCH') {
+    for (const target of termTargets) {
+      try {
+        process.kill(target, 'SIGTERM');
+        signaled = true;
+        break;
+      } catch (err) {
+        if (err?.code !== 'ESRCH') throw err;
+      }
+    }
+    if (!signaled) {
       log(`  ${label} 进程已不存在(pid ${pid})`);
       return false;
     }
+  } catch (err) {
     log(`  注意:${label} 进程(pid ${pid}) 未停止:${err.message}`);
     return false;
   }
@@ -600,8 +622,16 @@ async function stopPid(pid, label, { commandMatches, cwd } = {}) {
       return true;
     }
   }
+  const killTargets = killGroup && process.platform !== 'win32' ? [-pid, pid] : [pid];
   try {
-    process.kill(pid, 'SIGKILL');
+    for (const target of killTargets) {
+      try {
+        process.kill(target, 'SIGKILL');
+        break;
+      } catch (err) {
+        if (err?.code !== 'ESRCH') throw err;
+      }
+    }
     log(`  已强制停止 ${label} 进程(pid ${pid})`);
     return true;
   } catch (err) {
@@ -630,7 +660,14 @@ async function stopKnownAgentServe(paths, meta = null, cwd = null) {
 
   let stopped = false;
   for (const pid of candidates) {
-    stopped = (await stopPid(pid, 'agent serve', { commandMatches: commandLooksLikeAgentServe, cwd })) || stopped;
+    stopped = (await stopPid(pid, 'agent serve', { commandMatches: commandLooksLikeAgentServe, cwd, killGroup: true })) || stopped;
+  }
+
+  for (const pid of listenPidsOnPort(agentPort(cwd ?? process.cwd()))) {
+    if (candidates.includes(pid)) continue;
+    stopped =
+      (await stopPid(pid, 'agent serve listener', { commandMatches: commandLooksLikeAgentServe, cwd, killGroup: true })) ||
+      stopped;
   }
   return stopped;
 }

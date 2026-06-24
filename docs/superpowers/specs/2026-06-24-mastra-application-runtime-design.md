@@ -16,7 +16,7 @@ The runtime uses one Mastra application:
 
 - `Mastra` registers the `screenwriter` and `logline` agents.
 - `@mastra/hono` initializes the Hono app through `MastraServer`.
-- `/run`, `/logline`, and `/health` are Mastra custom API routes registered with `registerApiRoute`.
+- `/run`, `/logline`, and `/health` are registered directly on the outer Hono app before `MastraServer.init()`, so capped body reads happen before JSON parsing.
 - The Incipel AG-UI SSE contract remains unchanged.
 - Supabase authentication, store creation, request validation, and `runTurnCore` behavior remain unchanged.
 
@@ -28,12 +28,12 @@ Use the verified npm versions:
 - `@mastra/hono@1.5.1`
 - `hono@^4.12.8`
 
-`@mastra/hono` is the official Hono server adapter. It registers Mastra endpoints and middleware on a Hono app while allowing project-specific custom API routes.
+`@mastra/hono` is the official Hono server adapter. It registers Mastra endpoints and middleware on a Hono app. Incipel registers the AG-UI HTTP routes itself on the same outer app.
 
 ## Main Files
 
-- `packages/agent/src/mastra-app.ts`: creates the Mastra application, registered agents, and custom API routes.
-- `packages/agent/src/routes.ts`: exposes the custom route definitions for `/run`, `/logline`, and `/health`.
+- `packages/agent/src/mastra-app.ts`: creates the Mastra application and registered agents.
+- `packages/agent/src/routes.ts`: registers the Hono route handlers for `/run`, `/logline`, and `/health`.
 - `packages/agent/src/model/mastra.ts`: uses registered agents from the Mastra application instead of constructing agents per call.
 - `packages/agent/src/index.ts`: creates Hono, initializes `MastraServer`, and starts the Node server.
 - Existing HTTP tests remain the behavior contract for the custom routes.
