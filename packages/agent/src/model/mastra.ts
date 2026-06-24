@@ -1,6 +1,3 @@
-import type { ToolsInput } from '@mastra/core/agent';
-import { createTool } from '@mastra/core/tools';
-import { z } from 'zod';
 import {
   getModelConfig,
   providerOptionsForUse,
@@ -15,6 +12,7 @@ import type {
 } from './provider.ts';
 import { env } from '../env.ts';
 import { getMastraApp, type IncipelAgentName } from '../mastra-app.ts';
+import { createNoopScreenplayMastraTools } from '../screenplay-mastra-tools.ts';
 
 const MAX_TURN_STEPS = 8;
 
@@ -49,7 +47,7 @@ export function createMastraProvider(
       const agent = registry.getAgent('screenwriter');
       const stream = await agent.stream(input.prompt, {
         maxSteps: MAX_TURN_STEPS,
-        toolsets: { screenplay: toMastraTools(input.tools) },
+        toolsets: { screenplay: createNoopScreenplayMastraTools(input.tools) },
         toolChoice: 'auto',
         modelSettings: modelSettings(config.turn),
         providerOptions: providerOptionsForUse(config.provider, config.turn),
@@ -78,19 +76,6 @@ export function createMastraProvider(
 function modelSettings(useConfig: ModelUseConfig): Record<string, unknown> | undefined {
   if (useConfig.temperature === undefined) return undefined;
   return { temperature: useConfig.temperature };
-}
-
-function toMastraTools(schemas: Record<string, z.ZodTypeAny>): ToolsInput {
-  const tools: ToolsInput = {};
-  for (const [name, schema] of Object.entries(schemas)) {
-    tools[name] = createTool({
-      id: name,
-      description: `Incipel internal screenplay tool: ${name}`,
-      inputSchema: schema,
-      execute: async () => ({ ok: true }),
-    });
-  }
-  return tools;
 }
 
 type MastraChunk = {

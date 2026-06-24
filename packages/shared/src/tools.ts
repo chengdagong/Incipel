@@ -55,6 +55,78 @@ function idEnum(ids: string[]) {
   return z.enum(ids as [string, ...string[]]);
 }
 
+type IdSchema = z.ZodType<string>;
+
+type AlwaysToolName =
+  | 'set_meta'
+  | 'add_world_section'
+  | 'add_character'
+  | 'add_act'
+  | 'add_scene'
+  | 'propose_options';
+type IdToolName = Exclude<ToolName, AlwaysToolName>;
+
+const toolSchemaBuilders = {
+  set_meta: () => z.object({ title: z.string().optional(), logline: z.string().optional() }),
+  add_world_section: () => z.object({ title: z.string(), text: z.string() }),
+  update_world_section: (id: IdSchema) =>
+    z.object({
+      id,
+      title: z.string().optional(),
+      text: z.string().optional(),
+    }),
+  remove_world_section: (id: IdSchema) => z.object({ id }),
+  // 人物:名字 + 一句话定位(role)+ 可选的初始属性 attrs。
+  // 新建时一并带 attrs,是为了让「本轮新建人物 + 给它属性」能一次完成——新人物的 id 本轮还不在
+  // characters 枚举里,add_character_attr 当轮无法引用它(见 ADR-0001 扩展段)。attr id 仍由服务端生成。
+  // 后续对已存在人物增删改属性,走 *_character_attr。
+  add_character: () =>
+    z.object({
+      name: z.string(),
+      role: z.string().optional(),
+      attrs: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
+    }),
+  update_character: (id: IdSchema) =>
+    z.object({
+      id,
+      name: z.string().optional(),
+      role: z.string().optional(),
+    }),
+  remove_character: (id: IdSchema) => z.object({ id }),
+  // 给某个已存在的人物加一条属性(characterId 枚举锁死到现有人物)。
+  add_character_attr: (characterId: IdSchema) =>
+    z.object({
+      characterId,
+      label: z.string(),
+      value: z.string(),
+    }),
+  // attrId 全局唯一,枚举锁死到现有属性;无需再带 characterId。
+  update_character_attr: (attrId: IdSchema) =>
+    z.object({
+      attrId,
+      label: z.string().optional(),
+      value: z.string().optional(),
+    }),
+  remove_character_attr: (attrId: IdSchema) => z.object({ attrId }),
+  add_act: () => z.object({ act: z.string(), beat: z.string() }),
+  update_act: (id: IdSchema) =>
+    z.object({
+      id,
+      act: z.string().optional(),
+      beat: z.string().optional(),
+    }),
+  remove_act: (id: IdSchema) => z.object({ id }),
+  add_scene: () => z.object({ slug: z.string(), content: z.string() }),
+  update_scene: (id: IdSchema) =>
+    z.object({
+      id,
+      slug: z.string().optional(),
+      content: z.string().optional(),
+    }),
+  remove_scene: (id: IdSchema) => z.object({ id }),
+  propose_options: () => z.object({ options: z.array(z.string()).max(3) }),
+} satisfies Record<AlwaysToolName, () => z.ZodTypeAny> & Record<IdToolName, (id: IdSchema) => z.ZodTypeAny>;
+
 /**
  * 按当前剧本状态构造本轮可用的工具 schema 集合。
  * add_* 与 set_meta / propose_options 恒定存在;update_* / remove_* 仅在该类实体
@@ -62,69 +134,58 @@ function idEnum(ids: string[]) {
  */
 export function buildToolSchemas(ids: IdSets): Record<string, z.ZodTypeAny> {
   const tools: Record<string, z.ZodTypeAny> = {
-    set_meta: z.object({ title: z.string().optional(), logline: z.string().optional() }),
-    add_world_section: z.object({ title: z.string(), text: z.string() }),
-    // 人物:名字 + 一句话定位(role)+ 可选的初始属性 attrs。
-    // 新建时一并带 attrs,是为了让「本轮新建人物 + 给它属性」能一次完成——新人物的 id 本轮还不在
-    // characters 枚举里,add_character_attr 当轮无法引用它(见 ADR-0001 扩展段)。attr id 仍由服务端生成。
-    // 后续对已存在人物增删改属性,走 *_character_attr。
-    add_character: z.object({
-      name: z.string(),
-      role: z.string().optional(),
-      attrs: z.array(z.object({ label: z.string(), value: z.string() })).optional(),
-    }),
-    add_act: z.object({ act: z.string(), beat: z.string() }),
-    add_scene: z.object({ slug: z.string(), content: z.string() }),
-    propose_options: z.object({ options: z.array(z.string()).max(3) }),
+    set_meta: toolSchemaBuilders.set_meta(),
+    add_world_section: toolSchemaBuilders.add_world_section(),
+    add_character: toolSchemaBuilders.add_character(),
+    add_act: toolSchemaBuilders.add_act(),
+    add_scene: toolSchemaBuilders.add_scene(),
+    propose_options: toolSchemaBuilders.propose_options(),
   };
 
   if (ids.world.length) {
-    tools.update_world_section = z.object({
-      id: idEnum(ids.world),
-      title: z.string().optional(),
-      text: z.string().optional(),
-    });
-    tools.remove_world_section = z.object({ id: idEnum(ids.world) });
+    tools.update_world_section = toolSchemaBuilders.update_world_section(idEnum(ids.world));
+    tools.remove_world_section = toolSchemaBuilders.remove_world_section(idEnum(ids.world));
   }
   if (ids.characters.length) {
-    tools.update_character = z.object({
-      id: idEnum(ids.characters),
-      name: z.string().optional(),
-      role: z.string().optional(),
-    });
-    tools.remove_character = z.object({ id: idEnum(ids.characters) });
-    // 给某个已存在的人物加一条属性(characterId 枚举锁死到现有人物)。
-    tools.add_character_attr = z.object({
-      characterId: idEnum(ids.characters),
-      label: z.string(),
-      value: z.string(),
-    });
+    tools.update_character = toolSchemaBuilders.update_character(idEnum(ids.characters));
+    tools.remove_character = toolSchemaBuilders.remove_character(idEnum(ids.characters));
+    tools.add_character_attr = toolSchemaBuilders.add_character_attr(idEnum(ids.characters));
   }
   if (ids.characterAttrs.length) {
-    // attrId 全局唯一,枚举锁死到现有属性;无需再带 characterId。
-    tools.update_character_attr = z.object({
-      attrId: idEnum(ids.characterAttrs),
-      label: z.string().optional(),
-      value: z.string().optional(),
-    });
-    tools.remove_character_attr = z.object({ attrId: idEnum(ids.characterAttrs) });
+    tools.update_character_attr = toolSchemaBuilders.update_character_attr(idEnum(ids.characterAttrs));
+    tools.remove_character_attr = toolSchemaBuilders.remove_character_attr(idEnum(ids.characterAttrs));
   }
   if (ids.acts.length) {
-    tools.update_act = z.object({
-      id: idEnum(ids.acts),
-      act: z.string().optional(),
-      beat: z.string().optional(),
-    });
-    tools.remove_act = z.object({ id: idEnum(ids.acts) });
+    tools.update_act = toolSchemaBuilders.update_act(idEnum(ids.acts));
+    tools.remove_act = toolSchemaBuilders.remove_act(idEnum(ids.acts));
   }
   if (ids.scenes.length) {
-    tools.update_scene = z.object({
-      id: idEnum(ids.scenes),
-      slug: z.string().optional(),
-      content: z.string().optional(),
-    });
-    tools.remove_scene = z.object({ id: idEnum(ids.scenes) });
+    tools.update_scene = toolSchemaBuilders.update_scene(idEnum(ids.scenes));
+    tools.remove_scene = toolSchemaBuilders.remove_scene(idEnum(ids.scenes));
   }
 
   return tools;
+}
+
+export function buildStudioToolSchemas(): Record<ToolName, z.ZodTypeAny> {
+  const id = z.string();
+  return {
+    set_meta: toolSchemaBuilders.set_meta(),
+    add_world_section: toolSchemaBuilders.add_world_section(),
+    update_world_section: toolSchemaBuilders.update_world_section(id),
+    remove_world_section: toolSchemaBuilders.remove_world_section(id),
+    add_character: toolSchemaBuilders.add_character(),
+    update_character: toolSchemaBuilders.update_character(id),
+    remove_character: toolSchemaBuilders.remove_character(id),
+    add_character_attr: toolSchemaBuilders.add_character_attr(id),
+    update_character_attr: toolSchemaBuilders.update_character_attr(id),
+    remove_character_attr: toolSchemaBuilders.remove_character_attr(id),
+    add_act: toolSchemaBuilders.add_act(),
+    update_act: toolSchemaBuilders.update_act(id),
+    remove_act: toolSchemaBuilders.remove_act(id),
+    add_scene: toolSchemaBuilders.add_scene(),
+    update_scene: toolSchemaBuilders.update_scene(id),
+    remove_scene: toolSchemaBuilders.remove_scene(id),
+    propose_options: toolSchemaBuilders.propose_options(),
+  };
 }

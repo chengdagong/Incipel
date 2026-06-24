@@ -1,4 +1,4 @@
-import { Agent } from '@mastra/core/agent';
+import { Agent, type ToolsInput } from '@mastra/core/agent';
 import { Mastra } from '@mastra/core/mastra';
 import { InMemoryStore } from '@mastra/core/storage';
 import {
@@ -7,16 +7,26 @@ import {
   type ModelUseConfig,
 } from './model/config.ts';
 import { buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } from './prompt.ts';
+import { createStudioScreenplayTools } from './studio-screenplay-tools.ts';
 
-export type IncipelAgentName = 'screenwriter' | 'logline';
+export type IncipelAgentName = 'screenwriter' | 'studio-screenwriter' | 'logline';
 
 export function createMastraAgents(config: ModelRuntimeConfig) {
+  const screenwriterInstructions = buildScreenwriterInstructions();
+
   return {
     screenwriter: createAgent(
       'incipel-screenwriter',
       'Incipel Screenwriter',
       config.turn,
-      buildScreenwriterInstructions(),
+      screenwriterInstructions,
+    ),
+    'studio-screenwriter': createAgent(
+      'incipel-studio-screenwriter',
+      'Incipel Studio Screenwriter',
+      config.turn,
+      screenwriterInstructions,
+      createStudioScreenplayTools(),
     ),
     logline: createAgent('incipel-logline', 'Incipel Logline', config.logline, LOGLINE_INSTRUCTIONS),
   };
@@ -39,12 +49,19 @@ export function getMastraApp(config?: ModelRuntimeConfig): IncipelMastraApp {
   return mastraApp;
 }
 
-function createAgent(id: string, name: string, useConfig: ModelUseConfig, instructions: string): Agent {
+function createAgent(
+  id: string,
+  name: string,
+  useConfig: ModelUseConfig,
+  instructions: string,
+  tools?: ToolsInput,
+): Agent {
   return new Agent({
     id,
     name,
     instructions,
     model: mastraModelId(useConfig.model),
+    ...(tools ? { tools } : {}),
   });
 }
 
