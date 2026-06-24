@@ -26,6 +26,12 @@ function run(bin, args, cwd, options = {}) {
   });
 }
 
+function envWithout(...keys) {
+  const env = { ...process.env };
+  for (const key of keys) delete env[key];
+  return env;
+}
+
 function mustRun(bin, args, cwd) {
   const res = run(bin, args, cwd);
   assert.equal(res.status, 0, `${bin} ${args.join(' ')}\n${res.stdout}\n${res.stderr}`);
@@ -538,6 +544,51 @@ test('dev asks to start the foreground agent on the next port when the configure
     assert.match(agentEnv, new RegExp(`^AGENT_PORT=${nextPort}$`, 'm'));
     assert.match(loggedServe, /pnpm --filter @incipel\/agent dev/);
     assert.match(loggedServe, new RegExp(`^AGENT_PORT=${nextPort}$`, 'm'));
+  } finally {
+    blocker.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('env sync keeps using the foreground agent fallback port chosen by dev', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const occupiedPort = await findAvailablePortPair();
+  const nextPort = occupiedPort + 1;
+  const blocker = await startHealthServer(occupiedPort);
+  const serveLog = path.join(tmp, 'serve.log');
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    makeFakeAgentDevExit(tmp);
+    mustRun('git', ['init'], tmp);
+
+    const devRes = spawnSync(process.execPath, [cli, 'dev'], {
+      cwd: tmp,
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_SERVE_LOG: serveLog,
+        INCIPEL_DEV_AGENT_PORT: String(occupiedPort),
+        INCIPEL_DEV_PROMPT_STDIN: '1',
+      },
+      input: 'y\n',
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    assert.equal(devRes.status, 0, devRes.stderr);
+
+    const freshEnv = envWithout('INCIPEL_DEV_AGENT_PORT', 'DEV_AGENT_PORT');
+    const syncRes = run('node', [cli, 'env', 'sync'], tmp, {
+      env: { ...freshEnv, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(syncRes.status, 0, syncRes.stderr);
+
+    const worktreeEnv = readFileSync(path.join(tmp, '.worktree-dev.env'), 'utf8');
+    const mobileEnv = readFileSync(path.join(tmp, 'apps', 'mobile', '.env'), 'utf8');
+    const agentEnv = readFileSync(path.join(tmp, 'supabase', '.env'), 'utf8');
+    assert.match(worktreeEnv, new RegExp(`^DEV_AGENT_PORT=${nextPort}$`, 'm'));
+    assert.match(mobileEnv, new RegExp(`^EXPO_PUBLIC_AGENT_URL=http://127\\.0\\.0\\.1:${nextPort}$`, 'm'));
+    assert.match(agentEnv, new RegExp(`^AGENT_PORT=${nextPort}$`, 'm'));
   } finally {
     blocker.child.kill();
     rmSync(tmp, { recursive: true, force: true });

@@ -66,7 +66,11 @@ if ! grep -Fq 'OPENROUTER_API_KEY' "$E2E_IOS"; then
 fi
 
 if ! grep -Fq 'DEV_AGENT_PORT=4111' "$WORKTREE_ENV"; then
-  fail "dev agent 端口应固定为 4111,不应随 worktree 变化。"
+  fail "dev agent 端口默认值应为 4111。"
+fi
+
+if ! grep -Fq 'DEV_AGENT_PORT="$DEV_AGENT_PORT"' "$WORKTREE_ENV"; then
+  fail "worktree-dev-env.sh 应保留 dev:agent 选定的 fallback 端口。"
 fi
 
 if ! grep -Fq 'E2E_AGENT_PORT=' "$WORKTREE_ENV"; then
