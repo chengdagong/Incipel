@@ -22,6 +22,7 @@ import {
 import { getAccessToken, supabase } from '../supabase';
 import { orderStoredMessages, type StoredMessageRow } from './order-messages';
 import { baselineBeforeLastTurn } from './reopen-baseline';
+import { applyScreenplayTitle } from '../session-title';
 
 const AGENT_URL = process.env.EXPO_PUBLIC_AGENT_URL;
 
@@ -166,6 +167,8 @@ export type ScreenplayAgentApi = {
   // 重试当前这一轮:沿用同一 runId,服务端据此幂等、不重复写入数据库(见 KI-2)。
   // 失败后应调用它,而不是重新 sendMessage(后者会生成新 runId、绕开幂等键)。
   retry: () => Promise<void>;
+  // 用户手动改标题后,把本地 AG-UI state 同步到新标题,避免重开页面才看到变化。
+  applyLocalTitle: (title: string, updatedAt?: string) => void;
 };
 
 /**
@@ -322,6 +325,13 @@ export function useScreenplayAgent(
     }
   }, [genre]);
 
+  const applyLocalTitle = useCallback((title: string, updatedAt?: string) => {
+    const agent = agentRef.current!;
+    const next = applyScreenplayTitle(agent.state as Screenplay, title, updatedAt);
+    agent.setState(next as unknown as Record<string, unknown>);
+    setScreenplay(next);
+  }, []);
+
   // 发消息 / 点选项:追加一条用户消息,为这一逻辑轮生成稳定 runId,触发一次 run(system-design §6.2 / §10)。
   const sendMessage = useCallback(
     async (text: string) => {
@@ -361,5 +371,6 @@ export function useScreenplayAgent(
     hydrating,
     sendMessage,
     retry,
+    applyLocalTitle,
   };
 }

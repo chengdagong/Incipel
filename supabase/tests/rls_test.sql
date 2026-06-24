@@ -3,7 +3,7 @@
 -- 跑法:supabase start && supabase db reset && supabase test db
 
 begin;
-select plan(13);
+select plan(20);
 
 -- ── 测试数据:两个用户 A / B,各一会话 + 剧本 ──────────────────────────────────
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -15,8 +15,8 @@ insert into public.sessions (id, user_id, title, accent) values
   ('11111111-0000-0000-0000-0000000000a1', 'aaaaaaaa-0000-0000-0000-000000000001', 'A 的会话', '#C2724E'),
   ('22222222-0000-0000-0000-0000000000b1', 'bbbbbbbb-0000-0000-0000-000000000002', 'B 的会话', '#C2724E');
 insert into public.documents (session_id, state) values
-  ('11111111-0000-0000-0000-0000000000a1', '{"meta":{},"world":[],"characters":[],"outline":[],"scenes":[]}'::jsonb),
-  ('22222222-0000-0000-0000-0000000000b1', '{"meta":{},"world":[],"characters":[],"outline":[],"scenes":[]}'::jsonb);
+  ('11111111-0000-0000-0000-0000000000a1', '{"meta":{"title":"A 的剧本","updatedAt":"2026-01-01T00:00:00.000Z"},"world":[],"characters":[],"outline":[],"scenes":[]}'::jsonb),
+  ('22222222-0000-0000-0000-0000000000b1', '{"meta":{"title":"B 的剧本","updatedAt":"2026-01-01T00:00:00.000Z"},"world":[],"characters":[],"outline":[],"scenes":[]}'::jsonb);
 
 -- ── RLS 隔离:以用户 A 身份(authenticated + jwt.claims.sub=A)──────────────────
 select set_config('request.jwt.claims', json_build_object('sub', 'aaaaaaaa-0000-0000-0000-000000000001')::text, true);
@@ -35,8 +35,36 @@ select throws_ok(
   $$ update public.documents set state = '{}'::jsonb where session_id = '11111111-0000-0000-0000-0000000000a1' $$,
   '42501', null, 'authenticated 不能 update documents');
 select throws_ok(
+  $$ update public.sessions set title = '直接写标题' where id = '11111111-0000-0000-0000-0000000000a1' $$,
+  '42501', null, 'authenticated 不能直接 update sessions.title');
+select throws_ok(
   $$ insert into public.document_versions (session_id, turn_index, state) values ('11111111-0000-0000-0000-0000000000a1', 1, '{}'::jsonb) $$,
   '42501', null, 'authenticated 不能 insert document_versions');
+
+-- ── 标题编辑:authenticated 可经受限 RPC 修改自己的标题,但不能改他人会话 ──
+select lives_ok(
+  $$ select * from public.update_session_title(
+       '11111111-0000-0000-0000-0000000000a1'::uuid,
+       '  用户标题  ') $$,
+  'A 能通过 RPC 修改自己的会话标题');
+select is(
+  (select title from public.sessions where id = '11111111-0000-0000-0000-0000000000a1'),
+  '用户标题',
+  'RPC 会更新 sessions.title');
+select is(
+  (select state #>> '{meta,title}' from public.documents where session_id = '11111111-0000-0000-0000-0000000000a1'),
+  '用户标题',
+  'RPC 会更新 documents.state.meta.title');
+select ok(
+  (select (state #>> '{meta,updatedAt}') is not null and (state #>> '{meta,updatedAt}') <> '2026-01-01T00:00:00.000Z'
+     from public.documents where session_id = '11111111-0000-0000-0000-0000000000a1'),
+  'RPC 会更新 documents.state.meta.updatedAt');
+select throws_ok(
+  $$ select * from public.update_session_title(
+       '22222222-0000-0000-0000-0000000000b1'::uuid,
+       '偷改标题') $$,
+  'P0001', '会话不存在或不属于该用户',
+  'A 不能通过 RPC 修改 B 的会话标题');
 
 -- 客户端可删自己的会话;删他人会话被 RLS 过滤(0 行、不报错)。
 select lives_ok(
@@ -47,8 +75,17 @@ reset role;
 select is((select count(*)::int from public.sessions where id = '22222222-0000-0000-0000-0000000000b1'), 1, 'B 的会话未被 A 删掉');
 
 -- ── save_turn 行为:changed / 空 user 文本(以属主身份调用)──────────────────
-select public.save_turn('11111111-0000-0000-0000-0000000000a1', 'rl-1', '用户', '芯', '[]'::jsonb, '[]'::jsonb, '{}'::jsonb, false);
+select public.save_turn(
+  '11111111-0000-0000-0000-0000000000a1',
+  'rl-1',
+  '用户',
+  '芯',
+  '[]'::jsonb,
+  '[]'::jsonb,
+  '{"meta":{"title":"AI 标题","updatedAt":"2026-01-02T00:00:00.000Z"},"world":[],"characters":[],"outline":[],"scenes":[]}'::jsonb,
+  false);
 select is((select count(*)::int from public.document_versions where session_id = '11111111-0000-0000-0000-0000000000a1'), 0, 'changed=false 不写 document_versions');
+select is((select title from public.sessions where id = '11111111-0000-0000-0000-0000000000a1'), 'AI 标题', 'save_turn 会同步 sessions.title');
 
 select public.save_turn('11111111-0000-0000-0000-0000000000a1', 'rl-2', '', '芯回', '[]'::jsonb, '[]'::jsonb, '{}'::jsonb, false);
 select is((select count(*)::int from public.messages where session_id = '11111111-0000-0000-0000-0000000000a1' and role = 'user'), 1, 'p_user_text 为空时不插 user 消息(只有 rl-1 那条)');

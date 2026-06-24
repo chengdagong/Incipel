@@ -6,8 +6,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Screenplay } from '@incipel/shared';
 import { timeAgo } from '../../src/components/Drawer';
 import { useT } from '../../src/i18n';
+import { sessionTitleForDisplay } from '../../src/session-title';
 import { supabase } from '../../src/supabase';
 import { defaultTheme, palette } from '../../src/theme';
 
@@ -20,6 +22,7 @@ type SessionRow = {
   accent: string | null;
   starred: boolean;
   updated_at: string;
+  documents: { state: Screenplay } | null;
 };
 
 export default function HistoryScreen() {
@@ -33,13 +36,13 @@ export default function HistoryScreen() {
     setLoading(true);
     const { data, error } = await supabase
       .from('sessions')
-      .select('id, title, accent, starred, updated_at')
+      .select('id, title, accent, starred, updated_at, documents(state)')
       .order('updated_at', { ascending: false });
     if (error) {
       console.warn('[history] 查询失败:', error.message);
       setRows([]);
     } else {
-      setRows((data ?? []) as SessionRow[]);
+      setRows((data ?? []) as unknown as SessionRow[]);
     }
     setLoading(false);
   }, []);
@@ -121,7 +124,7 @@ export default function HistoryScreen() {
             <View key={r.id} style={[styles.item, { backgroundColor: palette.cardBg, borderColor: palette.borderAlt }]}>
               <Pressable style={styles.itemMain} onPress={() => resume(r.id)} testID={`history-row-${r.id}`}>
                 <Text style={[styles.itemTitle, { color: palette.textPrimary }]} numberOfLines={1}>
-                  {r.title || t('untitled')}
+                  {sessionTitleForDisplay(r.title, r.documents?.state?.meta?.title, t('untitled'))}
                 </Text>
                 <Text style={[styles.itemMeta, { color: palette.textSecondary }]}>{timeAgo(r.updated_at, t)}</Text>
               </Pressable>

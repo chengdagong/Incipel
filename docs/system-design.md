@@ -39,6 +39,7 @@
 | 侧栏抽屉 | 新建创作、会话列表、作品列表;收藏(starred)+ 最近(recent)两段 |
 | 历史会话 | 全屏会话列表;续写、删除;空状态引导 |
 | 作品 | 每个会话对应一部作品(它的剧本);全屏作品列表,点开直接进文档视图 |
+| 标题编辑 | 用户可点击对话顶栏标题并手动编辑;同时更新会话标题与剧本标题 |
 | 主题 | 可调主色(accent) |
 
 ### 2.2 非功能需求
@@ -260,7 +261,7 @@ messages
 
 - **`messages.deltas`** 的作用:续聊旧会话时,历史的内联卡片直接照原样重渲染,不用重算——正好接上原型「resumeSession 恢复完整对话流与卡片」的需求。
 - **权威剧本放哪**:`documents.state` 存当前态;`document_versions` **只在该轮剧本真有改动时**写一版做历史(纯提问/引导、没动剧本的轮次不写)。**不**上完整 event sourcing(见 §13 取舍)。
-- **RLS**:所有表按 `user_id`(经 `sessions` 关联)隔离;客户端只能读写自己的数据。匿名与正式用户一视同仁。agent 运行时用 service key 读写(已自行校验 JWT 与归属)。
+- **RLS**:所有表按 `user_id`(经 `sessions` 关联)隔离;客户端只能读自己的列表与剧本、删除自己的会话、收藏自己的会话,并经 `update_session_title` 修改自己的标题。匿名与正式用户一视同仁。agent 运行时用 service key 读写(已自行校验 JWT 与归属)。
 
 ---
 
@@ -291,6 +292,7 @@ messages
 | 打开文档 / 收起 | 纯客户端;数据来自已同步的共享状态 |
 | 侧栏/历史/作品列表 | supabase-js 直接查 `sessions` join `documents` |
 | 收藏 / 删除 | 收藏 = 客户端列级 update `sessions.starred`(列级授权 + RLS;见 migration 0003);删除 = client delete `sessions` 行(RLS) |
+| 点击标题并手动编辑 | 客户端调用 `update_session_title(session_id, title)`,函数内校验归属并同时更新 `sessions.title` 与 `documents.state.meta.title` |
 | 续写旧会话 | 查 `messages`(含 deltas/options)+ `documents.state`;打开 AG-UI 连接并以该状态作 STATE_SNAPSHOT |
 
 > 导出(Fountain / PDF)移出 v1,见 §15。
