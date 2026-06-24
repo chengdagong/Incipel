@@ -54,6 +54,10 @@ function diffCard(prev: Screenplay, next: Screenplay): InlineCardData {
   };
 }
 
+function hasInlineCardData(card: InlineCardData): boolean {
+  return Boolean(card.world?.length || card.characters?.length || card.outline?.length || card.scenes?.length);
+}
+
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string }>();
   const router = useRouter();
@@ -76,6 +80,14 @@ export default function ChatScreen() {
   const composerRef = useRef<ComposerHandle>(null);
 
   const title = screenplay.meta.title?.trim() || '无题';
+  const hasGeneratedState =
+    Boolean(screenplay.meta.title?.trim()) ||
+    Boolean(screenplay.meta.logline?.trim()) ||
+    screenplay.world.length > 0 ||
+    screenplay.characters.length > 0 ||
+    screenplay.outline.length > 0 ||
+    screenplay.scenes.length > 0;
+  const chatStateTestID = isRunning || thinking || hydrating ? 'chat-running' : error ? 'chat-error' : hasGeneratedState ? 'chat-generated' : 'chat-empty';
 
   // 首轮:挂载时把欢迎页带来的 idea 作为第一条用户消息发出(只发一次)。
   const sentIdea = useRef(false);
@@ -156,15 +168,17 @@ export default function ChatScreen() {
   // 本轮运行中,@ag-ui/client 已把「正在流式的那条助手消息」实时加进 messages(随 token 增长)。
   // 它由下方的流式气泡(streamingText)或思考点代表显示,若同时留在列表里就会同屏重复(用户反馈)。
   const lastMsg = messages[messages.length - 1];
+  const lastMsgIsUser = !!lastMsg && lastMsg.role === 'user';
   const lastIsAssistant = !!lastMsg && lastMsg.role === 'assistant';
   const lastMsgText = lastMsg ? messageText(lastMsg) : '';
   // 末条助手消息「正在本轮流式中」(尚未定稿):正在打字(streamingText 有内容),或还没首 token(消息为空)。
   // 定稿后(streamingText 清空且消息已有内容)不再成立,消息照常显示——避免文本结束到 RUN_FINISHED 之间短暂消失。
   const trailingAssistantStreaming = isRunning && lastIsAssistant && (!!streamingText || lastMsgText === '');
+  const showStateOnlyAssistant = !isRunning && !thinking && !error && lastMsgIsUser && hasInlineCardData(card);
 
   return (
     <PortraitProvider>
-    <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
+    <View style={[styles.screen, { backgroundColor: palette.pageBg }]} testID={chatStateTestID}>
       <Header
         title={title}
         docOpen={docOpen}
@@ -183,8 +197,8 @@ export default function ChatScreen() {
               key={m.id}
               role={m.role === 'user' ? 'user' : 'assistant'}
               text={messageText(m)}
-              card={isLastAssistant ? card : undefined}
-              options={isLastAssistant ? options : undefined}
+              card={isLastAssistant && !showStateOnlyAssistant ? card : undefined}
+              options={isLastAssistant && !showStateOnlyAssistant ? options : undefined}
               onSend={sendPlain}
               onOpenDoc={() => setDocOpen(true)}
               onFocusAttr={focusAttr}
@@ -200,6 +214,19 @@ export default function ChatScreen() {
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
           <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={() => setDocOpen(true)} />
+        )}
+
+        {showStateOnlyAssistant && (
+          <MessageBubble
+            role="assistant"
+            text=""
+            card={card}
+            options={options}
+            onSend={sendPlain}
+            onOpenDoc={() => setDocOpen(true)}
+            onFocusAttr={focusAttr}
+            onFocusCharacter={focusCharacter}
+          />
         )}
 
         {!!error && (
@@ -336,10 +363,12 @@ function MessageBubble({
         <Text style={[styles.assistantName, { color: palette.textSecondary }]}>{assistantName}</Text>
       </View>
 
-      <Text style={[styles.assistantText, { color: palette.textPrimary }]}>
-        {text}
-        {streaming ? <BlinkCaret /> : null}
-      </Text>
+      {(text.trim() || streaming) ? (
+        <Text style={[styles.assistantText, { color: palette.textPrimary }]} testID="chat-assistant-text">
+          {text}
+          {streaming ? <BlinkCaret /> : null}
+        </Text>
+      ) : null}
 
       {/* 内联卡片:本轮新增实体(由剧本 diff 得出);人物属性可点生成聚焦标签(#12)。 */}
       {card && (

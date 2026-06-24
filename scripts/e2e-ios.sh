@@ -4,12 +4,14 @@
 #   bash scripts/e2e-ios.sh                       # 默认跑 frontend-only,stub-agent 两层(免 Supabase)
 #   bash scripts/e2e-ios.sh frontend-only         # 只跑无后端的纯 UI 流
 #   bash scripts/e2e-ios.sh stub-agent            # 只跑 stub agent 创作主路径
+#   bash scripts/e2e-ios.sh real-ai               # 跑真实 OpenRouter/Mastra:骰子生成 logline → 提交一轮
 #   bash scripts/e2e-ios.sh supabase              # 跑需真实匿名登录 + 本地 Supabase 的流(需先 supabase start)
 #   bash scripts/e2e-ios.sh frontend-only --no-build  # 复用已装的包,只重跑 Maestro(改 flow 时省一次构建)
 #
 # 三层按后端依赖切(详见 apps/mobile/.maestro/README.md):
 #   frontend-only   仅 app(DEV_NO_AUTH bundle),不起 agent
 #   stub-agent      app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1)
+#   real-ai         app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=openrouter STORE=memory DEV_NO_AUTH=1)
 #   supabase        app(真实匿名登录,不设 DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub + 真 SupabaseStore)
 #
 # 为什么跑 release 包、不跑 dev-client(见 ADR-0007):dev-client 加载 bundle 会弹开发者菜单模态盖住
@@ -55,10 +57,18 @@ IOS_DIR="$MOBILE_DIR/ios"
 DERIVED="$IOS_DIR/build-release"
 IOS_DEVICE_TYPE="${IOS_DEVICE_TYPE:-iPhone 16 Pro}"
 
-# supabase 层要真实会话(DEV_NO_AUTH 必须留空);frontend-only/stub-agent 层要 DEV_NO_AUTH=1。两者 bundle 不同,不能同跑。
-if printf '%s' "$TIERS" | grep -q 'supabase' && printf '%s' "$TIERS" | grep -qE 'frontend-only|stub-agent'; then
-  echo "✗ supabase 层与 frontend-only/stub-agent 层的 EXPO_PUBLIC_DEV_NO_AUTH bundle 不同,不能同跑。"
+tier_has() { printf '%s' "$TIERS" | tr ',' '\n' | grep -qx "$1"; }
+
+# supabase 层要真实会话(DEV_NO_AUTH 必须留空);其它层要 DEV_NO_AUTH=1。两者 bundle 不同,不能同跑。
+if tier_has supabase && printf '%s' "$TIERS" | grep -qE 'frontend-only|stub-agent|real-ai'; then
+  echo "✗ supabase 层与 frontend-only/stub-agent/real-ai 层的 EXPO_PUBLIC_DEV_NO_AUTH bundle 不同,不能同跑。"
   echo "  分两次:bash scripts/e2e-ios.sh frontend-only,stub-agent  与  bash scripts/e2e-ios.sh supabase"
+  exit 1
+fi
+
+if tier_has real-ai && tier_has stub-agent; then
+  echo "✗ real-ai 层与 stub-agent 层需要不同 MODEL_PROVIDER,不能同跑。"
+  echo "  分两次:bash scripts/e2e-ios.sh stub-agent  与  bash scripts/e2e-ios.sh real-ai"
   exit 1
 fi
 
@@ -68,10 +78,10 @@ case "$TIERS" in
   *)          WANT_DEV_NO_AUTH="1" ;;
 esac
 
-# supabase 层的 agent 需要显式导出 env-file。Node entrypoint 不读取 dotenv,因此不能只依赖 cwd。
-if [ -z "$WANT_DEV_NO_AUTH" ]; then
+# supabase / real-ai 层的 agent 需要显式导出 env-file。Node entrypoint 不读取 dotenv,因此不能只依赖 cwd。
+if [ -z "$WANT_DEV_NO_AUTH" ] || tier_has real-ai; then
   [ -f "$AGENT_ENV" ] || {
-    echo "✗ supabase 层需有 agent env-file:$AGENT_ENV"
+    echo "✗ 本层需有 agent env-file:$AGENT_ENV"
     echo "  共用栈请先运行 pnpm env:sync;隔离栈请先运行 pnpm e2e:stack up,并设置 INCIPEL_E2E_AGENT_ENV。"
     exit 1
   }
@@ -79,6 +89,11 @@ if [ -z "$WANT_DEV_NO_AUTH" ]; then
   # shellcheck disable=SC1090
   . "$AGENT_ENV"
   set +a
+fi
+
+if tier_has real-ai && [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  echo "✗ real-ai 层需在 $AGENT_ENV 填 OPENROUTER_API_KEY。"
+  exit 1
 fi
 
 # ── 工具链定位(非交互 shell 不读 ~/.zshrc,这里自行接好 PATH / DEVELOPER_DIR)──
@@ -128,7 +143,7 @@ fi
 echo "▸ worktree   : $REPO_ROOT"
 echo "▸ 层 (tags)  : $TIERS"
 echo "▸ Agent 端口 : $AGENT_PORT"
-if [ -z "$WANT_DEV_NO_AUTH" ]; then
+if [ -z "$WANT_DEV_NO_AUTH" ] || tier_has real-ai; then
   echo "▸ Agent env  : $AGENT_ENV"
 fi
 echo "▸ 模拟器     : ${IOS_SIMULATOR_NAME} (${UDID})"
@@ -206,19 +221,28 @@ else
   echo "  注意:请确保已装包的 bundle 期开关与本层一致(切层需去掉 --no-build 重建)。"
 fi
 
-# ── 起 stub agent(stub-agent / supabase 层需要;frontend-only 不起)──
+# ── 起 agent(stub-agent / real-ai / supabase 层需要;frontend-only 不起)──
 need_agent=0
-case "$TIERS" in *stub-agent*|*supabase*) need_agent=1 ;; esac
+case "$TIERS" in *stub-agent*|*real-ai*|*supabase*) need_agent=1 ;; esac
 if [ "$need_agent" = 1 ]; then
   # 先清掉本端口上可能残留的上一轮 agent:tsx 子进程不随父 kill 退出,旧实例若仍答 /health,
   # 本轮会误用「配置不对」的它(如上一层的内存 store 当本层的 SupabaseStore 用)——见 #36 的验证记录。
   free_port "$AGENT_PORT"
-  echo "▸ 启动 stub agent(MODEL_PROVIDER=stub)…"
+  if tier_has real-ai; then
+    echo "▸ 启动 real-ai agent(MODEL_PROVIDER=openrouter)…"
+  else
+    echo "▸ 启动 stub agent(MODEL_PROVIDER=stub)…"
+  fi
   # 直接跑 tsx(非 watch)。supabase 层已在上方导出 agent env-file;env 显式传的键优先。
   case "$TIERS" in
     *supabase*)
       # 真实持久化 + 真实鉴权:显式清掉 STORE / DEV_NO_AUTH,避免 .env 残留把它退回内存/免鉴权。
       ( cd "$REPO_ROOT/packages/agent" && exec env AGENT_PORT="$AGENT_PORT" PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE= DEV_NO_AUTH= \
+          node_modules/.bin/tsx src/index.ts ) &
+      AGENT_PID=$!
+      ;;
+    *real-ai*)
+      ( cd "$REPO_ROOT/packages/agent" && exec env AGENT_PORT="$AGENT_PORT" PORT="$AGENT_PORT" MODEL_PROVIDER=openrouter STORE=memory DEV_NO_AUTH=1 \
           node_modules/.bin/tsx src/index.ts ) &
       AGENT_PID=$!
       ;;

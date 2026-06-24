@@ -152,7 +152,7 @@
 | 1 | `pnpm -r typecheck`(已有) | 每个 PR |
 | 2 | `pnpm -r test`(Vitest:shared + agent) | 每个 PR,秒级,无外部依赖 |
 | 3 | pgTAP:`supabase db reset` + `supabase test db` | 每个 PR(独立 job,较慢但 gate) |
-| 4 | smoke / verify-summary(真实模型) | 定时(nightly)或手动,不进 PR——花钱、不确定、需 key |
+| 4 | smoke / verify-summary / `test:real-ai`(真实模型) | 定时(nightly)或手动,不进 PR——花钱、不确定、需 key |
 
 建议在根 `package.json` 加 `"test": "pnpm -r test"`,各包加 `vitest` 与 `"test": "vitest run"`。
 

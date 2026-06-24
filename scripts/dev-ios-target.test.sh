@@ -39,4 +39,16 @@ if ! grep -Fq 'set -a' "$E2E_IOS"; then
   fail "e2e-ios.sh 启动 agent 前应显式导出 env-file。"
 fi
 
+if ! grep -Fq 'real-ai' "$E2E_IOS"; then
+  fail "e2e-ios.sh 应支持 real-ai 层。"
+fi
+
+if ! grep -Fq 'MODEL_PROVIDER=openrouter' "$E2E_IOS"; then
+  fail "e2e-ios.sh 的 real-ai 层应使用 MODEL_PROVIDER=openrouter。"
+fi
+
+if ! grep -Fq 'OPENROUTER_API_KEY' "$E2E_IOS"; then
+  fail "e2e-ios.sh 的 real-ai 层应检查 OPENROUTER_API_KEY。"
+fi
+
 echo "✓ dev-ios simulator target checks passed"

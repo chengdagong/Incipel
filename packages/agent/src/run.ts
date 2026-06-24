@@ -178,18 +178,34 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     }
   }
 
-  // 文本段收尾:整轮唯一一条 END(失败尝试不单独定稿,避免重复气泡)。
-  if (textStarted) {
-    yield ev({ type: EventType.TEXT_MESSAGE_END, messageId });
-  }
-
   if (lastErr) {
+    // 文本段收尾:整轮唯一一条 END(失败尝试不单独定稿,避免重复气泡)。
+    if (textStarted) {
+      yield ev({ type: EventType.TEXT_MESSAGE_END, messageId });
+    }
     yield ev({
       type: EventType.RUN_ERROR,
       message: `模型调用失败: ${(lastErr as Error).message}`,
       code: 'MODEL_FAILED',
     });
     return;
+  }
+
+  if (!assistantText.trim() && changed) {
+    const summary = fallbackAssistantText(committedState);
+    if (summary) {
+      assistantText = summary;
+      if (!textStarted) {
+        yield ev({ type: EventType.TEXT_MESSAGE_START, messageId, role: 'assistant' });
+        textStarted = true;
+      }
+      yield ev({ type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: summary });
+    }
+  }
+
+  // 文本段收尾:整轮唯一一条 END(失败尝试不单独定稿,避免重复气泡)。
+  if (textStarted) {
+    yield ev({ type: EventType.TEXT_MESSAGE_END, messageId });
   }
 
   // 本轮可点选项(瞬时,不入剧本)。CUSTOM{name:'options'}。
@@ -269,6 +285,57 @@ async function* streamOnce(
       }
     }
   }
+}
+
+function fallbackAssistantText(state: Screenplay): string {
+  const title = compactText(state.meta.title);
+  const logline = compactText(state.meta.logline);
+  const lines: string[] = [];
+
+  if (title) {
+    lines.push(`《${title}》`);
+  }
+  if (logline) {
+    lines.push(logline);
+  }
+
+  const world = state.world
+    .map((section) => compactText(section.title) || compactText(section.text))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (world.length) {
+    lines.push(`世界观:${world.join('、')}`);
+  }
+
+  const characters = state.characters
+    .map((character) => compactText(character.name) || compactText(character.role))
+    .filter(Boolean)
+    .slice(0, 3);
+  if (characters.length) {
+    lines.push(`人物:${characters.join('、')}`);
+  }
+
+  const outline = state.outline
+    .map((act) => compactText(act.act) || compactText(act.beat))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (outline.length) {
+    lines.push(`大纲:${outline.join('、')}`);
+  }
+
+  const scenes = state.scenes
+    .map((scene) => compactText(scene.slug) || compactText(scene.content))
+    .filter(Boolean)
+    .slice(0, 2);
+  if (scenes.length) {
+    lines.push(`分场:${scenes.join('、')}`);
+  }
+
+  return lines.join('\n').trim() || '这轮更新了剧本草稿。';
+}
+
+function compactText(value: string | undefined): string {
+  return (value ?? '').replace(/\s+/g, ' ').trim();
 }
 
 // AG-UI 事件以普通对象发出(见 building-agents.md);BaseEvent 是 @ag-ui/core 的严格判别联合,

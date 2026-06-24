@@ -6,6 +6,7 @@
 # 流程按后端依赖分三层,用 tag 过滤(详见 README.md):
 #   frontend-only   仅 app(DEV_NO_AUTH bundle),不起 agent
 #   stub-agent      app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1)
+#   real-ai         app(DEV_NO_AUTH)+ agent(MODEL_PROVIDER=openrouter STORE=memory DEV_NO_AUTH=1)
 #   supabase        app(真实匿名登录)+ agent(MODEL_PROVIDER=stub + 真 SupabaseStore)
 #
 # 日常套件(免 Supabase):

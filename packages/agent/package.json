@@ -9,6 +9,7 @@
     "start": "tsx src/index.ts",
     "smoke": "tsx src/dev/smoke-turn.ts",
     "typecheck": "tsc --noEmit",
+    "test:real-ai": "INCIPEL_REAL_AI_INTEGRATION=1 vitest run test/real-ai-runtime.integration.test.ts",
     "test": "vitest run"
   },
   "dependencies": {

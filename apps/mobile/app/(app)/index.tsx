@@ -77,7 +77,10 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
+    <View
+      style={[styles.screen, { backgroundColor: palette.pageBg }]}
+      testID={idea.trim() ? 'welcome-has-idea' : 'welcome-empty-idea'}
+    >
       {/* 页内顶栏:左上汉堡唤出侧边抽屉(对应原型欢迎页)。 */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <MenuButton variant="circle" onPress={drawer.open} />

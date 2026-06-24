@@ -1,0 +1,32 @@
+# [real-ai] 真实 OpenRouter/Mastra:欢迎页点骰子生成 logline,再把该 logline 提交给 agent 完成一轮生成。
+# 需 app 以 DEV_NO_AUTH bundle 运行,agent 以 MODEL_PROVIDER=openrouter STORE=memory DEV_NO_AUTH=1 运行。
+# 这条 flow 只断言稳定 UI 状态,不依赖真实模型的具体文案。
+appId: com.incipel.app
+tags:
+  - real-ai
+---
+- runFlow: ../subflows/enter-welcome.yaml
+- tapOn:
+    id: "welcome-dice"
+# /logline 成功会把输入框填入随机 logline;失败则不会出现 welcome-has-idea。
+- extendedWaitUntil:
+    visible:
+      id: "welcome-has-idea"
+    timeout: 90000
+- assertNotVisible: ".*没能生成.*"
+- tapOn:
+    id: "welcome-start"
+# 已进入对话屏,首轮开始。
+- extendedWaitUntil:
+    visible:
+      id: "chat-doc"
+    timeout: 30000
+# 等真实模型完成一轮并产生剧本状态。该 testID 只在非 running、无 error 且剧本非空时出现。
+- extendedWaitUntil:
+    visible:
+      id: "chat-generated"
+    timeout: 180000
+- assertVisible:
+    id: "chat-assistant-text"
+- assertNotVisible:
+    id: "error-retry"
