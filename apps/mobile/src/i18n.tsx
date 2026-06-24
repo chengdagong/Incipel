@@ -20,6 +20,76 @@ export const LANGS = [
 ] as const;
 export type Lang = (typeof LANGS)[number]['code'];
 
+// 题材选择(欢迎页)。取自原型 T.genreTitle / T.genres。
+// 单列于 DICT 之外:t() 只返回字符串,而 genres 是数组;欢迎页按当前 lang 直接读这里。
+export const GENRE_I18N: Record<Lang, { title: string; list: string[] }> = {
+  zh: {
+    title: '想写哪种类型？',
+    list: ['科幻', '赛博朋克', '犯罪', '爱情', '悬疑', '奇幻', '恐怖', '喜剧', '武侠', '年代'],
+  },
+  en: {
+    title: 'What genre?',
+    list: ['Sci-Fi', 'Cyberpunk', 'Crime', 'Romance', 'Mystery', 'Fantasy', 'Horror', 'Comedy', 'Thriller', 'Period'],
+  },
+  ja: {
+    title: 'どんなジャンル？',
+    list: ['SF', 'サイバーパンク', '犯罪', '恋愛', 'ミステリー', 'ファンタジー', 'ホラー', 'コメディ', 'スリラー', '時代劇'],
+  },
+  zhHant: {
+    title: '想寫哪種類型？',
+    list: ['科幻', '賽博龐克', '犯罪', '愛情', '懸疑', '奇幻', '恐怖', '喜劇', '武侠', '年代'],
+  },
+};
+
+// 登录页法务行:拆成可点片段,让「服务条款 / 隐私政策」可点开(App Store 要求隐私政策
+// URL 可达,见 ADR-0005)。pre+terms+mid+privacy+post 拼起来即原整句,视觉不变。
+export const TERMS_I18N: Record<Lang, { pre: string; terms: string; mid: string; privacy: string; post: string }> = {
+  zh: { pre: '继续即表示同意', terms: '服务条款', mid: '与', privacy: '隐私政策', post: '' },
+  en: { pre: 'By continuing you agree to the ', terms: 'Terms', mid: ' & ', privacy: 'Privacy Policy', post: '.' },
+  ja: { pre: '続行すると', terms: '利用規約', mid: 'と', privacy: 'プライバシーポリシー', post: 'に同意したものとみなされます。' },
+  zhHant: { pre: '繼續即表示同意', terms: '服務條款', mid: '與', privacy: '隱私政策', post: '' },
+};
+
+// 对话屏头部的「阶段」副标题。取自原型 T.stagePrefix / stageIdea…;同样独立于 DICT。
+export const STAGE_I18N: Record<Lang, { prefix: string; idea: string; world: string; chars: string; outline: string; scenes: string }> = {
+  zh: { prefix: '阶段 · ', idea: '灵感', world: '世界观', chars: '人物', outline: '大纲', scenes: '分场 · 对白' },
+  en: { prefix: 'Stage · ', idea: 'Idea', world: 'World', chars: 'Characters', outline: 'Outline', scenes: 'Scenes · Dialogue' },
+  ja: { prefix: 'ステージ · ', idea: 'ひらめき', world: '世界観', chars: '登場人物', outline: 'アウトライン', scenes: 'シーン · セリフ' },
+  zhHant: { prefix: '階段 · ', idea: '靈感', world: '世界觀', chars: '人物', outline: '大綱', scenes: '分場 · 對白' },
+};
+
+// 输入栏「思考」模式 pill 的档位文案。取自原型 T.thinkFast/Balanced/Deep;独立于 DICT。
+// 注:当前仅作本地 UI 档位(快速 / 平衡 / 深入),尚未接进 agent 生成参数。
+export const THINK_I18N: Record<Lang, { fast: string; balanced: string; deep: string }> = {
+  zh: { fast: '快速', balanced: '平衡', deep: '深入' },
+  en: { fast: 'Fast', balanced: 'Balanced', deep: 'Deep' },
+  ja: { fast: '高速', balanced: '標準', deep: '熟考' },
+  zhHant: { fast: '快速', balanced: '平衡', deep: '深入' },
+};
+
+// 卷名 + 「打开…」页脚文案(内联卡片页脚 / 文档目录)。取自原型 T.openVol / volWorld…;独立于 DICT。
+export const VOL_I18N: Record<
+  Lang,
+  { openTmpl: string; charCard: string; world: string; chars: string; beats: string; script: string }
+> = {
+  zh: { openTmpl: '打开{x} →', charCard: '打开人物卡片 →', world: '世界设定', chars: '人物表', beats: '故事节拍', script: '剧本正文' },
+  en: { openTmpl: 'Open {x} →', charCard: 'Open character card →', world: 'World', chars: 'Characters', beats: 'Beats', script: 'Script' },
+  ja: { openTmpl: '{x}を開く →', charCard: 'キャラクターを開く →', world: '世界設定', chars: '登場人物', beats: 'ビート', script: '本編' },
+  zhHant: { openTmpl: '開啟{x} →', charCard: '開啟人物卡片 →', world: '世界設定', chars: '人物表', beats: '故事節拍', script: '劇本正文' },
+};
+
+// 文档面板目录(扉页 + 目录 + 卷号 + 计量单位)。取自原型 T.docCover / tocNums…;独立于 DICT。
+// tocUnits 顺序对齐原型:[0]=世界观「条」 [1]=节拍「幕」 [2]=分场「场」 [3]=人物「位」。
+export const DOC_I18N: Record<
+  Lang,
+  { cover: string; contents: string; tocNums: string[]; tocUnits: string[]; tocEmpty: string; bioLabel: string }
+> = {
+  zh: { cover: '原创剧本', contents: '目录', tocNums: ['一', '二', '三', '四'], tocUnits: ['条', '幕', '场', '位'], tocEmpty: '待建立', bioLabel: '人物小传' },
+  en: { cover: 'Original Screenplay', contents: 'Contents', tocNums: ['I', 'II', 'III', 'IV'], tocUnits: ['', 'acts', 'scenes', 'chars'], tocEmpty: '—', bioLabel: 'Bio' },
+  ja: { cover: 'オリジナル脚本', contents: '目次', tocNums: ['一', '二', '三', '四'], tocUnits: ['項', '幕', '場', '人'], tocEmpty: '未作成', bioLabel: '人物紹介' },
+  zhHant: { cover: '原創劇本', contents: '目錄', tocNums: ['一', '二', '三', '四'], tocUnits: ['條', '幕', '場', '位'], tocEmpty: '待建立', bioLabel: '人物小傳' },
+};
+
 const LANG_STORAGE_KEY = 'scn_lang_v1';
 
 // 四语言文案表(由原型 T 生成,勿手改本块;改文案改原型或此生成块)。
@@ -40,6 +110,9 @@ const DICT = {
     orDivider: "或",
     emailPlaceholder: "你的邮箱",
     emailBtn: "用邮箱继续",
+    comingSoon: "{feature}即将开放",
+    loginFailed: "登录失败,请重试。",
+    enterFailed: "没能进入,请稍后重试。",
     tabRegister: "注册",
     tabSignIn: "登录",
     emailSheetTitleReg: "创建账户",
@@ -124,6 +197,8 @@ const DICT = {
     swipeHint: "← 左右滑动 →",
     charsEmpty: "▢ 还没聊到人物",
     chatAboutChar: "聊聊 TA →",
+    discussAttr: "聊聊这条 →",
+    attrEmpty: "这个标签还没写。",
     unnamedChar: "未命名角色",
     outlineEmpty: "▢ 还没搭大纲",
     scenesEmpty: "▢ 还没写到具体场景",
@@ -171,6 +246,9 @@ const DICT = {
     orDivider: "or",
     emailPlaceholder: "Your email",
     emailBtn: "Continue with email",
+    comingSoon: "{feature} coming soon",
+    loginFailed: "Sign-in failed. Please try again.",
+    enterFailed: "Couldn't continue. Please try again later.",
     tabRegister: "Sign up",
     tabSignIn: "Sign in",
     emailSheetTitleReg: "Create account",
@@ -255,6 +333,8 @@ const DICT = {
     swipeHint: "← swipe →",
     charsEmpty: "▢ No characters yet",
     chatAboutChar: "Chat about them →",
+    discussAttr: "Chat about this →",
+    attrEmpty: "Not written yet.",
     unnamedChar: "Unnamed character",
     outlineEmpty: "▢ No outline yet",
     scenesEmpty: "▢ No scenes written yet",
@@ -302,6 +382,9 @@ const DICT = {
     orDivider: "または",
     emailPlaceholder: "メールアドレス",
     emailBtn: "メールで続ける",
+    comingSoon: "{feature}は近日公開予定",
+    loginFailed: "ログインに失敗しました。もう一度お試しください。",
+    enterFailed: "続行できませんでした。後でもう一度お試しください。",
     tabRegister: "新規登録",
     tabSignIn: "ログイン",
     emailSheetTitleReg: "アカウント作成",
@@ -386,6 +469,8 @@ const DICT = {
     swipeHint: "← スワイプ →",
     charsEmpty: "▢ 登場人物はまだいません",
     chatAboutChar: "この人物について話す →",
+    discussAttr: "これについて話す →",
+    attrEmpty: "まだ書かれていません。",
     unnamedChar: "名称未設定のキャラクター",
     outlineEmpty: "▢ アウトラインはまだありません",
     scenesEmpty: "▢ シーンはまだ書いていません",
@@ -433,6 +518,9 @@ const DICT = {
     orDivider: "或",
     emailPlaceholder: "你的電子郵件",
     emailBtn: "用电子郵件繼續",
+    comingSoon: "{feature}即將開放",
+    loginFailed: "登入失敗,請重試。",
+    enterFailed: "沒能進入,請稍後重試。",
     tabRegister: "註冊",
     tabSignIn: "登入",
     emailSheetTitleReg: "建立帳戶",
@@ -517,6 +605,8 @@ const DICT = {
     swipeHint: "← 左右滑動 →",
     charsEmpty: "▢ 還沒聊到人物",
     chatAboutChar: "聊聊 TA →",
+    discussAttr: "聊聊這條 →",
+    attrEmpty: "這個標籤還沒寫。",
     unnamedChar: "未命名角色",
     outlineEmpty: "▢ 還沒搭大綱",
     scenesEmpty: "▢ 還沒寫到具體場景",

@@ -15,14 +15,34 @@ import {
 } from '@incipel/shared';
 import { useScreenplayAgent, newThreadId } from '../../src/agui/client';
 import { Composer, type ComposerHandle } from '../../src/components/Composer';
-import { DocSheet } from '../../src/components/DocPanel';
+import { DocSheet, type DocTarget } from '../../src/components/DocPanel';
 import { PortraitSheet } from '../../src/components/PortraitSheet';
 import { PortraitProvider } from '../../src/portrait';
 import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
 import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
-import { useT } from '../../src/i18n';
+import { STAGE_I18N, useI18n, useT } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
+
+// 助手正文行内 **加粗** 渲染(对齐原型 parseInline:**…** → 加粗、主色)。
+function InlineText({ text, color, boldColor }: { text: string; color: string; boldColor: string }) {
+  const parts = String(text).split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.startsWith('**') && p.endsWith('**') && p.length > 4 ? (
+          <Text key={i} style={{ fontWeight: '600', color: boldColor }}>
+            {p.slice(2, -2)}
+          </Text>
+        ) : (
+          <Text key={i} style={{ color }}>
+            {p}
+          </Text>
+        ),
+      )}
+    </>
+  );
+}
 
 // 取 AG-UI Message 的纯文本内容(user 消息可为多模态数组,这里只取文本部分)。
 function messageText(m: Message): string {
@@ -55,9 +75,10 @@ function diffCard(prev: Screenplay, next: Screenplay): InlineCardData {
 }
 
 export default function ChatScreen() {
-  const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string }>();
+  const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string; genre?: string }>();
   const router = useRouter();
   const { palette } = defaultTheme;
+  const { t, lang } = useI18n();
 
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
@@ -65,17 +86,37 @@ export default function ChatScreen() {
   // 带 sessionId(从历史 / 作品 / 抽屉打开已有会话)时恢复历史消息与剧本;
   // 新建创作(仅带 idea + 全新 threadId)无需恢复。
   const reopening = !!params.sessionId;
+  // 欢迎屏带来的题材(仅新建创作时有);转发给 agent 作首轮定调,不进用户消息。
+  const genre = typeof params.genre === 'string' ? params.genre : undefined;
   const { messages, screenplay, streamingText, options, isRunning, thinking, error, hydratedBaseline, hydrating, sendMessage, retry } =
-    useScreenplayAgent(threadId, { hydrate: reopening });
+    useScreenplayAgent(threadId, { hydrate: reopening, genre });
 
   // 「作品」入口可带 view=doc 直接进文档视图。
   const [docOpen, setDocOpen] = useState(params.view === 'doc');
+  // 卡片页脚的定向跳转目标;openDoc() 不带目标 = 顶栏文档键,落到目录。
+  const [docTarget, setDocTarget] = useState<DocTarget | null>(null);
+  const openDoc = (next?: DocTarget) => {
+    setDocTarget(next ?? null);
+    setDocOpen(true);
+  };
 
   // 聚焦标签(#12):瞬时;发送时拼进消息、随即清空。
   const [chips, setChips] = useState<FocusChip[]>([]);
   const composerRef = useRef<ComposerHandle>(null);
 
-  const title = screenplay.meta.title?.trim() || '无题';
+  const title = screenplay.meta.title?.trim() || t('draftTitle');
+  // 头部「阶段」副标题:按剧本进度推断(分场 > 大纲 > 人物 > 世界观 > 灵感)。
+  const stage = STAGE_I18N[lang];
+  const stageKey = screenplay.scenes.length
+    ? 'scenes'
+    : screenplay.outline.length
+      ? 'outline'
+      : screenplay.characters.length
+        ? 'chars'
+        : screenplay.world.length
+          ? 'world'
+          : 'idea';
+  const stageLabel = stage.prefix + stage[stageKey];
 
   // 首轮:挂载时把欢迎页带来的 idea 作为第一条用户消息发出(只发一次)。
   const sentIdea = useRef(false);
@@ -167,9 +208,13 @@ export default function ChatScreen() {
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
       <Header
         title={title}
+        stageLabel={stageLabel}
         docOpen={docOpen}
         onBack={() => router.back()}
-        onToggleDoc={() => setDocOpen((v) => !v)}
+        onToggleDoc={() => {
+          setDocTarget(null);
+          setDocOpen((v) => !v);
+        }}
       />
 
       <ScrollView style={styles.thread} contentContainerStyle={styles.threadContent}>
@@ -186,7 +231,7 @@ export default function ChatScreen() {
               card={isLastAssistant ? card : undefined}
               options={isLastAssistant ? options : undefined}
               onSend={sendPlain}
-              onOpenDoc={() => setDocOpen(true)}
+              onOpenDoc={openDoc}
               onFocusAttr={focusAttr}
               onFocusCharacter={focusCharacter}
             />
@@ -199,7 +244,7 @@ export default function ChatScreen() {
 
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
-          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={() => setDocOpen(true)} />
+          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={openDoc} />
         )}
 
         {!!error && (
@@ -234,6 +279,7 @@ export default function ChatScreen() {
         open={docOpen}
         onClose={() => setDocOpen(false)}
         screenplay={screenplay}
+        target={docTarget}
         onFocusCharacter={focusCharacter}
         onFocusAttr={focusAttr}
       />
@@ -247,11 +293,13 @@ export default function ChatScreen() {
 
 function Header({
   title,
+  stageLabel,
   docOpen,
   onBack,
   onToggleDoc,
 }: {
   title: string;
+  stageLabel: string;
   docOpen: boolean;
   onBack: () => void;
   onToggleDoc: () => void;
@@ -260,30 +308,33 @@ function Header({
   const insets = useSafeAreaInsets();
   const t = useT();
   return (
-    <View style={[styles.header, { paddingTop: insets.top, borderColor: palette.border }]}>
+    <View style={[styles.header, { paddingTop: insets.top + 6, borderColor: palette.divider }]}>
       <View style={styles.headerInner}>
         <Pressable onPress={onBack} hitSlop={{ top: 12, bottom: 12, left: 16, right: 16 }} accessibilityRole="button" accessibilityLabel="返回" testID="chat-back">
           <Text style={[styles.backChevron, { color: palette.textSecondary }]}>‹</Text>
         </Pressable>
 
         <View style={styles.headerCenter} pointerEvents="none">
-          <Text style={[styles.headerTitle, { color: palette.textPrimary }]} numberOfLines={1}>
+          <Text style={[styles.headerTitle, { color: palette.textSecondary }]} numberOfLines={1}>
             {title}
+          </Text>
+          <Text style={[styles.headerStage, { color: palette.placeholder }]} numberOfLines={1}>
+            {stageLabel}
           </Text>
         </View>
 
         <Pressable
           onPress={onToggleDoc}
-          style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.border }]}
+          style={[styles.docChip, { backgroundColor: palette.cardBg, borderColor: palette.borderControl }]}
           accessibilityRole="button"
           accessibilityLabel={t('docBtn')}
           testID="chat-doc"
           hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
         >
           <View
-            style={[styles.docDot, { backgroundColor: docOpen ? defaultTheme.accent : palette.dot }]}
+            style={[styles.docDot, { backgroundColor: docOpen ? defaultTheme.accent : palette.docDotInactive }]}
           />
-          <Text style={[styles.docChipLabel, { color: palette.textPrimary }]}>{t('docBtn')}</Text>
+          <Text style={[styles.docChipLabel, { color: palette.textSecondary }]}>{t('docBtn')}</Text>
         </Pressable>
       </View>
     </View>
@@ -307,7 +358,7 @@ function MessageBubble({
   card?: InlineCardData;
   options?: string[];
   onSend: (text: string) => void;
-  onOpenDoc: () => void;
+  onOpenDoc: (target: DocTarget) => void;
   onFocusAttr?: (c: Character, a: CharacterAttr) => void;
   onFocusCharacter?: (c: Character) => void;
 }) {
@@ -318,7 +369,7 @@ function MessageBubble({
     return (
       <View style={styles.rowUser}>
         <View style={[styles.userBubble, { backgroundColor: palette.userBubbleBg }]}>
-          <Text style={[styles.userText, { color: palette.textPrimary }]}>{text}</Text>
+          <Text style={[styles.userText, { color: palette.textPrimaryAlt }]}>{text}</Text>
         </View>
       </View>
     );
@@ -331,13 +382,13 @@ function MessageBubble({
     <View style={styles.assistantBlock}>
       <View style={styles.assistantHeader}>
         <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
-          <Text style={styles.avatarText}>{assistantName.slice(0, 1)}</Text>
+          <Text style={styles.avatarText}>织</Text>
         </View>
         <Text style={[styles.assistantName, { color: palette.textSecondary }]}>{assistantName}</Text>
       </View>
 
-      <Text style={[styles.assistantText, { color: palette.textPrimary }]}>
-        {text}
+      <Text style={styles.assistantText}>
+        <InlineText text={text} color={palette.textPrimaryAlt} boldColor={palette.textPrimary} />
         {streaming ? <BlinkCaret /> : null}
       </Text>
 
@@ -357,7 +408,7 @@ function MessageBubble({
           {options.map((opt) => (
             <Pressable
               key={opt}
-              style={[styles.optionRow, { borderTopColor: palette.border }]}
+              style={[styles.optionRow, { borderTopColor: palette.dividerOptions }]}
               onPress={() => onSend(opt)}
               accessibilityRole="button"
             >
@@ -397,7 +448,7 @@ function ThinkingDots() {
     <View style={styles.assistantBlock}>
       <View style={styles.assistantHeader}>
         <View style={[styles.avatar, { backgroundColor: palette.avatarBg }]}>
-          <Text style={styles.avatarText}>{DEFAULT_ASSISTANT_NAME.slice(0, 1)}</Text>
+          <Text style={styles.avatarText}>织</Text>
         </View>
         <Text style={[styles.assistantName, { color: palette.textSecondary }]}>{DEFAULT_ASSISTANT_NAME}</Text>
       </View>
@@ -434,66 +485,77 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { borderBottomWidth: 1 },
   headerInner: {
-    height: 52,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
   },
-  backChevron: { fontSize: 30, lineHeight: 30, fontWeight: '300' },
+  backChevron: { fontSize: 22, lineHeight: 24, fontWeight: '400' },
   // 居中标题块:绝对覆盖在内栏上、屏幕水平居中;pointerEvents none,不挡两侧按钮。
   headerCenter: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 56,
+    right: 56,
     top: 0,
-    bottom: 0,
+    bottom: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 18, fontWeight: '600', fontFamily: defaultTheme.fonts.serifTitle },
+  headerTitle: { fontSize: 14, fontWeight: '500', maxWidth: 200 },
+  headerStage: { fontSize: 11, marginTop: 1 },
   docChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
   },
-  docDot: { width: 7, height: 7, borderRadius: 4 },
-  docChipLabel: { fontSize: 13, fontWeight: '500' },
+  docDot: { width: 6, height: 6, borderRadius: 3 },
+  docChipLabel: { fontSize: 12.5 },
 
   thread: { flex: 1 },
-  threadContent: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12, gap: 22 },
+  threadContent: { paddingHorizontal: 22, paddingTop: 24, paddingBottom: 8, gap: 20 },
 
-  // 用户气泡
+  // 用户气泡:右下角收一个小圆角(16/16/4/16)。
   rowUser: { alignItems: 'flex-end' },
-  userBubble: { maxWidth: '84%', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 12 },
-  userText: { fontSize: 16, lineHeight: 26 },
+  userBubble: {
+    maxWidth: '82%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 4,
+    borderBottomLeftRadius: 16,
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+  },
+  userText: { fontSize: 14, lineHeight: 22 },
 
   // 助手回复块
   assistantBlock: { width: '100%' },
-  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  avatar: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontSize: 14, fontFamily: defaultTheme.fonts.serifTitle },
-  assistantName: { fontSize: 14 },
-  assistantText: { fontSize: 16, lineHeight: 26 },
-  caret: { fontSize: 16, fontWeight: '700' },
+  assistantHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 9 },
+  avatar: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 10, lineHeight: 14 },
+  assistantName: { fontSize: 12 },
+  assistantText: { fontSize: 14.5, lineHeight: 25.5 },
+  caret: { fontSize: 15, fontWeight: '700' },
   dots: { flexDirection: 'row', gap: 5, paddingVertical: 6 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#BDB8AE' },
+  dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#BDB8AE' },
 
   // 选项列表
-  options: { marginTop: 14 },
+  options: { marginTop: 6 },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 17,
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
     borderTopWidth: 1,
   },
-  optionArrow: { fontSize: 11 },
-  optionLabel: { fontSize: 16 },
+  optionArrow: { fontSize: 13 },
+  optionLabel: { fontSize: 14 },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   error: { fontSize: 13, fontWeight: '600' },
