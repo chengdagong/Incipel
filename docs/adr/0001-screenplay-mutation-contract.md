@@ -18,6 +18,6 @@
 - `add_character({ name, role?, attrs? })` / `update_character({ id, name?, role? })` / `remove_character({ id })`。`add_character` 可带**初始** `attrs:[{label,value}]`:新建人物的 id 当轮还不在枚举里,`add_character_attr` 无法引用它,故「本轮新建人物 + 赋属性」必须靠 `add_character` 一次完成。属性的 `id` 仍由服务端生成,模型只给 label/value——这是「父 + 子实体原子创建,id 全服务端生成」,不等于 upsert,不违反本契约;后续对已存在人物增删改属性才走 `*_character_attr`。
 - 属性单列三个显式工具:`add_character_attr({ characterId, label, value })`、`update_character_attr({ attrId, label?, value? })`、`remove_character_attr({ attrId })`。
 - `attrId` **全局唯一**(跨人物),`update/remove_character_attr` 的 `attrId` 与 `add_character_attr` 的 `characterId` 都在 schema 里按当前状态枚举锁死;服务端 `apply` 再校验一次,不存在即拒绝、绝不静默新建。
-- 剧本存在 `documents.state` 的 jsonb 里,**不需要 SQL(DDL)migration**;但 jsonb 是 opaque、不做归一,**改动前落库的旧行**里人物只有 `note`、缺 `attrs`/`role`,直接喂给 `idSetsOf` / `serializeScreenplay` 会对 `undefined` 取属性而崩。因此在**载入边界**用 `normalizeScreenplay`(`@incipel/shared`)补齐(`attrs` 兜空、旧 `note` 搬进 `role`),`store.loadSession` 已接入——这是数据归一,不是 schema migration。
+- 剧本存在 `documents.state` 的 jsonb 里,**不需要 SQL(DDL)migration**;但 jsonb 是 opaque、不做归一,**改动前写入数据库的旧行**里人物只有 `note`、缺 `attrs`/`role`,直接喂给 `idSetsOf` / `serializeScreenplay` 会对 `undefined` 取属性而崩。因此在**载入边界**用 `normalizeScreenplay`(`@incipel/shared`)补齐(`attrs` 兜空、旧 `note` 搬进 `role`),`store.loadSession` 已接入——这是数据归一,不是 schema migration。
 
 **不要**把属性塞回一段长 `note`,或用「整组覆盖 attrs」的 upsert——那会重新引入「partial 编辑丢内容」与「错误/重复 id」。

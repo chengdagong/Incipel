@@ -3,23 +3,28 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "main": "src/app.ts",
+  "main": "src/index.ts",
   "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
     "smoke": "tsx src/dev/smoke-turn.ts",
     "typecheck": "tsc --noEmit",
+    "test:real-ai": "INCIPEL_REAL_AI_INTEGRATION=1 vitest run test/real-ai-runtime.integration.test.ts",
     "test": "vitest run"
   },
   "dependencies": {
     "@ag-ui/core": "0.0.57",
+    "@hono/node-server": "1.19.14",
     "@incipel/shared": "workspace:*",
-    "@openrouter/ai-sdk-provider": "0.7.3",
+    "@mastra/core": "1.46.0",
+    "@mastra/hono": "1.5.1",
     "@supabase/supabase-js": "^2.45.0",
-    "ai": "^4.0.0",
+    "ai": "6.0.209",
     "dotenv": "^17.4.2",
-    "hono": "^4.6.0",
+    "hono": "^4.12.25",
     "jose": "^5.9.0",
     "nanoid": "^5.0.0",
-    "zod": "^3.23.8"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

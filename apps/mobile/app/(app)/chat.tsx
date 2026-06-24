@@ -74,6 +74,10 @@ function diffCard(prev: Screenplay, next: Screenplay): InlineCardData {
   };
 }
 
+function hasInlineCardData(card: InlineCardData): boolean {
+  return Boolean(card.world?.length || card.characters?.length || card.outline?.length || card.scenes?.length);
+}
+
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string; genre?: string }>();
   const router = useRouter();
@@ -105,6 +109,14 @@ export default function ChatScreen() {
   const composerRef = useRef<ComposerHandle>(null);
 
   const title = screenplay.meta.title?.trim() || t('draftTitle');
+  const hasGeneratedState =
+    Boolean(screenplay.meta.title?.trim()) ||
+    Boolean(screenplay.meta.logline?.trim()) ||
+    screenplay.world.length > 0 ||
+    screenplay.characters.length > 0 ||
+    screenplay.outline.length > 0 ||
+    screenplay.scenes.length > 0;
+  const chatStateTestID = isRunning || thinking || hydrating ? 'chat-running' : error ? 'chat-error' : hasGeneratedState ? 'chat-generated' : 'chat-empty';
   // 头部「阶段」副标题:按剧本进度推断(分场 > 大纲 > 人物 > 世界观 > 灵感)。
   const stage = STAGE_I18N[lang];
   const stageKey = screenplay.scenes.length
@@ -113,9 +125,9 @@ export default function ChatScreen() {
       ? 'outline'
       : screenplay.characters.length
         ? 'chars'
-        : screenplay.world.length
-          ? 'world'
-          : 'idea';
+           : screenplay.world.length
+             ? 'world'
+             : 'idea';
   const stageLabel = stage.prefix + stage[stageKey];
 
   // 首轮:挂载时把欢迎页带来的 idea 作为第一条用户消息发出(只发一次)。
@@ -168,7 +180,7 @@ export default function ChatScreen() {
     }
   }, [assistantCount, isRunning, screenplay]);
 
-  // 聚焦标签:点属性 / 点人物 → 加一枚 chip,关文档面板并聚焦输入框(对齐原型 discussAttr/discussCharacter)。
+  // 聚焦标签:点属性 / 点人物 → 加一枚 chip,关文档面板并聚焦输入框(对应原型 discussAttr/discussCharacter)。
   function addChip(chip: FocusChip) {
     setChips((prev) => (prev.some((c) => c.key === chip.key) ? prev : [...prev, chip]));
     setDocOpen(false);
@@ -178,14 +190,14 @@ export default function ChatScreen() {
   const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a));
   const focusCharacter = (c: Character) => addChip(chipFromCharacter(c));
 
-  // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用兜底话术),发出后清空 chip。
+  // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用默认话术),发出后清空 chip。
   function sendComposed(text: string) {
     const msg = composeFocusMessage(text, chips);
     if (!msg) return;
     setChips([]);
     void sendMessage(msg);
   }
-  // 快捷选项 / 直接发送:不带聚焦上下文,但发送即清空残留 chip(对齐原型 pushUserAndReply)。
+  // 快捷选项 / 直接发送:不带聚焦上下文,但发送即清空残留 chip(对应原型 pushUserAndReply)。
   function sendPlain(text: string) {
     setChips([]);
     void sendMessage(text);
@@ -197,15 +209,17 @@ export default function ChatScreen() {
   // 本轮运行中,@ag-ui/client 已把「正在流式的那条助手消息」实时加进 messages(随 token 增长)。
   // 它由下方的流式气泡(streamingText)或思考点代表显示,若同时留在列表里就会同屏重复(用户反馈)。
   const lastMsg = messages[messages.length - 1];
+  const lastMsgIsUser = !!lastMsg && lastMsg.role === 'user';
   const lastIsAssistant = !!lastMsg && lastMsg.role === 'assistant';
   const lastMsgText = lastMsg ? messageText(lastMsg) : '';
   // 末条助手消息「正在本轮流式中」(尚未定稿):正在打字(streamingText 有内容),或还没首 token(消息为空)。
   // 定稿后(streamingText 清空且消息已有内容)不再成立,消息照常显示——避免文本结束到 RUN_FINISHED 之间短暂消失。
   const trailingAssistantStreaming = isRunning && lastIsAssistant && (!!streamingText || lastMsgText === '');
+  const showStateOnlyAssistant = !isRunning && !thinking && !error && lastMsgIsUser && hasInlineCardData(card);
 
   return (
     <PortraitProvider>
-    <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
+    <View style={[styles.screen, { backgroundColor: palette.pageBg }]} testID={chatStateTestID}>
       <Header
         title={title}
         stageLabel={stageLabel}
@@ -228,8 +242,8 @@ export default function ChatScreen() {
               key={m.id}
               role={m.role === 'user' ? 'user' : 'assistant'}
               text={messageText(m)}
-              card={isLastAssistant ? card : undefined}
-              options={isLastAssistant ? options : undefined}
+              card={isLastAssistant && !showStateOnlyAssistant ? card : undefined}
+              options={isLastAssistant && !showStateOnlyAssistant ? options : undefined}
               onSend={sendPlain}
               onOpenDoc={openDoc}
               onFocusAttr={focusAttr}
@@ -238,7 +252,7 @@ export default function ChatScreen() {
           );
         })}
 
-        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。
+        {/* 思考中(本轮已开始、首 token 未到):三点动画(对应原型 typing dots)。
             thinking 由 hook 按 run 生命周期维护:retry 不追加 user 消息时也准确(见 #42 P3)。 */}
         {thinking && <ThinkingDots />}
 
@@ -247,10 +261,23 @@ export default function ChatScreen() {
           <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={openDoc} />
         )}
 
+        {showStateOnlyAssistant && (
+          <MessageBubble
+            role="assistant"
+            text=""
+            card={card}
+            options={options}
+            onSend={sendPlain}
+            onOpenDoc={openDoc}
+            onFocusAttr={focusAttr}
+            onFocusCharacter={focusCharacter}
+          />
+        )}
+
         {!!error && (
           <View style={styles.errorRow}>
             <Text style={[styles.error, { color: palette.danger }]}>出错了:{error}</Text>
-            {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复落库(见 KI-2)。
+            {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复写入数据库(见 KI-2)。
                 务必走 retry 而非重新 sendMessage——后者会生成新 runId、绕开幂等。 */}
             <Pressable
               onPress={() => void retry()}
@@ -387,10 +414,12 @@ function MessageBubble({
         <Text style={[styles.assistantName, { color: palette.textSecondary }]}>{assistantName}</Text>
       </View>
 
-      <Text style={styles.assistantText}>
-        <InlineText text={text} color={palette.textPrimaryAlt} boldColor={palette.textPrimary} />
-        {streaming ? <BlinkCaret /> : null}
-      </Text>
+      {(text.trim() || streaming) ? (
+        <Text style={styles.assistantText} testID="chat-assistant-text">
+          <InlineText text={text} color={palette.textPrimaryAlt} boldColor={palette.textPrimary} />
+          {streaming ? <BlinkCaret /> : null}
+        </Text>
+      ) : null}
 
       {/* 内联卡片:本轮新增实体(由剧本 diff 得出);人物属性可点生成聚焦标签(#12)。 */}
       {card && (
@@ -422,7 +451,7 @@ function MessageBubble({
   );
 }
 
-// 流式打字光标:主色细竖条,闪烁(对齐原型 caret)。
+// 流式打字光标:主色细竖条,闪烁(对应原型 caret)。
 // 光标内联在助手气泡的 <Text> 里;原生端嵌套 Text 会被摊平、没有独立的可动画视图,
 // 用 native driver 的 opacity 动画落不到这个 span 上(真机不闪)。故用 JS 驱动(useNativeDriver:false),
 // 由 JS 线程更新该文本 span 的 opacity。
@@ -441,7 +470,7 @@ function BlinkCaret() {
   return <Animated.Text style={[styles.caret, { color: defaultTheme.accent, opacity: op }]}>▏</Animated.Text>;
 }
 
-// 思考中:助手头像 + 三点闪烁(首 token 到达前;对齐原型 typing dots)。
+// 思考中:助手头像 + 三点闪烁(首 token 到达前;对应原型 typing dots)。
 function ThinkingDots() {
   const { palette } = defaultTheme;
   return (

@@ -51,18 +51,35 @@ describe('runTurnCore — 事件顺序与产物', () => {
     expect(saved.options).toEqual(['x', 'y']);
   });
 
-  it('本轮无文本(纯接管):不发 TEXT_MESSAGE_START/END', async () => {
+  it('模型只调用工具但不发文本时,用剧本状态补一条助手消息', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
     const provider = stubProvider([
-      [{ type: 'tool-call', call: { toolCallId: '1', toolName: 'add_character', args: { name: 'A', note: '' } } }],
+      [
+        {
+          type: 'tool-call',
+          call: {
+            toolCallId: '1',
+            toolName: 'set_meta',
+            args: { title: '黑白之间', logline: '失忆的卧底在警局和黑帮之间寻找身份。' },
+          },
+        },
+      ],
     ]);
-    const types = (await collect(runTurnCore(input(), { provider, store }))).map((e) => e.type);
-    expect(types).not.toContain(EventType.TEXT_MESSAGE_START);
-    expect(types).not.toContain(EventType.TEXT_MESSAGE_END);
+    const events = await collect(runTurnCore(input(), { provider, store }));
+    const types = events.map((e) => e.type);
+    expect(types).toContain(EventType.TEXT_MESSAGE_START);
+    expect(types).toContain(EventType.TEXT_MESSAGE_CONTENT);
+    expect(types).toContain(EventType.TEXT_MESSAGE_END);
     expect(types).toContain(EventType.STATE_DELTA);
+    const assistantText = events
+      .filter((e) => e.type === EventType.TEXT_MESSAGE_CONTENT)
+      .map((e) => String(e.delta ?? ''))
+      .join('');
+    expect(assistantText).toContain('黑白之间');
+    expect(assistantText).toContain('失忆的卧底');
     expect(store.lastSaved!.changed).toBe(true);
-    expect(store.lastSaved!.assistantText).toBe('');
+    expect(store.lastSaved!.assistantText).toBe(assistantText);
   });
 
   it('纯引导(只 propose_options,没改剧本):无 STATE_DELTA,changed=false,有 options', async () => {
@@ -120,7 +137,7 @@ describe('runTurnCore — 事件顺序与产物', () => {
 });
 
 describe('runTurnCore — 错误路径', () => {
-  it('loadSession 抛错 → RUN_ERROR{LOAD_FAILED} 且不落库', async () => {
+  it('loadSession 抛错 → RUN_ERROR{LOAD_FAILED} 且不写入数据库', async () => {
     const store = new MemoryStore(); // 未建会话 → loadSession 抛错
     const provider = stubProvider([[{ type: 'text', delta: 'hi' }]]);
     const events = await collect(runTurnCore(input({ threadId: 'missing' }), { provider, store }));

@@ -1,4 +1,4 @@
-// KI-2 回归测试(store 层):runId 经 runTurnCore 透传到 saveTurn,同 runId 重发不重复落库。
+// KI-2 回归测试(store 层):runId 经 runTurnCore 透传到 saveTurn,同 runId 重发不重复写入数据库。
 // 真正的 DB 层幂等(save_turn)在 supabase/tests/reliability_test.sql 用 pgTAP 验证。
 
 import { describe, it, expect } from 'vitest';
@@ -20,8 +20,8 @@ const SUCCESS = [
   ],
 ] as const;
 
-describe('KI-2 落库幂等', () => {
-  it('同一 runId 重发,只落库一次', async () => {
+describe('KI-2 写入数据库幂等', () => {
+  it('同一 runId 重发,只写入数据库一次', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
     const provider = stubProvider(SUCCESS as never);
@@ -32,7 +32,7 @@ describe('KI-2 落库幂等', () => {
     expect(store.savedTurnCount).toBe(1);
   });
 
-  it('不同 runId 各自落库', async () => {
+  it('不同 runId 各自写入数据库', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
     const provider = stubProvider(SUCCESS as never);
@@ -43,11 +43,11 @@ describe('KI-2 落库幂等', () => {
     expect(store.savedTurnCount).toBe(2);
   });
 
-  it('已落库的 runId 重发:在调用模型前重放,不再跑模型(Codex P1)', async () => {
+  it('已写入数据库的 runId 重发:在调用模型前重放,不再跑模型(Codex P1)', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
 
-    // 先正常跑一轮 r5 并落库:写一个人物 + 一句总结。
+    // 先正常跑一轮 r5 并写入数据库:写一个人物 + 一句总结。
     const okProvider = stubProvider([
       [
         { type: 'tool-call', call: { toolCallId: 'a', toolName: 'add_character', args: { name: '阿七', note: '' } } },
@@ -81,10 +81,10 @@ describe('KI-2 落库幂等', () => {
     const types = replay.map((e) => e.type);
     expect(types).toContain(EventType.RUN_FINISHED);
     expect(types).not.toContain(EventType.RUN_ERROR);
-    // 重放不产生新的 STATE_DELTA(模型没跑),且不再落库。
+    // 重放不产生新的 STATE_DELTA(模型没跑),且不再写入数据库。
     expect(types).not.toContain(EventType.STATE_DELTA);
     expect(store.savedTurnCount).toBe(1);
-    // 重放的助手文本等于首次落库的文本。
+    // 重放的助手文本等于首次写入数据库的文本。
     const replayText = replay
       .filter((e) => e.type === EventType.TEXT_MESSAGE_CONTENT)
       .map((e) => e.delta)

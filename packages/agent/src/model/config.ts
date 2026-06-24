@@ -1,5 +1,3 @@
-import type { OpenRouterProviderOptions } from '@openrouter/ai-sdk-provider';
-import type { ProviderMetadata } from 'ai';
 import rawModelConfig from '../../model.config.json' with { type: 'json' };
 import { env } from '../env.ts';
 
@@ -22,6 +20,9 @@ export type ModelRuntimeConfig = {
   turn: ModelUseConfig;
   logline: ModelUseConfig;
 };
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type ModelProviderOptions = Record<string, Record<string, JsonValue>>;
 
 type RawReasoningConfig = {
   enabled?: boolean;
@@ -59,16 +60,15 @@ export function resolveModelConfig(
 export function providerOptionsForUse(
   provider: ProviderName,
   useConfig: ModelUseConfig,
-): ProviderMetadata | undefined {
+): ModelProviderOptions | undefined {
   if (!useConfig.reasoning.enabled) return undefined;
 
   if (provider === 'openrouter') {
-    const reasoning =
+    const reasoning: Record<string, JsonValue> =
       useConfig.reasoning.budgetTokens === undefined
         ? { enabled: true, effort: useConfig.reasoning.effort ?? 'medium' }
         : { enabled: true, max_tokens: useConfig.reasoning.budgetTokens };
-    const openrouter: OpenRouterProviderOptions = { reasoning };
-    return { openrouter } as ProviderMetadata;
+    return { openrouter: { reasoning } };
   }
 
   return undefined;

@@ -40,6 +40,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const [thinkMode, setThinkMode] = useState<ThinkMode>('balanced');
   const inputRef = useRef<TextInput>(null);
 
+  // 点属性/人物加 chip 时,上层会调用 focus() 把光标放到输入框(对应原型)。
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
 
   const hasChips = chips.length > 0;

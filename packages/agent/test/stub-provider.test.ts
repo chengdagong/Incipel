@@ -71,7 +71,7 @@ describe('createStubProvider — 一轮确定性创作', () => {
     );
     const types = events.map((e) => e.type);
 
-    // 暗号轮:落到 RUN_ERROR(code=MODEL_FAILED),不发 RUN_FINISHED,也不落库(无内容可编造)。
+    // 暗号轮:落到 RUN_ERROR(code=MODEL_FAILED),不发 RUN_FINISHED,也不写入数据库(无内容可编造)。
     expect(types).toContain(EventType.RUN_ERROR);
     expect(types).not.toContain(EventType.RUN_FINISHED);
     const errEv = events.find((e) => e.type === EventType.RUN_ERROR)!;

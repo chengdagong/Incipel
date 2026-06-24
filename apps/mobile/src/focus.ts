@@ -1,5 +1,5 @@
 // 聚焦标签(focus chip):把某个人物或其某条属性带入输入框作为聚焦上下文(见 issue #12)。
-// 对齐原型「编剧助手 原型.dc.html」的 contextChips / discussAttr / discussCharacter / sendComposer。
+// 对应原型「编剧助手 原型.dc.html」的 contextChips / discussAttr / discussCharacter / sendComposer。
 //
 // chip 是一轮内的瞬时 UI 状态(不入剧本);发送时把各 chip 的 detail 拼成「（聚焦：…）」前缀,
 // 并入这条用户消息发给 agent —— agent 端无需特殊处理,它就是普通用户消息文本。

@@ -97,7 +97,7 @@ describe('idSetsOf', () => {
 
 describe('normalizeScreenplay — 归一旧结构剧本(载入边界)', () => {
   it('旧人物 {id,name,note}(无 role/attrs)→ 补 role(搬 note)+ attrs=[];归一后 idSetsOf 不再崩', () => {
-    // 模拟改动前落库的旧结构(opaque jsonb,人物无 role/attrs)。
+    // 模拟改动前写入数据库的旧结构(opaque jsonb,人物无 role/attrs)。
     const legacy = {
       ...emptyScreenplay(),
       characters: [{ id: 'char_a', name: '林深', note: '前外科医生' }],

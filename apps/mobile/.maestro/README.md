@@ -5,9 +5,9 @@
 
 ## 方案(见 [ADR-0007](../../../docs/adr/0007-e2e-test-strategy.md))
 
-测试策略经一次 review 定论,记在 ADR-0007。**绿 ≠ AI 没问题**:这些 flow 覆盖主路径(启动→欢迎、
-登录门控、一条创作首轮、持久化往返、i18n、出错重试),**模型行为不在 E2E 范围**(交给 agent `smoke` +
-录真实一轮当 fixture 回放)。
+测试策略经一次 review 定论,记在 ADR-0007。**默认 E2E 通过 ≠ AI 没问题**:这些 flow 覆盖主路径(启动→欢迎、
+登录门控、一条创作首轮、持久化往返、i18n、出错重试)。模型质量主要交给 agent `smoke` +
+录真实一轮当 fixture 回放。另有显式 `real-ai` 层,用于在 simulator 中验证「骰子生成 logline → 提交给真实 AI runtime 完成一轮」。
 
 **有意推后、现在没测的**(记在 [issue #33](https://github.com/chengdagong/Incipel/issues/33)):多轮 /
 点选项进下一轮、聚焦 chip、文档面板、`/works`、登出、语言重启记忆、更全的剧本渲染。
@@ -18,12 +18,13 @@
 
 ## 怎么跑
 
-经 worktree 感知的 release 运行器(按 worktree 接好端口 / 模拟器,按层出 release 包、装好、起 stub agent):
+经 worktree 感知的 release 运行器(按 worktree 接好端口 / 模拟器,按层出 release 包、装好、起 agent):
 
 ```bash
 bash scripts/e2e-ios.sh                       # 默认 frontend-only,stub-agent 两层(免 Supabase)
 bash scripts/e2e-ios.sh frontend-only         # 只跑无后端的纯 UI 流
 bash scripts/e2e-ios.sh stub-agent            # 只跑 stub agent 的创作主路径
+bash scripts/e2e-ios.sh real-ai               # 跑真实 OpenRouter/Mastra:骰子生成 logline → 提交一轮
 bash scripts/e2e-ios.sh supabase              # 需真实匿名登录 + 本地 Supabase 的流
 bash scripts/e2e-ios.sh frontend-only --no-build  # 复用已装包、只重跑 Maestro(改 flow 时省一次构建)
 # 等价入口:pnpm e2e:ios [层] [--no-build]
@@ -31,12 +32,12 @@ bash scripts/e2e-ios.sh frontend-only --no-build  # 复用已装包、只重跑 
 
 运行器每步做了什么(为什么跑 release 包、不跑 dev-client,见 ADR-0007「跑 release 包」):
 
-1. 按层把 `apps/mobile/.env` 的 `EXPO_PUBLIC_DEV_NO_AUTH` 改成该层所需(frontend-only/stub-agent = `1`、
+1. 按层把 `apps/mobile/.env` 的 `EXPO_PUBLIC_DEV_NO_AUTH` 改成该层所需(frontend-only/stub-agent/real-ai = `1`、
    supabase = 空)——这是 **bundle 期**开关,必须在构建前写好;
 2. 首次自动 `expo prebuild` + `pod install` 生成 `ios/`(已被 gitignore),之后复用;
 3. 复用 `derivedDataPath` 时先删 `main.jsbundle` 逼 bundle 重跑(否则 Xcode 认 output 最新会跳过 → 烘进旧 `.env`);
 4. `xcodebuild -configuration Release`(JS 内嵌)出包,`simctl install` 换包;
-5. stub-agent / supabase 层另起 stub agent(`MODEL_PROVIDER=stub`);
+5. stub-agent / supabase 层另起 stub agent(`MODEL_PROVIDER=stub`);real-ai 层另起 OpenRouter agent(`MODEL_PROVIDER=openrouter`);
 6. `maestro test --device <UDID> --include-tags <层>`;退出时把 `.env` 的 `DEV_NO_AUTH` 还原。
 
 直接用 Maestro(自行接好设备 / 包时):
@@ -50,16 +51,18 @@ maestro test --device <模拟器 UDID> --include-tags frontend-only,stub-agent a
 - 已装 [Maestro](https://maestro.mobile.dev)(`curl -fsSL "https://get.maestro.mobile.dev" | bash`)与 JDK 17+。
 - 完整 Xcode(`xcodebuild` / `simctl`)与 CocoaPods(`brew install cocoapods`)。运行器会在
   `xcode-select` 指向 CommandLineTools 时回退到 `/Applications/Xcode.app`,无需 `sudo xcode-select`。
-- `supabase` 层另需:`supabase start`;`packages/agent/.env` 填好 `SUPABASE_URL` /
+- `supabase` 层另需:`supabase start`;`supabase/.env` 填好 `SUPABASE_URL` /
   `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_JWT_SECRET`;`apps/mobile/.env` 填好真实
   `EXPO_PUBLIC_SUPABASE_ANON_KEY`,且**不设** `EXPO_PUBLIC_DEV_NO_AUTH`(运行器会按层自动改并在退出时还原)。
+- `real-ai` 层另需:`supabase/.env` 填好 `OPENROUTER_API_KEY`。该层使用 `STORE=memory`,不需要本地 Supabase 数据库。
 
-## 三层(按后端依赖切)
+## 四层(按后端依赖切)
 
 | 层 tag | 进程 / 开关 | 覆盖 |
 |---|---|---|
 | `frontend-only` | 仅 app(`DEV_NO_AUTH` bundle),不起 agent | 登录门绕过、欢迎页控件、建议 chip 回填、多语言切换 |
 | `stub-agent` | app(`DEV_NO_AUTH`)+ agent(`MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1`) | 一轮创作、肖像弹窗、抽屉基础导航、出错重试 |
+| `real-ai` | app(`DEV_NO_AUTH`)+ agent(`MODEL_PROVIDER=openrouter STORE=memory DEV_NO_AUTH=1`) | simulator 中的真实模型冒烟:骰子 `/logline` + 首轮 `/run` |
 | `supabase` | app(真实匿名登录,不设 `DEV_NO_AUTH`)+ agent(`MODEL_PROVIDER=stub` + 真 SupabaseStore) | 匿名登录冒烟、星标、历史续写 |
 
 分层的原因:抽屉 / 历史 / 作品的会话列表是**客户端直连 Supabase** 查的
@@ -67,8 +70,8 @@ maestro test --device <模拟器 UDID> --include-tags frontend-only,stub-agent a
 所以这些「列表 / 星标」类只能放在真实 Supabase 那层。而一轮创作的人物卡来自 **AG-UI 实时流**、
 肖像是**纯客户端占位**,故在 stub-agent 层就能确定性地跑。
 
-> `frontend-only` 与 `stub-agent` 共用 `DEV_NO_AUTH=1` 的 bundle;`supabase` 需要不设该开关的另一份 bundle。
-> 两者**不能同跑**——分两次,运行器会拦住误用。
+> `frontend-only`、`stub-agent` 与 `real-ai` 共用 `DEV_NO_AUTH=1` 的 bundle;`supabase` 需要不设该开关的另一份 bundle。
+> `stub-agent` 与 `real-ai` 需要不同 `MODEL_PROVIDER`,也不能同跑。运行器会拦住误用。
 
 ## stub provider
 
@@ -93,7 +96,7 @@ tool-call 参数先过当轮 Zod schema 校验再产出,形状不偏离真实路
 
 ```
 subflows/                被 runFlow 复用,不独立跑
-  enter-welcome.yaml       DEV_NO_AUTH 直达欢迎页(frontend-only/stub-agent)
+  enter-welcome.yaml       DEV_NO_AUTH 直达欢迎页(frontend-only/stub-agent/real-ai)
   enter-welcome-anon.yaml  真实匿名登录到欢迎页(supabase)
   run-one-turn.yaml        从欢迎页跑出 stub 的一轮(停在对话屏)
 flows/
@@ -104,6 +107,7 @@ flows/
   portrait-generate.yaml   [stub-agent]    人物卡 → 生成肖像 → 选风格 → 生成 → 绘制中 → 完成
   drawer-nav.yaml          [stub-agent]    抽屉唤出 / 导航 / 遮罩关闭(空列表)
   error-retry.yaml         [stub-agent]    暗号触发 stub 抛错 → 出错了 + 重试本轮 → 重试再跑仍报错
+  real-ai-logline-turn.yaml [real-ai]      真实模型:骰子生成 logline → 提交首轮 → 剧本状态完成更新
   smoke-anon-login.yaml    [supabase] 匿名登录冒烟(原 anon-login.yaml 的修正版)
   star-session.yaml        [supabase] 一轮落进数据库 → 抽屉星标 → 变实心
   history-resume.yaml      [supabase] 一轮落进数据库 → 历史页出现 → 续写回对话屏
@@ -164,10 +168,9 @@ flows/
 - `/works` 作品页已注册路由(`app/(app)/_layout.tsx`),但 v1 里没有任何界面入口导航到它
   (抽屉只通到 `/history` 与 `/settings`)。故作品页未经 UI 流程覆盖;持久化列表用历史页
   (`history-resume`)代表。日后给作品页接上入口时再补一条流程。
-- 真实模型路径(`anthropic` / `openrouter`)不在 E2E 内,另由两条线覆盖:agent 的
-  `pnpm --filter @incipel/agent smoke`(真实 provider + key,多题材逐条断言结构不变量,发版前 / 夜间手动跑);
-  以及录真实一轮当 fixture 经 stub 确定性回放(`packages/agent/test/fixtures/real-turns.ts` +
-  `fixture-replay.test.ts`),压 apply / save 这条客户端依赖的数据契约在「更乱的产出」前不崩、不丢内容。
+- 真实模型路径(`openrouter`)默认不随 E2E 套件执行,需要显式跑 `bash scripts/e2e-ios.sh real-ai`。
+  它会使用真实模型 key,可能产生费用,只断言稳定 UI 状态:logline 已填入、首轮完成且剧本状态非空。
+  模型质量仍由 agent 的 `pnpm --filter @incipel/agent smoke` 与真实轮 fixture 回放补充覆盖。
 - Google 真实授权依赖 Google 账号、native build 与后台配置,不放进 Maestro 自动化;Maestro 只检查
   登录页 Google 按钮可见且匿名入口仍能进入。
 - 本地 Supabase 栈多 worktree 共用:`supabase` 层会写测试会话(RLS 限定在该匿名用户),
@@ -179,7 +182,7 @@ flows/
 
 ```bash
 cd apps/mobile
-# 1) bundle 期开关:frontend-only/stub-agent 用 DEV_NO_AUTH=1(在 .env 设 EXPO_PUBLIC_DEV_NO_AUTH=1);
+# 1) bundle 期开关:frontend-only/stub-agent/real-ai 用 DEV_NO_AUTH=1(在 .env 设 EXPO_PUBLIC_DEV_NO_AUTH=1);
 #    supabase 留空 + 填真 anon key。该开关在 bundle 期烘进二进制,两组要各出一份包。
 # 2) 首次生成原生工程(ios/ 已 gitignore):
 npx expo prebuild --platform ios --no-install && ( cd ios && LANG=en_US.UTF-8 pod install )
@@ -191,7 +194,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer PATH="$HOME/.local/bin:
   CODE_SIGN_IDENTITY="-"
 # 4) 装到模拟器
 xcrun simctl install <sim-UDID> ios/build-release/Build/Products/Release-iphonesimulator/<scheme>.app
-# 5) 起 stub agent(stub-agent 层):PORT=<AGENT_PORT> MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1
+# 5) 起 agent(stub-agent 层):PORT=<AGENT_PORT> MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1
+#    real-ai 层改为:MODEL_PROVIDER=openrouter STORE=memory DEV_NO_AUTH=1,并从 supabase/.env 读取 OPENROUTER_API_KEY
 #    (supabase 层改用真 SupabaseStore:不设 STORE/DEV_NO_AUTH,填 SUPABASE_URL/SERVICE_ROLE_KEY/JWT_SECRET)
 maestro test --device <sim-UDID> --include-tags frontend-only,stub-agent apps/mobile/.maestro/
 ```

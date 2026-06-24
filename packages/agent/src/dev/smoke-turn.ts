@@ -1,4 +1,4 @@
-// 冒烟脚本:用真实 OpenRouter provider + 内存 store 跑几条真实回合,验证核心循环可跑、结构不变量成立。
+// 冒烟脚本:用真实 Mastra/OpenRouter provider + 内存 store 跑几条真实回合,验证核心循环可跑、结构约束成立。
 //
 // 跑法:pnpm --filter @incipel/agent smoke(发版前 / 夜间手动跑;真实模型不进 E2E,见 ADR-0007 Q2)
 // 需要 packages/agent/.env 里有 OPENROUTER_API_KEY;模型参数来自 packages/agent/model.config.json。
@@ -21,7 +21,7 @@ import {
   type JsonPatchOp,
   type Screenplay,
 } from '@incipel/shared';
-import { createOpenRouterProvider } from '../model/openrouter';
+import { createMastraProvider } from '../model/mastra';
 import { runTurnCore } from '../run';
 import type { ModelProvider } from '../model/provider';
 import { MemoryStore } from './memory-store';
@@ -180,7 +180,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const provider = createOpenRouterProvider();
+  const provider = createMastraProvider();
   let allPass = true;
   for (const [i, insp] of INSPIRATIONS.entries()) {
     const pass = await runOne(provider, i, insp);

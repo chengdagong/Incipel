@@ -50,7 +50,7 @@ describe('KI-1 重试按尝试隔离', () => {
     expect(saved.state.characters[0]!.name).toBe('林深');
   });
 
-  it('重试补发干净基线 STATE_SNAPSHOT,且客户端重放事件 == 落库 state', async () => {
+  it('重试补发干净基线 STATE_SNAPSHOT,且客户端重放事件 == 写入数据库 state', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't2', userId: 'u1' });
     const provider = stubProvider([
@@ -113,12 +113,12 @@ describe('KI-1 重试按尝试隔离', () => {
     expect(starts[0]!.messageId).toBe(ends[0]!.messageId);
     expect(events.map((e) => e.type)).toContain(EventType.RUN_FINISHED);
 
-    // 落库只含成功尝试的文本与人物。
+    // 写入数据库只含成功尝试的文本与人物。
     expect(store.lastSaved!.assistantText).toBe('立了阿七。');
     expect(store.lastSaved!.state.characters).toHaveLength(1);
   });
 
-  it('两次都失败 → RUN_ERROR{MODEL_FAILED} 且不落库', async () => {
+  it('两次都失败 → RUN_ERROR{MODEL_FAILED} 且不写入数据库', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't3', userId: 'u1' });
     const provider = stubProvider([[throwStep('e1')], [throwStep('e2')]]);

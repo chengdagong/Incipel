@@ -91,7 +91,7 @@ function pickLastAssistant(rows: readonly StoredMessageRowFull[]): StoredMessage
  *
  * 数据来源与抽屉 / 历史 / 作品屏一致:都用 supabase-js 直查、靠 RLS 按 user_id 归属隔离
  * (messages 的 SELECT 策略经 session 归属校验,见 supabase/migrations/0001_init.sql、0004)。
- * 全新会话(threadId 尚未落库)查不到任何行,返回 null。
+ * 全新会话(threadId 尚未写入数据库)查不到任何行,返回 null。
  */
 export async function loadSessionSnapshot(threadId: string): Promise<SessionSnapshot | null> {
   const [docRes, msgRes] = await Promise.all([
@@ -163,7 +163,7 @@ export type ScreenplayAgentApi = {
   // 历史恢复进行中(reopening 且首次快照未返回);为真时屏幕应禁用发送,避免与恢复竞争。
   hydrating: boolean;
   sendMessage: (text: string) => Promise<void>;
-  // 重试当前这一轮:沿用同一 runId,服务端据此幂等、不重复落库(见 KI-2)。
+  // 重试当前这一轮:沿用同一 runId,服务端据此幂等、不重复写入数据库(见 KI-2)。
   // 失败后应调用它,而不是重新 sendMessage(后者会生成新 runId、绕开幂等键)。
   retry: () => Promise<void>;
 };
@@ -252,7 +252,7 @@ export function useScreenplayAgent(
       onRunFinishedEvent: () => {
         setIsRunning(false);
         setThinking(false);
-        pendingRunIdRef.current = null; // 本轮已落库,runId 使命结束
+        pendingRunIdRef.current = null; // 本轮已写入数据库,runId 使命结束
         syncFromAgent();
       },
       onRunErrorEvent: ({ event }) => {
@@ -342,7 +342,7 @@ export function useScreenplayAgent(
     [runWith, hydrating],
   );
 
-  // 重试当前这一轮:沿用同一 runId、不再追加用户消息。服务端据此幂等,重发不重复落库(见 KI-2)。
+  // 重试当前这一轮:沿用同一 runId、不再追加用户消息。服务端据此幂等,重发不重复写入数据库(见 KI-2)。
   const retry = useCallback(async () => {
     const runId = pendingRunIdRef.current;
     if (!runId) return;

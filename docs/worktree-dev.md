@@ -9,17 +9,17 @@ Metro 固定使用 8081。本文件说明这些机器级资源如何复用,以�
 在任一 worktree 根目录:
 
 ```bash
-pnpm dev:ios -- --go          # iOS 模拟器 + Expo Go + Metro 8081 + 自动起共用栈并后台 serve agent
-pnpm dev:android -- --go      # Android 设备 + Expo Go + Metro 8081 + 自动起共用栈并后台 serve agent
-pnpm dev:ios -- --devbuild    # iOS development build + Metro 8081 + 自动起共用栈并后台 serve agent
+pnpm dev:ios -- --go          # iOS 模拟器 + Expo Go + Metro 8081 + 自动起共用 Supabase 栈并后台启动 agent
+pnpm dev:android -- --go      # Android 设备 + Expo Go + Metro 8081 + 自动起共用 Supabase 栈并后台启动 agent
+pnpm dev:ios -- --devbuild    # iOS development build + Metro 8081 + 自动起共用 Supabase 栈并后台启动 agent
 pnpm dev:android -- --devbuild
-pnpm dev:agent        # (前台)起共用栈 + serve agent;想在专用终端看 agent 热重载日志时用
-pnpm dx agent stop    # 停止当前 worktree 的后台 agent watcher / serve,保留本地 Supabase 数据库等容器
+pnpm dev:agent        # (前台)起共用 Supabase 栈 + 启动 agent server;想在专用终端看 agent 日志时用
+pnpm dx agent stop    # 停止当前 worktree 的后台 agent watcher / server,保留本地 Supabase 数据库等容器
 
 INCIPEL_SKIP_AGENT=1 pnpm dev:ios -- --go # 不自动起 agent(你已在别处前台跑 dev:agent 时)
 ```
 
-`pnpm dev:ios` / `dev:android` 必须显式传 `--go` 或 `--devbuild`;不带参数会打印用法后退出。Google Sign-In 需要 development build,不能用 Expo Go 验证。启动脚本起 Metro 前会先调 `tools/incipel-dev up`:确保共用栈在运行、确认当前 worktree 的 agent 正在被 serve,并在**后台**启动 watcher 监控当前 worktree 的 agent 源码与 `supabase/.env`,所以平时一条带参数的命令就把前后端都带起来。新 worktree 首跑时,或 `apps/mobile/package.json` 新增直接依赖后,若 `apps/mobile` 依赖不完整,会先自动 `pnpm install`(pnpm 用全局 content-addressable store,命中时通常只是创建硬链接,不会重复下载,所以每个 worktree 装一次很轻;无需也无法靠全局安装 Expo 省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库);这个文件仍给 Android serial 与 E2E 的 iOS simulator 名称使用,但 `pnpm dev:ios` 会忽略其中的 `IOS_SIMULATOR_NAME`,始终使用 `incipel-development`。脚本会按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量;如果已有旧 env 文件,它也会从主工作区补充 Google iOS client id 与 Supabase Google client secret。`Ctrl+C` 退出 Metro 不会自动停止后台 agent watcher / serve;需要清理时运行 `pnpm dx agent stop`。agent 已不是本地 Node 服务,**没有 per-worktree 端口**(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md))。
+`pnpm dev:ios` / `dev:android` 必须显式传 `--go` 或 `--devbuild`;不带参数会打印用法后退出。Google Sign-In 需要 development build,不能用 Expo Go 验证。启动脚本起 Metro 前会先调 `tools/incipel-dev up`:确保共用 Supabase 栈在运行、确认当前 worktree 的 Mastra application agent server 正在运行,并在**后台**启动 watcher 监控当前 worktree 的 agent 源码与 `supabase/.env`,所以平时一条带参数的命令就把客户端和服务端都启动。新 worktree 首跑时,或 `apps/mobile/package.json` 新增直接依赖后,若 `apps/mobile` 依赖不完整,会先自动 `pnpm install`(pnpm 用全局 content-addressable store,命中时通常只是创建硬链接,不会重复下载,所以每个 worktree 装一次很轻;无需也无法靠全局安装 Expo 省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库);这个文件仍给 Android serial 与 E2E 的 iOS simulator 名称使用,但 `pnpm dev:ios` 会忽略其中的 `IOS_SIMULATOR_NAME`,始终使用 `incipel-development`。脚本会按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量与 agent 端口;如果已有旧 env 文件,它也会从主工作区补充 Google iOS client id 与 Supabase Google client secret。`Ctrl+C` 退出 Metro 不会自动停止后台 agent watcher / server;需要清理时运行 `pnpm dx agent stop`。agent 端口按 worktree 路径派生,写入 `apps/mobile/.env` 的 `EXPO_PUBLIC_AGENT_URL` 与 `supabase/.env` 的 `AGENT_PORT`。
 
 首次使用 `--devbuild` 前,脚本会在目标设备缺少 `com.incipel.app` 时自动构建并安装 development build。这个步骤可能需要几分钟,完成后脚本会继续启动 Metro。iOS simulator 路径由脚本执行 `expo prebuild`、`pod install`、`xcodebuild` 与 `simctl install`;CocoaPods 需要的 `modular_headers` 由 `expo-build-properties` 写入生成配置,脚本不会直接修改 `Podfile`。本地 simulator build 使用 ad-hoc signing,使 app 携带 Keychain entitlement;Google 登录返回 `com.google.GIDSignIn Code=-2 "keychain error"` 时,先卸载旧 app 安装包再让脚本重建。不要手动用 `expo run:ios --device <UDID>` 代替,该命令在某些 Xcode / Expo CLI 组合下会走需要 code signing 的 device build 分支。
 
@@ -37,21 +37,25 @@ INCIPEL_SKIP_AGENT=1 pnpm dev:ios -- --go # 不自动起 agent(你已在别处�
    - iOS E2E:`pnpm e2e:ios` 仍读取 `.worktree-dev.env` 的 `IOS_SIMULATOR_NAME`,继续使用 worktree 专属 simulator,避免 release 包和测试数据互相影响。
    - Android:用 `adb -s <serial> reverse` 把端口转发进指定设备,再 `am start` 打开。
 
-## Agent 与 Supabase(后端)
+## Agent 与 Supabase
 
-agent 唯一运行时是 Supabase Edge Function(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md)),它就跑在本地 Supabase 栈的 edge runtime 里——后端只剩「一套 Supabase 栈」这一个进程,不再有单独的 Node agent 端口。
+agent 当前运行时是 Mastra application,通过 Hono server adapter 在 Node server 中运行。Supabase 仍负责本地数据库、Auth、Storage。两者的 URL 分开:
 
-- **agent(edge function)**:本地 `supabase start` **不会**自动 serve 函数,必须另跑 `supabase functions serve`。所以 `pnpm dev:ios` / `dev:android` 经 `tools/incipel-dev up` 在**后台**拉起 serve(detached,日志/PID/metadata 落 `os.tmpdir()`),并启动 watcher 监控当前 worktree 的 agent 输入文件,不阻塞 Metro;想在前台看 agent 日志就单独 `pnpm dev:agent`(别和后台的同时跑)。`up` 不只探 `/health`:还会读取 `os.tmpdir()/incipel-agent-serve-<worktree-hash>.json` 和 `os.tmpdir()/incipel-agent-watcher-<worktree-hash>.json`,确认其中的 `repoRoot` 等于当前 worktree,并核对源码 hash、`supabase/.env` hash 与 watcher 监控路径。两条路都会把 `apps/mobile/.env`(`EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` / `EXPO_PUBLIC_AGENT_URL`)与 `supabase/.env`(`INCIPEL_SUPABASE_JWT_*`)写好。客户端一律指向共用栈的 `<api>/functions/v1/agent`(`api` 端口取自 `supabase/config.toml` 的 `[api]`,默认 54521)。watcher 监控 `supabase/functions/agent/index.ts`、`supabase/functions/agent/deno.json`、存在时的 `supabase/functions/agent/deno.lock`、`packages/agent/src/**/*.ts`、`packages/agent/model.config.json`、`packages/shared/src/**/*.ts` 与 `supabase/.env`;这些文件变化后会停止 Edge Runtime 并重新 serve 当前 worktree 的 agent。模型 id、`temperature` 与 reasoning 参数不在 `supabase/.env` 中,而在 `packages/agent/model.config.json` 中。
-  - `pnpm dx agent stop` 只停止当前 worktree metadata 记录的 agent watcher / serve,并在停止当前 serve 时停止 Edge Runtime;它不会停止本地 Supabase 数据库、auth、storage 等其它容器。停止 Edge Runtime 会短暂影响同一共用栈上的 function 服务,这与日常 development 只跑一个 dev 环境的约定一致。
-  - 日常共用 dev 走 **Supabase anonymous auth**:无 session 时显示登录页,点击「先随便逛逛」创建 anonymous user;agent 校验 JWT 后使用 SupabaseStore 保存会话数据。不要把这条路径称作“免登录”;它仍有用户身份。
-  - 主工作区的 `supabase/.env` 是日常 dev 的模型 secret 和 Google provider secret 来源。新 worktree 第一次启动时复制整份文件;如果已有旧模板但缺模型密钥或 `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET`,`tools/incipel-dev` 只补这些项,不会覆盖已经写好的本地 JWT 校验变量。
-  - iOS 模拟器的 `localhost` 直通宿主机;**Android 模拟器的 `localhost` 是模拟器自身**,`dev-android.sh` 已 `adb reverse` 共用栈的 API 端口——这一个端口就同时覆盖 `EXPO_PUBLIC_SUPABASE_URL` 与 `EXPO_PUBLIC_AGENT_URL`(agent 挂在它下面)。
-  - **一份共用 function 同一时刻只有一套配置**(`MODEL_PROVIDER` / 本地 JWT 校验配置):几个 worktree 不能各跑各的 agent 配置;配置需求不同就去起隔离栈(下)。
+- `EXPO_PUBLIC_SUPABASE_URL`:共用 Supabase 栈的 API URL,默认来自 `supabase/config.toml` 的 `[api].port`。
+- `EXPO_PUBLIC_AGENT_URL`:当前 worktree 的 agent server base URL,形如 `http://127.0.0.1:<agent-port>`。
+
+`pnpm dev:ios` / `dev:android` 经 `tools/incipel-dev up` 在**后台**启动 `pnpm --filter @incipel/agent dev`(detached,日志/PID/metadata 写入 `os.tmpdir()`),并启动 watcher 监控当前 worktree 的 agent 输入文件。想在前台看 agent 日志就单独 `pnpm dev:agent`。`up` 不只探 `/health`:还会读取 `os.tmpdir()/incipel-agent-serve-<worktree-hash>.json` 和 `os.tmpdir()/incipel-agent-watcher-<worktree-hash>.json`,确认其中的 `repoRoot` 等于当前 worktree,并核对源码 hash、`supabase/.env` hash 与 watcher 监控路径。watcher 监控 `packages/agent/src/**/*.ts`、`packages/agent/model.config.json`、`packages/shared/src/**/*.ts` 与 `supabase/.env`;这些文件变化后会重启当前 worktree 的 agent server。
+
+- `pnpm dx agent stop` 只停止当前 worktree metadata 记录的 agent watcher / server;它不会停止本地 Supabase 数据库、auth、storage 等其它容器。
+- 日常共用 dev 走 **Supabase anonymous auth**:无 session 时显示登录页,点击「先随便逛逛」创建 anonymous user;agent 校验 JWT 后使用 SupabaseStore 保存会话数据。不要把这条路径称作“免登录”;它仍有用户身份。
+- 主工作区的 `supabase/.env` 是日常 dev 的模型 secret 和 Google provider secret 来源。新 worktree 第一次启动时复制整份文件;如果已有旧模板但缺模型密钥或 `SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET`,`tools/incipel-dev` 只补这些项,不会覆盖已经写好的本地 JWT 校验变量。
+- iOS 模拟器的 `localhost` 直通宿主机;**Android 模拟器的 `localhost` 是模拟器自身**,`dev-android.sh` 已 `adb reverse` Metro、Supabase API 与 agent server 三个端口。
+- 每个 worktree 可有自己的 agent server 端口与源码版本;Supabase 共用栈仍只有一套数据库/Auth/Storage。需要隔离数据时用独立栈。
 
 - **Supabase 本地栈**(`supabase start` → Docker,按 `project_id` 命名、端口写死)
   CLI 按 `project_id` 认栈,所以多个 worktree **共用同一套**,而非各得一套。真正的风险不是端口,而是共享了同一个数据库 / auth / storage:在一个 worktree 跑 `supabase db reset` 或改 `supabase/migrations`,会冲掉另一个 worktree 的数据。建议:
   1. **共用一套(默认)**:`supabase start` 一次,各 worktree 的 `.env` 都指向同一 API 端口(`tools/incipel-dev` 会刷新这些值);别在别人测试时 reset,migration 保持一致,用不同匿名用户或测试账号隔离数据。
-  2. **每树一套独立栈(E2E / 需隔离数据时)**:`pnpm e2e:stack up`(= `tools/incipel-dev e2e up`)按本 worktree 派生 `project_id` 与整段错开的端口,生成一份 gitignored 的 `.worktree-supabase/` workdir:链入 `migrations` / `seed`,复制 `functions`,并在 workdir 根目录链入 `packages`,确保 Edge Function 的相对 import 能解析到 agent 与 shared 源码。`supabase start --workdir` 起一套独立栈;`pnpm e2e:stack down` 拆掉。代价是每套一组 Docker 容器、数 GB 内存,故只在 E2E 或真要隔离数据库时用,日常仍只一套共用栈。
+  2. **每树一套独立栈(E2E / 需隔离数据时)**:`pnpm e2e:stack up`(= `tools/incipel-dev e2e up`)按本 worktree 派生 `project_id` 与整段错开的端口,生成一份 gitignored 的 `.worktree-supabase/` workdir:链入 `migrations` / `seed`,写出隔离栈自己的 `agent.env`,并打印 `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_AGENT_URL`。`supabase start --workdir` 起一套独立 Supabase 栈;agent 仍用 `pnpm --filter @incipel/agent start` 启动。`pnpm e2e:stack down` 拆掉 Supabase 栈。代价是每套一组 Docker 容器、数 GB 内存,故只在 E2E 或真要隔离数据库时用,日常仍只一套共用栈。
 
 ## 不需要做的事(本拓扑下)
 

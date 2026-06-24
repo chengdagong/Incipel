@@ -1,0 +1,1060 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Incipel agent architecture 变更说明</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #18212b;
+        --muted: #5e6875;
+        --line: #d9dee7;
+        --panel: #ffffff;
+        --wash: #f6f8fb;
+        --blue: #244fd6;
+        --teal: #087f7a;
+        --red: #bd3f3f;
+        --amber: #9b6b08;
+        --green: #24714c;
+        --shadow: 0 18px 45px rgba(24, 33, 43, 0.09);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          linear-gradient(180deg, #eef3ff 0, rgba(246, 248, 251, 0) 360px),
+          var(--wash);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        line-height: 1.72;
+      }
+
+      a {
+        color: var(--blue);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+
+      code {
+        padding: 0.12rem 0.34rem;
+        border: 1px solid #dce2ec;
+        border-radius: 6px;
+        background: #f7f9fc;
+        color: #243047;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        font-size: 0.92em;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 36px));
+        margin: 0 auto;
+      }
+
+      header {
+        padding: 56px 0 34px;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--blue);
+        font-size: 0.86rem;
+        font-weight: 750;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.18;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 900px;
+        font-size: clamp(2.15rem, 4vw, 4.45rem);
+        font-weight: 820;
+      }
+
+      h2 {
+        font-size: clamp(1.55rem, 2vw, 2.15rem);
+      }
+
+      h3 {
+        font-size: 1.05rem;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .lead {
+        max-width: 860px;
+        margin-top: 20px;
+        color: #35404d;
+        font-size: 1.14rem;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 26px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid #cbd5e4;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.76);
+        color: #314156;
+        font-size: 0.92rem;
+        font-weight: 650;
+      }
+
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        border-top: 1px solid rgba(217, 222, 231, 0.82);
+        border-bottom: 1px solid rgba(217, 222, 231, 0.92);
+        background: rgba(246, 248, 251, 0.94);
+        backdrop-filter: blur(14px);
+      }
+
+      nav .page {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 10px 0;
+      }
+
+      nav a {
+        flex: 0 0 auto;
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: #314156;
+        font-size: 0.91rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      nav a:hover {
+        background: #e8eef8;
+        color: var(--blue);
+      }
+
+      main {
+        padding: 30px 0 70px;
+      }
+
+      section {
+        margin-top: 34px;
+      }
+
+      .section-head {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .section-head p {
+        max-width: 860px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+      }
+
+      .panel.pad {
+        padding: 22px;
+      }
+
+      .panel h3 {
+        margin-bottom: 10px;
+      }
+
+      .panel p,
+      .panel li {
+        color: #465260;
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: 7px 1fr;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: var(--shadow);
+      }
+
+      .callout strong {
+        color: var(--ink);
+      }
+
+      .callout .bar {
+        background: var(--blue);
+      }
+
+      .callout .body {
+        padding: 20px 22px;
+      }
+
+      .callout.warning .bar {
+        background: var(--amber);
+      }
+
+      .callout.success .bar {
+        background: var(--green);
+      }
+
+      .comparison {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .lane {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: var(--shadow);
+      }
+
+      .lane-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        background: #f8fafc;
+      }
+
+      .lane-title span {
+        color: var(--muted);
+        font-size: 0.9rem;
+        font-weight: 700;
+      }
+
+      .lane-body {
+        display: grid;
+        gap: 12px;
+        padding: 18px;
+      }
+
+      .box {
+        padding: 14px 15px;
+        border: 1px solid #dce2ec;
+        border-radius: 8px;
+        background: #fbfcfe;
+      }
+
+      .box strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .arrow {
+        color: var(--muted);
+        font-size: 0.95rem;
+        font-weight: 750;
+        text-align: center;
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .flow {
+        display: grid;
+        gap: 10px;
+      }
+
+      .flow-step {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        gap: 14px;
+        align-items: start;
+        padding: 15px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .flow-num {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 999px;
+        background: #e8eef8;
+        color: var(--blue);
+        font-weight: 850;
+      }
+
+      .flow-step p {
+        color: #465260;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: var(--shadow);
+      }
+
+      th,
+      td {
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f8fafc;
+        color: #2b3645;
+        font-size: 0.88rem;
+        font-weight: 800;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      td {
+        color: #465260;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 1.18rem;
+      }
+
+      li + li {
+        margin-top: 0.48rem;
+      }
+
+      .code-block {
+        overflow: auto;
+        padding: 16px;
+        border: 1px solid #dce2ec;
+        border-radius: 8px;
+        background: #101722;
+        color: #e9eef7;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        font-size: 0.88rem;
+        line-height: 1.62;
+      }
+
+      .code-block code {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font-size: inherit;
+      }
+
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 0 9px;
+        border-radius: 999px;
+        background: #eef3ff;
+        color: #244fd6;
+        font-size: 0.78rem;
+        font-weight: 800;
+      }
+
+      .tag.teal {
+        background: #e8f5f3;
+        color: var(--teal);
+      }
+
+      .tag.red {
+        background: #faeeee;
+        color: var(--red);
+      }
+
+      .tag.amber {
+        background: #fbf2df;
+        color: var(--amber);
+      }
+
+      .file-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .file-row {
+        display: grid;
+        gap: 4px;
+        padding: 13px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .file-row strong {
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        font-size: 0.91rem;
+      }
+
+      .file-row span {
+        color: var(--muted);
+      }
+
+      .footer-note {
+        margin-top: 34px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      @media (max-width: 860px) {
+        .grid.two,
+        .grid.three,
+        .comparison {
+          grid-template-columns: 1fr;
+        }
+
+        header {
+          padding-top: 40px;
+        }
+
+        .page {
+          width: min(100% - 26px, 1180px);
+        }
+
+        .flow-step {
+          grid-template-columns: 38px 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page">
+      <p class="eyebrow">Architecture Change · 2026-06-24</p>
+      <h1>Incipel agent architecture 变更说明</h1>
+      <p class="lead">
+        本文记录本次将 agent runtime 从 Supabase Edge Function 迁移到
+        Mastra application + Hono server adapter 的设计背景、代码边界、运行流程、本地开发变化和后续部署影响。
+        移动端继续消费 AG-UI SSE 事件，Supabase 继续负责 Auth、Postgres 和 Storage。
+      </p>
+      <div class="meta-row" aria-label="变更摘要">
+        <span class="pill">状态：已实现并通过验证</span>
+        <span class="pill">运行时：Mastra application</span>
+        <span class="pill">协议：AG-UI over SSE</span>
+        <span class="pill">数据层：Supabase</span>
+      </div>
+    </header>
+
+    <nav aria-label="文档目录">
+      <div class="page">
+        <a href="#summary">摘要</a>
+        <a href="#reason">为什么改</a>
+        <a href="#before-after">前后对比</a>
+        <a href="#runtime-flow">运行流程</a>
+        <a href="#code-map">代码边界</a>
+        <a href="#local-dev">本地开发</a>
+        <a href="#deployment">部署影响</a>
+        <a href="#verification">验证记录</a>
+        <a href="#next">后续事项</a>
+      </div>
+    </nav>
+
+    <main class="page">
+      <section id="summary">
+        <div class="section-head">
+          <h2>1. 摘要</h2>
+          <p>
+            这次变更只移动 agent runtime 的承载方式，不改移动端协议，不改核心数据模型，
+            也不把产品语义交给第三方 framework。
+          </p>
+        </div>
+
+        <div class="grid three">
+          <article class="panel pad">
+            <span class="tag">Changed</span>
+            <h3>agent runtime 改为 Node server</h3>
+            <p>
+              <code>packages/agent/src/mastra-app.ts</code> 注册 Mastra application 和
+              agents；AG-UI HTTP routes 直接注册到外层 Hono app，再由 <code>@mastra/hono</code> 初始化。
+            </p>
+          </article>
+
+          <article class="panel pad">
+            <span class="tag teal">Kept</span>
+            <h3>AG-UI 协议保持不变</h3>
+            <p>
+              移动端仍通过 <code>/run</code> 接收 AG-UI SSE 事件：
+              文本流、tool call 事件、<code>STATE_SNAPSHOT</code> 和
+              <code>STATE_DELTA</code> 的行为继续由 Incipel 代码控制。
+            </p>
+          </article>
+
+          <article class="panel pad">
+            <span class="tag amber">Moved</span>
+            <h3>Supabase 回到数据层角色</h3>
+            <p>
+              Supabase 继续负责 Auth、Postgres、Storage 和本地开发数据库；
+              <code>supabase/functions/agent</code> 仅保留历史入口，不再作为新的
+              agent runtime 部署目标。
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="reason">
+        <div class="section-head">
+          <h2>2. 为什么改</h2>
+          <p>
+            Incipel 的 agent 不是普通 HTTP handler。它需要长程对话、streaming、
+            结构化 tool use，以及未来的 skill、hook、subagent 等机制。
+          </p>
+        </div>
+
+        <div class="comparison">
+          <article class="lane">
+            <div class="lane-title">
+              <h3>Supabase Edge Function 承载 agent</h3>
+              <span>旧方案</span>
+            </div>
+            <div class="lane-body">
+              <div class="box">
+                <strong>适合轻量 HTTP 入口</strong>
+                <p>用来接收请求和返回短响应很直接，但长轮 streaming agent 会暴露运行时限制。</p>
+              </div>
+              <div class="box">
+                <strong>Deno 依赖图较难维护</strong>
+                <p>Node 生态 agent framework、测试工具和 provider SDK 的组合需要额外适配。</p>
+              </div>
+              <div class="box">
+                <strong>本地多 worktree 不够顺手</strong>
+                <p>多个开发 worktree 共用 Supabase stack 时，agent 热重载和端口隔离成本较高。</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="lane">
+            <div class="lane-title">
+              <h3>Mastra application server</h3>
+              <span>新方案</span>
+            </div>
+            <div class="lane-body">
+              <div class="box">
+                <strong>agent 行为放在 agent 层</strong>
+                <p>Mastra application 负责注册 <code>Agent</code>、tool 注册、streaming chunk 和模型调用；AG-UI HTTP routes 仍由 Incipel 的 Hono handlers 承载。</p>
+              </div>
+              <div class="box">
+                <strong>协议边界仍由项目控制</strong>
+                <p>外层 Hono routes 继续输出 AG-UI SSE，不让 Mastra 接管移动端协议。</p>
+              </div>
+              <div class="box">
+                <strong>为后续机制保留空间</strong>
+                <p>skill、hook、subagent 以后可以从 Mastra 层扩展，避免把这些能力塞进 Edge Function。</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="before-after">
+        <div class="section-head">
+          <h2>3. 前后架构对比</h2>
+          <p>
+            旧方案把 HTTP 入口、agent 编排和模型 provider 都放在 Supabase Function 中。
+            新方案把 agent runtime 独立为 Node server，Supabase 专注保存用户、会话和剧本数据。
+          </p>
+        </div>
+
+        <div class="comparison">
+          <article class="lane">
+            <div class="lane-title">
+              <h3>Before</h3>
+              <span>Edge Function runtime</span>
+            </div>
+            <div class="lane-body">
+              <div class="box">
+                <strong>RN / Expo mobile app</strong>
+                <p>请求 <code>/functions/v1/agent</code>，消费 AG-UI SSE。</p>
+              </div>
+              <div class="arrow">↓ HTTPS + JWT</div>
+              <div class="box">
+                <strong>Supabase Edge Function</strong>
+                <p>承载 Hono app、authentication、run orchestration 和 model runtime。</p>
+              </div>
+              <div class="arrow">↓ direct provider call</div>
+              <div class="box">
+                <strong>AI SDK + OpenRouter provider</strong>
+                <p>项目代码直接处理 provider 事件并转换为内部 stream chunk。</p>
+              </div>
+              <div class="arrow">↕</div>
+              <div class="box">
+                <strong>Supabase data plane</strong>
+                <p>Auth、Postgres、Storage，同时也承载 agent runtime。</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="lane">
+            <div class="lane-title">
+              <h3>After</h3>
+              <span>Mastra application runtime</span>
+            </div>
+            <div class="lane-body">
+              <div class="box">
+                <strong>RN / Expo mobile app</strong>
+                <p>请求 <code>EXPO_PUBLIC_AGENT_URL</code>，继续消费 AG-UI SSE。</p>
+              </div>
+              <div class="arrow">↓ HTTPS + JWT</div>
+              <div class="box">
+                <strong>Mastra application + Hono adapter</strong>
+                <p>Incipel 先把 <code>/run</code>、<code>/logline</code> 和 <code>/health</code> 直接注册到 Hono app，<code>@mastra/hono</code> 再初始化同一个 app；<code>@hono/node-server</code> 只负责监听 HTTP。</p>
+              </div>
+              <div class="arrow">↓ Mastra Agent.stream</div>
+              <div class="box">
+                <strong>Mastra + OpenRouter</strong>
+                <p>Mastra agent 处理 model streaming、tool schema 和 tool call 生命周期。</p>
+              </div>
+              <div class="arrow">↕ service role</div>
+              <div class="box">
+                <strong>Supabase data plane</strong>
+                <p>Auth、Postgres、Storage；不再部署新的 agent runtime。</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="runtime-flow">
+        <div class="section-head">
+          <h2>4. 运行流程</h2>
+          <p>
+            外层 run orchestration 仍由 Incipel 实现。Mastra application 接管 agent registry、
+            模型调用的 framework 部分，AG-UI routes、事件生成、数据库事务和产品状态更新仍在项目代码内完成。
+          </p>
+        </div>
+
+        <div class="grid two">
+          <article class="panel pad">
+            <h3><code>/run</code>：对话回合</h3>
+            <div class="flow" aria-label="/run 时序">
+              <div class="flow-step">
+                <div class="flow-num">1</div>
+                <p>外层 Hono route 校验客户端 JWT，并确认用户可以访问目标 session。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">2</div>
+                <p>读取当前 <code>Screenplay</code> state、最近 messages 和本轮用户输入。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">3</div>
+                <p>根据当前 state 生成 prompt 和 tool schema，再调用 Mastra <code>Agent.stream</code>。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">4</div>
+                <p>把 Mastra chunks 转成项目内部 <code>StreamChunk</code>：文本、tool call start、tool call payload。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">5</div>
+                <p>run orchestration 应用 tool call，发出 AG-UI 文本事件和 <code>STATE_DELTA</code>。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">6</div>
+                <p>回合结束后保存 assistant message、最新 document state 和必要的 document version。</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="panel pad">
+            <h3><code>/logline</code>：欢迎页灵感生成</h3>
+            <div class="flow" aria-label="/logline 时序">
+              <div class="flow-step">
+                <div class="flow-num">1</div>
+                <p>客户端请求 logline 生成，不写入数据库。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">2</div>
+                <p>model provider 使用 Mastra agent 走一次短生成，<code>maxSteps</code> 设为 1。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">3</div>
+                <p>返回修剪后的 logline 文本，由客户端填入输入框。</p>
+              </div>
+              <div class="flow-step">
+                <div class="flow-num">4</div>
+                <p>用户点“开始创作”后，真正的 session 和 document 再由后续流程创建。</p>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="callout success" style="margin-top: 16px">
+          <div class="bar"></div>
+          <div class="body">
+            <p>
+              <strong>关键不变量：</strong>
+              AG-UI 事件、<code>Screenplay</code> mutation contract、authentication、SupabaseStore
+              仍属于 Incipel 的核心边界。Mastra 是 agent framework，不是产品协议的拥有者。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="code-map">
+        <div class="section-head">
+          <h2>5. 代码边界</h2>
+          <p>
+            本次变更把“模型 framework 适配”和“产品运行编排”分开。下面这些文件是理解新架构的入口。
+          </p>
+        </div>
+
+        <div class="file-list">
+          <div class="file-row">
+            <strong>packages/agent/src/index.ts</strong>
+            <span>Node server entrypoint。读取 <code>HOST</code>、<code>AGENT_PORT</code> 或 <code>PORT</code>，创建 Hono app，交给 <code>MastraServer</code> 初始化后再启动 HTTP server。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/mastra-app.ts</strong>
+            <span>Mastra application registry。注册 <code>screenwriter</code>、<code>logline</code> agents，并配置 Mastra framework storage。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/routes.ts</strong>
+            <span>Hono route handlers。负责 <code>/run</code>、<code>/logline</code>、<code>/health</code>、authentication、SSE response 和 store 注入。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/app.ts</strong>
+            <span>测试用 Hono wrapper。让既有 <code>app.request()</code> 测试继续覆盖同一组 route handlers。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/model/mastra.ts</strong>
+            <span>Mastra provider adapter。从 Mastra application registry 获取已注册 agents，再把 Incipel prompt、tool definitions 和 model config 映射为 <code>Agent.stream()</code> 与 <code>createTool()</code>。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/model/provider.ts</strong>
+            <span>model provider selection。<code>MODEL_PROVIDER=stub</code> 用测试 provider，<code>openrouter</code> 走 Mastra provider。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/model/config.ts</strong>
+            <span>模型配置读取。保留 provider options，但不再直接依赖旧 AI SDK provider。</span>
+          </div>
+          <div class="file-row">
+            <strong>tools/incipel-dev/cli.mjs</strong>
+            <span>本地开发 orchestration。为每个 worktree 计算稳定 agent port，写入 env，并后台启动 <code>pnpm --filter @incipel/agent dev</code>。</span>
+          </div>
+          <div class="file-row">
+            <strong>scripts/dev-android.sh · scripts/dev-ios.sh</strong>
+            <span>移动端开发脚本。Android 会同时 reverse Supabase API port、Metro port 和 agent server port。</span>
+          </div>
+          <div class="file-row">
+            <strong>supabase/functions/agent</strong>
+            <span>历史入口。保留文件用于说明迁移结果，运行时会明确报错；不要再把它作为新的 agent 部署目标。</span>
+          </div>
+        </div>
+
+        <div class="section-head" style="margin-top: 22px">
+          <h3>依赖变化</h3>
+        </div>
+        <table aria-label="依赖变化">
+          <thead>
+            <tr>
+              <th>类型</th>
+              <th>包</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>新增</td>
+              <td><code>@mastra/core</code></td>
+              <td>提供 Mastra application、<code>Agent</code>、tool registration 和 streaming runtime。</td>
+            </tr>
+            <tr>
+              <td>新增</td>
+              <td><code>@mastra/hono</code></td>
+              <td>提供 Hono server adapter，用 <code>MastraServer</code> 初始化 Hono app 并注册 Mastra routes。</td>
+            </tr>
+            <tr>
+              <td>新增</td>
+              <td><code>@hono/node-server</code></td>
+              <td>在 Node 环境监听 HTTP；当前使用 1.19.14 以满足 <code>@mastra/hono</code> 的 peer dependency。</td>
+            </tr>
+            <tr>
+              <td>保留</td>
+              <td><code>hono</code></td>
+              <td>承载 AG-UI SSE routes，同时作为 Mastra Hono adapter 的 app 容器。</td>
+            </tr>
+            <tr>
+              <td>保留</td>
+              <td><code>ai</code></td>
+              <td>继续使用 v6；Mastra 也基于 AI SDK 运行模型调用。</td>
+            </tr>
+            <tr>
+              <td>移除</td>
+              <td><code>@openrouter/ai-sdk-provider</code></td>
+              <td>OpenRouter 接入改由 Mastra model configuration 承担。</td>
+            </tr>
+            <tr>
+              <td>保留</td>
+              <td><code>zod</code> 3.x</td>
+              <td>项目现有代码仍使用 Zod 3 API；Mastra 支持该版本范围，因此暂不改到 Zod 4。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="local-dev">
+        <div class="section-head">
+          <h2>6. 本地开发变化</h2>
+          <p>
+            新方案的本地开发重点是：每个 worktree 有自己的 agent server port，
+            移动端通过 <code>EXPO_PUBLIC_AGENT_URL</code> 指向对应 server。
+          </p>
+        </div>
+
+        <div class="grid two">
+          <article class="panel pad">
+            <h3>常规开发</h3>
+            <div class="code-block" role="img" aria-label="常规开发命令">
+              <code>pnpm dx up</code>
+            </div>
+            <p style="margin-top: 12px">
+              <code>tools/incipel-dev</code> 会同步 <code>apps/mobile/.env</code> 和
+              <code>supabase/.env</code>，然后启动 agent dev server。agent server 的健康检查地址为
+              <code>http://127.0.0.1:&lt;agent-port&gt;/health</code>。
+            </p>
+          </article>
+
+          <article class="panel pad">
+            <h3>单独启动 agent</h3>
+            <div class="code-block" role="img" aria-label="单独启动 agent 命令">
+              <code>pnpm --filter @incipel/agent dev</code>
+            </div>
+            <p style="margin-top: 12px">
+              server 从环境变量读取 <code>SUPABASE_URL</code>、<code>SUPABASE_SERVICE_ROLE_KEY</code>、
+              <code>MODEL_PROVIDER</code>、<code>OPENROUTER_API_KEY</code> 和 <code>AGENT_PORT</code>。
+            </p>
+          </article>
+        </div>
+
+        <table style="margin-top: 16px" aria-label="本地环境变量">
+          <thead>
+            <tr>
+              <th>变量</th>
+              <th>写入位置</th>
+              <th>用途</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>EXPO_PUBLIC_AGENT_URL</code></td>
+              <td><code>apps/mobile/.env</code></td>
+              <td>移动端访问 Mastra application agent server 的 base URL。</td>
+            </tr>
+            <tr>
+              <td><code>AGENT_PORT</code></td>
+              <td><code>supabase/.env</code></td>
+              <td>agent server 监听端口。由 worktree 路径计算，避免常见端口冲突。</td>
+            </tr>
+            <tr>
+              <td><code>SUPABASE_URL</code></td>
+              <td><code>supabase/.env</code></td>
+              <td>agent server 访问本地或远端 Supabase API。</td>
+            </tr>
+            <tr>
+              <td><code>SUPABASE_SERVICE_ROLE_KEY</code></td>
+              <td><code>supabase/.env</code></td>
+              <td>服务端保存 messages、documents 和 document_versions。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout warning" style="margin-top: 16px">
+          <div class="bar"></div>
+          <div class="body">
+            <p>
+              <strong>Android 变化：</strong>
+              设备或 emulator 需要同时访问 Metro、Supabase API 和 agent server。
+              因此 <code>scripts/dev-android.sh</code> 会根据 <code>apps/mobile/.env</code>
+              中的 agent URL 追加对应的 <code>adb reverse</code>。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="deployment">
+        <div class="section-head">
+          <h2>7. 部署影响</h2>
+          <p>
+            生产环境以后需要一个 Node hosting target 来运行 agent server。Supabase Function
+            不再是 agent 的生产部署目标。
+          </p>
+        </div>
+
+        <div class="grid two">
+          <article class="panel pad">
+            <h3>需要新增的部署职责</h3>
+            <ul>
+              <li>选择 Node hosting target，例如 Cloud Run、Fly.io、Railway 或自有容器平台。</li>
+              <li>为 agent server 配置 secrets：Supabase service role key、OpenRouter API key、JWT 参数。</li>
+              <li>为 <code>/health</code> 配置健康检查。</li>
+              <li>把移动端生产环境的 <code>EXPO_PUBLIC_AGENT_URL</code> 指向新的 HTTPS endpoint。</li>
+            </ul>
+          </article>
+
+          <article class="panel pad">
+            <h3>继续不变的部署职责</h3>
+            <ul>
+              <li>Supabase migrations 继续管理 Postgres schema。</li>
+              <li>Supabase Auth 继续签发客户端 JWT。</li>
+              <li>客户端仍按 AG-UI SSE 事件渲染文本、inline cards 和文档状态。</li>
+              <li>RLS 与服务端访问边界继续由 Supabase 配置和 agent store 共同约束。</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="callout" style="margin-top: 16px">
+          <div class="bar"></div>
+          <div class="body">
+            <p>
+              <strong>推荐原则：</strong>
+              先选择最容易观察日志、配置 secrets、支持 streaming response 的 Node hosting target。
+              不要同时维护 Edge 与 Node 两套生产 agent runtime，否则会增加部署、监控和文档维护成本。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="verification">
+        <div class="section-head">
+          <h2>8. 验证记录</h2>
+          <p>
+            本次迁移完成后，已覆盖类型检查、单元测试、本地开发 CLI 测试和 agent server health smoke test。
+          </p>
+        </div>
+
+        <table aria-label="验证记录">
+          <thead>
+            <tr>
+              <th>验证项</th>
+              <th>命令或行为</th>
+              <th>结果</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>类型检查</td>
+              <td><code>pnpm -r typecheck</code></td>
+              <td>通过：shared、agent、mobile 均完成 typecheck。</td>
+            </tr>
+            <tr>
+              <td>项目测试</td>
+              <td><code>pnpm test</code></td>
+              <td>通过：shared 12 项、mobile 31 项、agent 120 项测试均通过。</td>
+            </tr>
+            <tr>
+              <td>开发 CLI 测试</td>
+              <td><code>node --test tools/incipel-dev/cli.test.mjs</code></td>
+              <td>通过：17 项测试均通过。</td>
+            </tr>
+            <tr>
+              <td>格式检查</td>
+              <td><code>git diff --check</code></td>
+              <td>通过：未发现 whitespace error。</td>
+            </tr>
+            <tr>
+              <td>health smoke test</td>
+              <td><code>MODEL_PROVIDER=stub AGENT_PORT=4111 pnpm --filter @incipel/agent start</code></td>
+              <td><code>/health</code> 返回 <code>{"ok":true,"service":"incipel-agent"}</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="next">
+        <div class="section-head">
+          <h2>9. 后续事项</h2>
+          <p>
+            本次变更已经完成开发和本地验证。上线前还需要把运行环境和后续 agent 能力设计补齐。
+          </p>
+        </div>
+
+        <div class="grid three">
+          <article class="panel pad">
+            <span class="tag">Deploy</span>
+            <h3>选择生产 Node hosting target</h3>
+            <p>
+              比较 streaming response、日志、secret 管理、region、成本和回滚方式，再写入新的部署 ADR。
+            </p>
+          </article>
+          <article class="panel pad">
+            <span class="tag teal">Observe</span>
+            <h3>补充 runtime 观测</h3>
+            <p>
+              为 <code>/run</code> 增加结构化日志、provider latency、tool call count、error code
+              和 session-scoped trace id。
+            </p>
+          </article>
+          <article class="panel pad">
+            <span class="tag amber">Extend</span>
+            <h3>设计 skill / hook / subagent</h3>
+            <p>
+              以 Mastra application 为扩展点，但保持 AG-UI 事件和 <code>Screenplay</code>
+              mutation contract 由 Incipel 负责。
+            </p>
+          </article>
+        </div>
+
+        <p class="footer-note">
+          相关文档：
+          <a href="./adr/0011-mastra-node-agent-runtime.md">ADR-0011</a>、
+          <a href="./system-design.md">system-design.md</a>、
+          <a href="./worktree-dev.md">worktree-dev.md</a>。
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

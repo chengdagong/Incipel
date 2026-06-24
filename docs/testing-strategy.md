@@ -12,7 +12,7 @@
 | 层 | 包 | 性质 |
 |---|---|---|
 | 契约 | `@incipel/shared` | 纯函数:类型、`buildToolSchemas`、`idSetsOf`、`serialize`、`sse`。无 I/O,确定性强 |
-| 计算 | `@incipel/agent` | Hono 端点、AG-UI 一轮编排、模型抽象层、JWT 校验、Supabase 落库 |
+| 计算 | `@incipel/agent` | Hono 端点、AG-UI 一轮编排、模型抽象层、JWT 校验、Supabase 写入数据库 |
 | 客户端 | `@incipel/mobile` | Expo RN + `@ag-ui/client`,事件到 React state 的映射 |
 | 数据 | `supabase/migrations/0001_init.sql` | schema + RLS + `save_turn` RPC + 表/函数授权 |
 
@@ -63,14 +63,14 @@
 
 - 事件顺序:`RUN_STARTED` →(`newConnection` 时)`STATE_SNAPSHOT` → 文本/增量交错 → `options`(仅当本轮有选项)→ `RUN_FINISHED`。
 - 文本起止:本轮无文本时,不发 `TEXT_MESSAGE_START`/`END`。
-- 落库:`saveTurn` 收到的 `changed` 标志正确;`deltas`/`options`/`assistantText` 与事件一致。
+- 写入数据库:`saveTurn` 收到的 `changed` 标志正确;`deltas`/`options`/`assistantText` 与事件一致。
 - 错误路径:`loadSession` 抛错 → `RUN_ERROR{code:'LOAD_FAILED'}` 且不调 `saveTurn`;provider 两次都抛 → `MODEL_FAILED`;`saveTurn` 抛错 → `PERSIST_FAILED`。
 - 重试不变量(经评审强化,见 [KI-1](./known-issues.md#ki-1-重试循环未按尝试隔离状态与流式输出--high)):仅断言「第二次成功、无 `RUN_ERROR`」**不够**——失败尝试在抛错前已把事件写进 SSE 流、客户端已应用,且 `state`/`textStarted`/`messageId` 跨尝试保留。验收标准改为:
-  - 第一次发一次 `add_character` 后抛错、第二次重发同一调用并成功 → 落库 `state.characters.length === 1`、无重复 id;
+  - 第一次发一次 `add_character` 后抛错、第二次重发同一调用并成功 → 写入数据库后的 `state.characters.length === 1`、无重复 id;
   - 第一次 `add` 后 `remove` 再抛错、第二次对该 id `update` → 不抛 `ApplyError`、整轮成功;
-  - 端到端不变量:客户端实收的 `STATE_DELTA` 重放结果 == 落库 `messages.deltas` 重放结果 == `documents.state`(三者逐字段相等);客户端实收文本重组 == 落库 `assistantText`。
+  - 端到端不变量:客户端实收的 `STATE_DELTA` 重放结果 == 写入数据库后的 `messages.deltas` 重放结果 == `documents.state`(三者逐字段相等);客户端实收文本重组 == 写入数据库后的 `assistantText`。
 
-> 这条「重试未按尝试隔离」是评审确认的 High 缺陷(一个根因、四种表现),细节与统一修复见 [KI-1](./known-issues.md)。回归测试与修复应同批进行。
+> 这条「重试未按尝试隔离」是评审确认的 High 缺陷(一个原因、四种表现),细节与统一修复见 [KI-1](./known-issues.md)。回归测试与修复应同批进行。
 
 ### 3.4 `auth.ts` — 安全边界(单元,目标 ≥ 90%)
 
@@ -107,8 +107,8 @@
 - `save_turn` 行为:`p_changed=false` 不写 `document_versions`;`p_changed=true` 写一版且 `turn_index = max+1`;`p_user_text` 为空则不插 user 消息;messages + documents + sessions.updated_at 同时变更(原子性)。
 - `save_turn` 授权:`EXECUTE` 已从 `PUBLIC` 收回、仅授予 `service_role`——以 `authenticated` 身份经 RPC 调用应被拒。
 - 级联删除:删 `sessions` 行,子表连带清除。
-- 幂等(经评审新增,见 [KI-2](./known-issues.md#ki-2-save_turn-无幂等键重发同一轮重复落库--medium)):同一 `runId` 重发同一轮**不应**产生重复的 messages 与 `document_versions`。当前实现无幂等键,此测试会失败,暴露与 §11「重发本轮不产生脏数据」的偏差。
-- 并发(经评审新增,见 [KI-3](./known-issues.md#ki-3-同会话并发-save_turn-竞争-turn_index--medium)):对同一 session 并发两次 `save_turn`(均 `changed=true`)。当前实现下一方撞 `document_versions` 唯一约束、整轮回滚(用以固化「原子回滚、无半截脏数据」并暴露「败方整轮丢失」);修复后断言两轮都成功、`turn_index` 连续。
+- 幂等(经评审新增,见 [KI-2](./known-issues.md#ki-2-save_turn-无幂等键重发同一轮重复写入数据库--medium)):同一 `runId` 重发同一轮**不应**产生重复的 messages 与 `document_versions`。当前实现无幂等键,此测试会失败,暴露与 §11「重发本轮不产生不一致数据」的偏差。
+- 并发(经评审新增,见 [KI-3](./known-issues.md#ki-3-同会话并发-save_turn-竞争-turn_index--medium)):对同一 session 并发两次 `save_turn`(均 `changed=true`)。当前实现下一方撞 `document_versions` 唯一约束、整轮回滚(用以固化「原子回滚、没有部分写入」并暴露「败方整轮丢失」);修复后断言两轮都成功、`turn_index` 连续。
 
 ### 3.8 会话创建路径(`store.ts`,集成)
 
@@ -133,14 +133,14 @@
 | `store.ts` 创建路径 | 集成 | 卡死会话 + 并发首轮(KI-5) |
 | mobile 客户端 | 暂缓 | v1 不阻塞;先抽 reducer |
 
-不测:Hono / AI SDK / supabase-js / jose 等框架代码(含 jose 的 JWKS 拉取/缓存/轮换);适配器工厂的纯接线;样板。
+不测:Hono / Mastra / supabase-js / jose 等框架代码(含 jose 的 JWKS 拉取/缓存/轮换);适配器工厂的纯接线;样板。
 
 ---
 
 ## 5. 需要的可测试性改造(轻量,贴合现有接缝)
 
 1. 确定性伪 ModelProvider(最重要的缺失 fixture):一个按脚本产出 `StreamChunk` 的异步生成器,实现 `ModelProvider` 接口。它解锁 §3.3 全部编排测试与 §3.5 happy 路径,完全离线。
-2. `/run` 加注入接缝:把 `index.ts` 改成 `createApp(deps?: { store?; provider? })`,与 `runTurnCore` 的 `RunDeps` 对齐,让 HTTP happy 路径也能喂伪 provider。缺省仍走真实实现。
+2. `/run` 加注入接缝:把 `index.ts` 改成 `createApp(deps?: { store?; provider? })`,与 `runTurnCore` 的 `RunDeps` 保持一致,让 HTTP happy 路径也能喂伪 provider。缺省仍走真实实现。
 3. 抽出客户端事件 reducer:把 `apps/mobile/src/agui/client.ts` 里 AG-UI 事件到 state 的映射逻辑抽成不依赖 React/`@ag-ui/client` 的纯函数,用 Vitest 验证「快照→增量→选项→清空」的状态推进。
 
 ---
@@ -152,7 +152,7 @@
 | 1 | `pnpm -r typecheck`(已有) | 每个 PR |
 | 2 | `pnpm -r test`(Vitest:shared + agent) | 每个 PR,秒级,无外部依赖 |
 | 3 | pgTAP:`supabase db reset` + `supabase test db` | 每个 PR(独立 job,较慢但 gate) |
-| 4 | smoke / verify-summary(真实模型) | 定时(nightly)或手动,不进 PR——花钱、不确定、需 key |
+| 4 | smoke / verify-summary / `test:real-ai`(真实模型) | 定时(nightly)或手动,不进 PR——花钱、不确定、需 key |
 
 建议在根 `package.json` 加 `"test": "pnpm -r test"`,各包加 `vitest` 与 `"test": "vitest run"`。
 

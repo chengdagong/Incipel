@@ -20,6 +20,7 @@ import { MenuButton } from '../../src/components/Drawer';
 import { useDrawer } from '../../src/drawer/DrawerProvider';
 import { GENRE_I18N, useI18n } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
+import { welcomeStartParams } from '../../src/welcome/start-params';
 
 const { palette, accent, accentSoft, fonts } = defaultTheme;
 
@@ -34,7 +35,7 @@ export default function WelcomeScreen() {
   const [ideaFocused, setIdeaFocused] = useState(false);
   const [rolling, setRolling] = useState(false);
   const [rollError, setRollError] = useState<string | null>(null);
-  // 骰子旋转(每次点一圈,对齐原型 diceSpin)。
+  // 骰子旋转(每次点一圈,对应原型 diceSpin)。
   const spin = useRef(new Animated.Value(0)).current;
   const spinDeg = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
@@ -70,20 +71,23 @@ export default function WelcomeScreen() {
 
   // 「开始创作」:生成 threadId 并跳到对话屏,带上灵感(选了题材则按原型折进首条消息)作为首轮。
   function start() {
-    const trimmed = idea.trim();
-    if (!trimmed) return;
+    const params = welcomeStartParams(idea, newThreadId);
+    if (!params) return;
     // 题材不拼进消息正文(避免污染聊天显示、影响 AI 判语言);经 params → forwardedProps 传给
-    // agent 作首轮定调(对齐设置页「界面语言不影响 AI 回复语言」的承诺)。
+    // agent 作首轮定调(保持设置页「界面语言不影响 AI 回复语言」的承诺)。
     router.push({
       pathname: '/chat',
-      params: { idea: trimmed, threadId: newThreadId(), ...(selectedGenre ? { genre: selectedGenre } : {}) },
+      params: { ...params, ...(selectedGenre ? { genre: selectedGenre } : {}) },
     });
   }
 
   const canStart = !!idea.trim();
 
   return (
-    <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
+    <View
+      style={[styles.screen, { backgroundColor: palette.pageBg }]}
+      testID={idea.trim() ? 'welcome-has-idea' : 'welcome-empty-idea'}
+    >
       {/* 页内顶栏:左上汉堡唤出侧边抽屉。 */}
       <View style={[styles.topBar, { paddingTop: insets.top + 18 }]}>
         <MenuButton variant="circle" onPress={drawer.open} />
@@ -113,6 +117,9 @@ export default function WelcomeScreen() {
             placeholderTextColor={palette.placeholder}
             testID="welcome-idea"
             multiline
+            returnKeyType="done"
+            blurOnSubmit
+            onSubmitEditing={start}
           />
           <Pressable
             style={[

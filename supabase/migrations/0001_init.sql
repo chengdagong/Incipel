@@ -157,7 +157,7 @@ create policy messages_delete on public.messages
   ));
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- save_turn:一轮结束时由 agent 通过 supabase.rpc('save_turn', ...) 原子落库。
+-- save_turn:一轮结束时由 agent 通过 supabase.rpc('save_turn', ...) 原子写入数据库。
 --
 -- 跨包契约 —— 参数名/顺序/语义必须与 agent 的 src/store.ts 调用完全一致:
 --   p_session_id uuid, p_user_text text, p_assistant_text text,
@@ -170,7 +170,7 @@ create policy messages_delete on public.messages
 --   4. 若 p_changed 为真,插入一条 document_versions
 --      (turn_index = 该会话当前最大 turn_index + 1)。
 --
--- security definer:让 agent 经 RPC 即可原子落库;函数内对所属用户的隔离
+-- security definer:让 agent 经 RPC 即可原子写入数据库;函数内对所属用户的隔离
 -- 已由 agent 在调用前校验(service key 路径)。search_path 锁死防注入。
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -237,7 +237,7 @@ $$;
 -- 服务端校验、版本顺序与上下文完整性,篡改自己的剧本与历史。故 authenticated 对这三张表
 -- 不给任何写权限。
 --
---   · service_role:agent 运行时身份,带 BYPASSRLS,授予四张表全部 DML 后即可越过 RLS 落库。
+--   · service_role:agent 运行时身份,带 BYPASSRLS,授予四张表全部 DML 后即可越过 RLS 写入数据库。
 --   · authenticated:客户端(含匿名登录,其 JWT 的 role 即 authenticated)只直接读自己的
 --     sessions / documents(history 列表、works 内嵌读 documents.state),并可删除自己的
 --     会话;删除经外键 on delete cascade 连带清掉子表(级联是系统行为,无需子表 delete 权)。

@@ -6,13 +6,12 @@ tags:
   - stub-agent
 ---
 - runFlow: ../subflows/enter-welcome.yaml
-# 在灵感框打暗号(按 testID 聚焦输入框,再 inputText),收起键盘后开始创作 → 首轮把暗号作为用户消息发出
+# 在灵感框打暗号(按 testID 聚焦输入框,再 inputText),点键盘完成键开始创作 → 首轮把暗号作为用户消息发出
 - tapOn:
     id: "welcome-idea"
 - inputText: "__STUB_ERROR__"
-- hideKeyboard
 - tapOn:
-    id: "welcome-start"
+    id: "Done"
 # stub 见暗号抛错 → runTurnCore 重试一次仍失败 → RUN_ERROR → 对话屏显示「出错了」(内容断言)与重试入口
 - extendedWaitUntil:
     visible: ".*出错了.*"
