@@ -36,3 +36,20 @@ export function scaleReaderStyle(style: ScalableText, fontScale: number, lineSca
   if (typeof style.lineHeight === 'number') out.lineHeight = round2(style.lineHeight * fontScale * lineScale);
   return out;
 }
+
+export type ParaLevel = 'compact' | 'standard' | 'loose';
+
+export const PARA_SCALES: Record<ParaLevel, number> = {
+  compact: 0.6,
+  standard: 1,
+  loose: 1.6,
+};
+
+export function normalizeParaLevel(v: unknown): ParaLevel {
+  return v === 'compact' || v === 'loose' ? v : 'standard';
+}
+
+// 段落 / 块之间的间距按段落间距档缩放;间距为整数像素,取整。
+export function scaleGap(base: number, paraScale: number): number {
+  return Math.round(base * paraScale);
+}

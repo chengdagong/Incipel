@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   FONT_SCALES,
   LINE_SCALES,
+  PARA_SCALES,
   normalizeFontLevel,
   normalizeLineLevel,
+  normalizeParaLevel,
+  scaleGap,
   scaleReaderStyle,
 } from './readingScale';
 
@@ -46,5 +49,23 @@ describe('readingScale', () => {
 
   it('空样式返回空对象', () => {
     expect(scaleReaderStyle({}, 1.3, 1.15)).toEqual({});
+  });
+
+  it('段落间距档倍率取值', () => {
+    expect(PARA_SCALES).toEqual({ compact: 0.6, standard: 1, loose: 1.6 });
+  });
+
+  it('段落间距未知 / 损坏值回落标准档', () => {
+    expect(normalizeParaLevel('huge')).toBe('standard');
+    expect(normalizeParaLevel(undefined)).toBe('standard');
+    expect(normalizeParaLevel('loose')).toBe('loose');
+    expect(normalizeParaLevel('compact')).toBe('compact');
+  });
+
+  it('scaleGap 取整缩放', () => {
+    expect(scaleGap(10, 1)).toBe(10);
+    expect(scaleGap(9, 0.6)).toBe(5); // 5.4 → 5
+    expect(scaleGap(16, 1.6)).toBe(26); // 25.6 → 26
+    expect(scaleGap(30, 0.6)).toBe(18); // 18.0 → 18
   });
 });
