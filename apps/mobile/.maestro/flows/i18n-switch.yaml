@@ -5,19 +5,24 @@ tags:
   - frontend-only
 ---
 - runFlow: ../subflows/enter-welcome.yaml
-# 进设置:菜单唤出抽屉 → 抽屉头像(设置入口)
+# 进设置:菜单唤出抽屉 → 抽屉头像(设置入口),落在类别索引页
 - tapOn:
     id: "menu-button"
 - tapOn:
     id: "drawer-settings"
+# 设置已按类别拆分:先点「通用」类别进详情页,再切语言(语言不再是索引页上的下拉)
 - extendedWaitUntil:
     visible:
-      id: "settings-lang-row"
+      id: "settings-cat-general"
     timeout: 20000
-# 展开语言下拉,选 English(语言项 testID 按 code:settings-lang-en)
 - tapOn:
-    id: "settings-lang-row"
+    id: "settings-cat-general"
+# 通用详情页:选 English(语言项 testID 按 code:settings-lang-en)
+- extendedWaitUntil:
+    visible:
+      id: "settings-lang-en"
+    timeout: 20000
 - tapOn:
     id: "settings-lang-en"
-# 界面文案应整体变英文:语言行标题变为「Interface language」(内容断言,证明切换生效)
+# 界面文案应整体变英文:语言分组标题变为「Interface language」(内容断言,证明切换生效)
 - assertVisible: ".*Interface language.*"

@@ -102,7 +102,7 @@ subflows/                被 runFlow 复用,不独立跑
 flows/
   smoke-dev-no-auth.yaml   [frontend-only] DEV_NO_AUTH 跳登录直达欢迎页
   welcome-controls.yaml    [frontend-only] 欢迎页控件 + 建议 chip 回填输入(不触后端)
-  i18n-switch.yaml         [frontend-only] 设置里切 English,断言界面变英文
+  i18n-switch.yaml         [frontend-only] 设置→「通用」里切 English,断言界面变英文
   creative-turn.yaml       [stub-agent]    创作主路径:一轮的流式回复 + 人物卡 + 文档更新 + 选项
   portrait-generate.yaml   [stub-agent]    人物卡 → 生成肖像 → 选风格 → 生成 → 绘制中 → 完成
   drawer-nav.yaml          [stub-agent]    抽屉唤出 / 导航 / 遮罩关闭(空列表)
@@ -141,9 +141,9 @@ flow 里写坐标点击,也不要假设 `keyboardShouldPersistTaps` 可以让 Ma
 | `drawer-sessions` | 会话(进历史) | `src/components/Drawer.tsx` |
 | `drawer-settings` | 设置(抽屉头像) | `src/components/Drawer.tsx` |
 | `drawer-backdrop` | 关闭抽屉(遮罩) | `src/components/Drawer.tsx` |
-| `settings-back` | 返回 | `app/(app)/settings.tsx` |
-| `settings-lang-row` | 界面语言行(展开下拉) | `app/(app)/settings.tsx` |
-| `settings-lang-<code>` | 语言项(`zh`/`en`/`ja`/`zhHant`) | `app/(app)/settings.tsx` |
+| `settings-back` | 返回(各设置屏共用顶栏) | `src/components/SettingsScaffold.tsx` |
+| `settings-cat-<key>` | 设置类别行(`general`/`reading`/`developer`,点进对应详情页) | `app/(app)/settings/index.tsx` |
+| `settings-lang-<code>` | 语言项(`zh`/`en`/`ja`/`zhHant`,在「通用」详情页) | `app/(app)/settings/general.tsx` |
 | `chat-back` | 返回 | `app/(app)/chat.tsx` |
 | `chat-doc` | 文档(开关 DocPanel) | `app/(app)/chat.tsx` |
 | `composer-send` | 发送 | `src/components/Composer.tsx` |
