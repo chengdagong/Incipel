@@ -10,6 +10,12 @@ import test from 'node:test';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const cli = path.join(here, 'cli.mjs');
 
+// 测试用临时 dev agent 端口:按进程区分,避开真 dev 的固定 4111,使本套件可与正在跑的 dev 共存
+// (也避免并行跑多个测试文件时互撞)。CLI 经 INCIPEL_DEV_AGENT_PORT 读取它(见 cli.mjs agentPort());
+// 这里写进本进程 env,run() 起的子进程会继承。
+const TEST_AGENT_PORT = 20000 + (process.pid % 40000);
+process.env.INCIPEL_DEV_AGENT_PORT = String(TEST_AGENT_PORT);
+
 function run(bin, args, cwd, options = {}) {
   return spawnSync(bin, args, {
     cwd,
@@ -52,7 +58,7 @@ function normalizeRoot(root) {
 }
 
 function agentPort() {
-  return 4111;
+  return TEST_AGENT_PORT;
 }
 
 function e2eAgentPort(root) {
@@ -423,9 +429,30 @@ test('env sync writes the fixed dev agent port instead of a worktree-derived por
 
     const mobileEnv = readFileSync(path.join(tmp, 'apps', 'mobile', '.env'), 'utf8');
     const agentEnv = readFileSync(path.join(tmp, 'supabase', '.env'), 'utf8');
-    assert.match(mobileEnv, /^EXPO_PUBLIC_AGENT_URL=http:\/\/127\.0\.0\.1:4111$/m);
-    assert.match(agentEnv, /^AGENT_PORT=4111$/m);
-    assert.notEqual(e2eAgentPort(tmp), 4111);
+    assert.match(mobileEnv, new RegExp(`^EXPO_PUBLIC_AGENT_URL=http://127\\.0\\.0\\.1:${TEST_AGENT_PORT}$`, 'm'));
+    assert.match(agentEnv, new RegExp(`^AGENT_PORT=${TEST_AGENT_PORT}$`, 'm'));
+    assert.notEqual(e2eAgentPort(tmp), agentPort(tmp));
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('env sync honors the INCIPEL_DEV_AGENT_PORT override for the dev agent port', () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+
+    const res = run('node', [cli, 'env', 'sync'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`, INCIPEL_DEV_AGENT_PORT: '49876' },
+    });
+    assert.equal(res.status, 0, res.stderr);
+
+    const mobileEnv = readFileSync(path.join(tmp, 'apps', 'mobile', '.env'), 'utf8');
+    const agentEnv = readFileSync(path.join(tmp, 'supabase', '.env'), 'utf8');
+    assert.match(mobileEnv, /^EXPO_PUBLIC_AGENT_URL=http:\/\/127\.0\.0\.1:49876$/m);
+    assert.match(agentEnv, /^AGENT_PORT=49876$/m);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

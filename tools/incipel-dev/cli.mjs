@@ -87,8 +87,11 @@ const E2E_AGENT_PORT_BASE = 6111;
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
+// 日常 dev agent 端口固定为 DEV_AGENT_PORT(见 ADR-0011);INCIPEL_DEV_AGENT_PORT 是覆盖钩子,
+// 主要给测试用——让测试套件能用本机临时端口,不必占用真 dev 的 4111,从而可与在跑的 dev 共存。
 function agentPort() {
-  return DEV_AGENT_PORT;
+  const override = Number(process.env.INCIPEL_DEV_AGENT_PORT);
+  return Number.isInteger(override) && override > 0 ? override : DEV_AGENT_PORT;
 }
 function e2eAgentPort(root) {
   return E2E_AGENT_PORT_BASE + (parseInt(worktreeHash(root).slice(0, 4), 16) % 2000);
