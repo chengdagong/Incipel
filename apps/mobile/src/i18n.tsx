@@ -82,6 +82,91 @@ export const DOC_I18N: Record<
   zhHant: { cover: '原創劇本', contents: '目錄', tocNums: ['一', '二', '三', '四'], tocUnits: ['條', '幕', '場', '位'], tocEmpty: '待建立', bioLabel: '人物小傳' },
 };
 
+// 设置页「阅读」节文案(字号 / 行距分档 + 预览)。与 VOL_I18N / DOC_I18N 同为独立映射,
+// 不进生成块 DICT;设置页按当前 lang 直接读 READING_I18N[lang]。
+type ReadingStrings = {
+  section: string;
+  fontSize: string;
+  lineSpacing: string;
+  fontSmall: string;
+  fontStandard: string;
+  fontLarge: string;
+  fontXLarge: string;
+  lineCompact: string;
+  lineStandard: string;
+  lineLoose: string;
+  desc: string;
+  previewLabel: string;
+  sampleAct: string;
+  sampleBeat: string;
+};
+export const READING_I18N: Record<Lang, ReadingStrings> = {
+  zh: {
+    section: '阅读',
+    fontSize: '字号',
+    lineSpacing: '行距',
+    fontSmall: '小',
+    fontStandard: '标准',
+    fontLarge: '大',
+    fontXLarge: '特大',
+    lineCompact: '紧凑',
+    lineStandard: '标准',
+    lineLoose: '宽松',
+    desc: '只影响剧本内容(文档与对话里的卡片),不改界面其它文字。',
+    previewLabel: '预览',
+    sampleAct: '第二幕:充值与共振',
+    sampleBeat: '林岑第一次不是出于玩笑,而是出于真切的心疼而充值。',
+  },
+  en: {
+    section: 'Reading',
+    fontSize: 'Font size',
+    lineSpacing: 'Line spacing',
+    fontSmall: 'Small',
+    fontStandard: 'Default',
+    fontLarge: 'Large',
+    fontXLarge: 'XL',
+    lineCompact: 'Compact',
+    lineStandard: 'Default',
+    lineLoose: 'Loose',
+    desc: 'Affects screenplay content only (the document and inline cards), not the rest of the interface.',
+    previewLabel: 'Preview',
+    sampleAct: 'Act II: Top-Ups and Resonance',
+    sampleBeat: 'For the first time, Lin Cen tops up not as a joke, but out of genuine compassion.',
+  },
+  ja: {
+    section: '読みやすさ',
+    fontSize: '文字サイズ',
+    lineSpacing: '行間',
+    fontSmall: '小',
+    fontStandard: '標準',
+    fontLarge: '大',
+    fontXLarge: '特大',
+    lineCompact: '狭い',
+    lineStandard: '標準',
+    lineLoose: '広い',
+    desc: '脚本本文(ドキュメントと会話内のカード)のみに適用され、その他の画面表示は変わりません。',
+    previewLabel: 'プレビュー',
+    sampleAct: '第二幕:課金と共鳴',
+    sampleBeat: 'リン・ツェンは初めて、冗談ではなく心からの思いやりで課金する。',
+  },
+  zhHant: {
+    section: '閱讀',
+    fontSize: '字體大小',
+    lineSpacing: '行距',
+    fontSmall: '小',
+    fontStandard: '標準',
+    fontLarge: '大',
+    fontXLarge: '特大',
+    lineCompact: '緊湊',
+    lineStandard: '標準',
+    lineLoose: '寬鬆',
+    desc: '只影響劇本內容(文件與對話中的卡片),不改介面其它文字。',
+    previewLabel: '預覽',
+    sampleAct: '第二幕:儲值與共振',
+    sampleBeat: '林岑第一次不是出於玩笑,而是出於真切的心疼而儲值。',
+  },
+};
+
 const LANG_STORAGE_KEY = 'scn_lang_v1';
 
 // 四语言文案表(由原型 T 生成,勿手改本块;改文案改原型或此生成块)。
