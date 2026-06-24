@@ -32,7 +32,7 @@ export default function WelcomeScreen() {
   const [ideaFocused, setIdeaFocused] = useState(false);
   const [rolling, setRolling] = useState(false);
   const [rollError, setRollError] = useState<string | null>(null);
-  // 骰子旋转(每次点一圈,对齐原型 diceSpin)。
+  // 骰子旋转(每次点一圈,对应原型 diceSpin)。
   const spin = useRef(new Animated.Value(0)).current;
   const spinDeg = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
@@ -78,7 +78,7 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]}>
-      {/* 页内顶栏:左上汉堡唤出侧边抽屉(对齐原型欢迎页)。 */}
+      {/* 页内顶栏:左上汉堡唤出侧边抽屉(对应原型欢迎页)。 */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <MenuButton variant="circle" onPress={drawer.open} />
       </View>

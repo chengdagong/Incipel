@@ -127,7 +127,7 @@ export default function ChatScreen() {
     }
   }, [assistantCount, isRunning, screenplay]);
 
-  // 聚焦标签:点属性 / 点人物 → 加一枚 chip,关文档面板并聚焦输入框(对齐原型 discussAttr/discussCharacter)。
+  // 聚焦标签:点属性 / 点人物 → 加一枚 chip,关文档面板并聚焦输入框(对应原型 discussAttr/discussCharacter)。
   function addChip(chip: FocusChip) {
     setChips((prev) => (prev.some((c) => c.key === chip.key) ? prev : [...prev, chip]));
     setDocOpen(false);
@@ -137,14 +137,14 @@ export default function ChatScreen() {
   const focusAttr = (c: Character, a: CharacterAttr) => addChip(chipFromAttr(c, a));
   const focusCharacter = (c: Character) => addChip(chipFromCharacter(c));
 
-  // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用兜底话术),发出后清空 chip。
+  // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用默认话术),发出后清空 chip。
   function sendComposed(text: string) {
     const msg = composeFocusMessage(text, chips);
     if (!msg) return;
     setChips([]);
     void sendMessage(msg);
   }
-  // 快捷选项 / 直接发送:不带聚焦上下文,但发送即清空残留 chip(对齐原型 pushUserAndReply)。
+  // 快捷选项 / 直接发送:不带聚焦上下文,但发送即清空残留 chip(对应原型 pushUserAndReply)。
   function sendPlain(text: string) {
     setChips([]);
     void sendMessage(text);
@@ -193,7 +193,7 @@ export default function ChatScreen() {
           );
         })}
 
-        {/* 思考中(本轮已开始、首 token 未到):三点动画(对齐原型 typing dots)。
+        {/* 思考中(本轮已开始、首 token 未到):三点动画(对应原型 typing dots)。
             thinking 由 hook 按 run 生命周期维护:retry 不追加 user 消息时也准确(见 #42 P3)。 */}
         {thinking && <ThinkingDots />}
 
@@ -205,7 +205,7 @@ export default function ChatScreen() {
         {!!error && (
           <View style={styles.errorRow}>
             <Text style={[styles.error, { color: palette.danger }]}>出错了:{error}</Text>
-            {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复落库(见 KI-2)。
+            {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复写入数据库(见 KI-2)。
                 务必走 retry 而非重新 sendMessage——后者会生成新 runId、绕开幂等。 */}
             <Pressable
               onPress={() => void retry()}
@@ -371,7 +371,7 @@ function MessageBubble({
   );
 }
 
-// 流式打字光标:主色细竖条,闪烁(对齐原型 caret)。
+// 流式打字光标:主色细竖条,闪烁(对应原型 caret)。
 // 光标内联在助手气泡的 <Text> 里;原生端嵌套 Text 会被摊平、没有独立的可动画视图,
 // 用 native driver 的 opacity 动画落不到这个 span 上(真机不闪)。故用 JS 驱动(useNativeDriver:false),
 // 由 JS 线程更新该文本 span 的 opacity。
@@ -390,7 +390,7 @@ function BlinkCaret() {
   return <Animated.Text style={[styles.caret, { color: defaultTheme.accent, opacity: op }]}>▏</Animated.Text>;
 }
 
-// 思考中:助手头像 + 三点闪烁(首 token 到达前;对齐原型 typing dots)。
+// 思考中:助手头像 + 三点闪烁(首 token 到达前;对应原型 typing dots)。
 function ThinkingDots() {
   const { palette } = defaultTheme;
   return (

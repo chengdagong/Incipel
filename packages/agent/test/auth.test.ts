@@ -102,7 +102,7 @@ describe('verifyJwt — issuer / audience(KI-4)', () => {
     const { verifyJwt, AuthError } = await import('../src/auth');
     await expect(verifyJwt(await mint({ sub: 'service_role', role: 'service_role' }, { iss: 'supabase', aud: null }))).rejects.toBeInstanceOf(AuthError);
   });
-  it('本地 edge runtime(SUPABASE_URL 指向本地)可用 INCIPEL_* 覆盖 issuer 与 HS256 secret', async () => {
+  it('本地 agent server(SUPABASE_URL 指向本地)可用 INCIPEL_* 覆盖 issuer 与 HS256 secret', async () => {
     const { verifyJwt } = await import('../src/auth');
     const previousSecret = process.env.SUPABASE_JWT_SECRET;
     const previousUrl = process.env.SUPABASE_URL;

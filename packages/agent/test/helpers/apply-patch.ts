@@ -1,5 +1,5 @@
 // 最小 RFC 6902 JSON Patch 应用器,只覆盖本项目 STATE_DELTA 用到的 add / replace / remove。
-// 用于「客户端重放收到的事件 == 服务端落库 state」这条不变量断言(见 KI-1)。
+// 用于「客户端重放收到的事件 == 服务端写入数据库 state」这条不变量断言(见 KI-1)。
 
 import type { JsonPatchOp } from '@incipel/shared';
 

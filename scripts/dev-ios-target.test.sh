@@ -27,4 +27,16 @@ if grep -Fq 'incipel-development' "$E2E_IOS"; then
   fail "e2e-ios.sh 不应改用共享 development simulator。"
 fi
 
+if grep -Fq 'packages/agent/.env' "$E2E_IOS"; then
+  fail "e2e-ios.sh 不应再读取旧的 packages/agent/.env。"
+fi
+
+if ! grep -Fq 'supabase/.env' "$E2E_IOS"; then
+  fail "e2e-ios.sh 应读取 tools/incipel-dev 管理的 supabase/.env。"
+fi
+
+if ! grep -Fq 'set -a' "$E2E_IOS"; then
+  fail "e2e-ios.sh 启动 agent 前应显式导出 env-file。"
+fi
+
 echo "✓ dev-ios simulator target checks passed"

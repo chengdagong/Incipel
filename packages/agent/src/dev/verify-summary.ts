@@ -9,7 +9,7 @@ import { config as loadEnv } from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { EventType, OPTIONS_EVENT_NAME, type JsonPatchOp } from '@incipel/shared';
-import { createOpenRouterProvider } from '../model/openrouter';
+import { createMastraProvider } from '../model/mastra';
 import { runTurnCore } from '../run';
 import { MemoryStore } from './memory-store';
 
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const provider = createOpenRouterProvider();
+  const provider = createMastraProvider();
   const store = new MemoryStore();
   await store.createSessionIfMissing({ threadId: 'verify', userId: 'verify' });
 

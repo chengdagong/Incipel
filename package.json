@@ -17,7 +17,6 @@
     "env:sync": "node tools/incipel-dev/cli.mjs env sync",
     "e2e:stack": "node tools/incipel-dev/cli.mjs e2e",
     "e2e:ios": "bash scripts/e2e-ios.sh",
-    "agent:deploy": "supabase functions deploy agent --use-api",
     "db:reset": "supabase db reset"
   }
 }

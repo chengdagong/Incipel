@@ -1,7 +1,7 @@
 // 侧边抽屉(全局浮层):菜单入口 + 新建创作 + 会话(历史)+ 收藏/最近两段 + 悬浮新建按钮
 // (system-design §2.1「侧栏抽屉」,交互见 handoff 的 interactions.feature「侧边抽屉导航」)。
 //
-// 视觉对齐原型「编剧助手 原型.dc.html」的 SIDEBAR DRAWER:从左滑出的 308px 面板 + 半透明遮罩。
+// 视觉对应原型「编剧助手 原型.dc.html」的 SIDEBAR DRAWER:从左滑出的 308px 面板 + 半透明遮罩。
 // 原型用内联 SVG 画图标;本仓库刻意零图标库(RN 集成坑见 apps/mobile/README.md),
 // 故汉堡用三条 View、星标用 ★/☆ 字形,与既有组件(‹ ↑ ▸)同风格。
 
@@ -28,7 +28,7 @@ export type DrawerSession = {
   updatedAt: string; // ISO
 };
 
-// drawer 各处用色统一引自通用 palette(过去这里是逐像素对齐原型的字面色表,已归并)。
+// drawer 各处用色统一引自通用 palette(过去这里是逐像素参照原型的字面色表,已归并)。
 // 次要文字 / 时间 / 计数 / 空态原先是 #A39E94 / #B3AEA4 / #9A958C 一类浅灰(对比 ~2.x:1),
 // 现统一走 palette.textSecondary(≈ 5.6:1)。
 const DRAWER = {

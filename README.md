@@ -12,13 +12,13 @@ AI 原生的编剧助手:一条流式对话持续形成一份结构化剧本。
 
 ```
 packages/shared   @incipel/shared — 类型、AG-UI 事件、工具 schema(契约源头)
-packages/agent    @incipel/agent  — Hono app(AG-UI SSE / 鉴权 / 模型抽象 / tool use 编排),运行时无关
+packages/agent    @incipel/agent  — Mastra Node agent server(Hono / AG-UI SSE / 鉴权 / tool use)
 apps/mobile       Expo 客户端(React Native + CopilotKit headless hooks)
-supabase/         Postgres migration + RLS + 本地配置;agent 的 Edge Function 在 functions/agent
-tools/incipel-dev 开发命令行工具(起栈 / serve agent / 隔离 E2E 栈,见 ADR-0008)
+supabase/         Postgres migration + RLS + 本地配置
+tools/incipel-dev 开发命令行工具(起 Supabase 栈 / 启动 agent server / 隔离 E2E 栈)
 ```
 
-数据层(Supabase)与计算层(agent)分开;agent 作为 Supabase Edge Function 部署(见 [ADR-0008](docs/adr/0008-edge-only-agent-runtime.md))。模型密钥只放在 agent 的环境变量里,**客户端绝不持有**(见系统设计 §4)。
+数据层(Supabase)与计算层(agent)分开;agent 由 Mastra Node server 承载,Supabase 负责数据库、Auth、Storage。模型密钥只放在 agent 的环境变量里,**客户端绝不持有**(见系统设计 §4)。
 
 ## 本地开发
 
@@ -31,7 +31,7 @@ pnpm install
 supabase start
 supabase db reset
 
-# Agent(共用栈上的 edge function:起栈 + 同步 env + serve)
+# Agent(起共用 Supabase 栈 + 同步 env + 启动 Mastra Node server)
 pnpm dev:agent
 
 # 客户端

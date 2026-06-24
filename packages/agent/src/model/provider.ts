@@ -52,8 +52,8 @@ export async function createModelProvider(): Promise<ModelProvider> {
   const config = getModelConfig();
   switch (config.provider) {
     case 'openrouter': {
-      const { createOpenRouterProvider } = await import('./openrouter.ts');
-      return createOpenRouterProvider(config);
+      const { createMastraProvider } = await import('./mastra.ts');
+      return createMastraProvider(config);
     }
     case 'stub': {
       // 确定性 stub:离线跑 E2E 创作主路径用,不接任何真实模型。

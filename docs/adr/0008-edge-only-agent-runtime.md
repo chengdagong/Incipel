@@ -1,6 +1,8 @@
 # Edge 为 agent 唯一运行时:删 Node 入口,本地 dev / E2E 改走 Supabase edge runtime
 
-> Status: accepted ·
+> Status: superseded by [ADR-0011](0011-mastra-node-agent-runtime.md) ·
+> 2026-06-24 起,agent runtime 改为 Mastra Node agent server;本文保留为历史记录。
+>
 > 部分取代 [ADR-0002](0002-agent-runtime-hono-edge-sse.md):0002 把 agent 写成可跨 Edge 与专用主机(Cloud Run / Fly / Node)的可移植运行时,并以 Node 专用主机作为「迁移退路」;本 ADR 删掉随时可用的 Node 部署入口,只留 Edge 一个运行时。0002 关于「应用本身运行时无关」的设计不变。
 > 本文关于“本地 dev 默认 `DEV_NO_AUTH`”的决定已被 [ADR-0009](0009-dev-uses-anonymous-auth.md) 修订:日常开发默认使用 Supabase anonymous auth。
 

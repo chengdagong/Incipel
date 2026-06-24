@@ -1,4 +1,4 @@
-// 剧本文档面板:从底部滑出的浮层(对齐原型「编剧助手 原型.dc.html」DOCUMENT PANEL,见 issue #11)。
+// 剧本文档面板:从底部滑出的浮层(对应原型「编剧助手 原型.dc.html」DOCUMENT PANEL,见 issue #11)。
 // 累积的剧本全文随对话实时更新;世界观/人物/大纲/分场分区,人物区可左右滑动,空分区显示虚线占位。
 //
 // 与原型差异:导出(Fountain/PDF)按 system-design §15 移出 v1,略去。
@@ -23,7 +23,7 @@ import { PortraitThumb } from './PortraitThumb';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
 
-// doc 面板各处用色统一引自通用 palette(过去这里是逐像素对齐原型的字面色表,已归并)。
+// doc 面板各处用色统一引自通用 palette(过去这里是逐像素参照原型的字面色表,已归并)。
 // eyebrow / collapse / 角色定位 / 滑动提示 / 分场 slug 原先是 #B3AEA4 / #9A958C / #A39E94 等浅灰
 //(对比 ~2.x:1),现统一走 palette.textSecondary;正文走 textBody,待沉淀提示走 placeholder。
 const DOC = {

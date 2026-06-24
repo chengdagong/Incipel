@@ -129,7 +129,7 @@ build_and_install_ios_devbuild() {
 
 echo "▸ worktree     : $REPO_ROOT"
 echo "▸ Metro 端口   : $EXPO_PORT"
-echo "▸ Agent        : edge function(共用栈 /functions/v1/agent;本脚本会自动起栈并后台 serve)"
+echo "▸ Agent        : Mastra Node server(本脚本会自动起共用 Supabase 栈并后台启动 agent)"
 echo "▸ iOS 模拟器   : $IOS_SIMULATOR_NAME"
 
 UDID="$(udid_for_name "$IOS_SIMULATOR_NAME" || true)"
@@ -164,7 +164,7 @@ if [ "$DEVBUILD" -eq 1 ] && ! xcrun simctl get_app_container "$UDID" "$IOS_BUNDL
   echo "✓ development build 已安装到 \"$IOS_SIMULATOR_NAME\""
 fi
 
-# 起共用 Supabase 栈 + 后台 serve agent edge function(已在跑则自动跳过)。
+# 起共用 Supabase 栈 + 后台启动 agent server(已在跑则自动跳过)。
 # 设 INCIPEL_SKIP_AGENT=1 可跳过(例如你在另一个终端用 `pnpm dev:agent` 前台跑 agent)。
 if [ "${INCIPEL_SKIP_AGENT:-0}" != "1" ]; then
   node "$REPO_ROOT/tools/incipel-dev/cli.mjs" up

@@ -4,7 +4,7 @@
 -- 背景:0001_init.sql 给 authenticated(含匿名登录)只授了 sessions 的 select + delete,漏了 update;
 -- 而 §10 的设计是「收藏直接 update sessions 行」。于是客户端
 --   supabase.from('sessions').update({ starred })
--- 因表级缺 update 授权被拒(permission denied for table sessions),星标乐观更新后必回滚、收藏永不落库。
+-- 因表级缺 update 授权被拒(permission denied for table sessions),星标乐观更新后必回滚、收藏永不写入数据库。
 --
 -- 修法:只放开 starred 这一列的 update(列级授权)。其余列客户端仍不可写——
 -- documents / messages / document_versions 以及 sessions 的 title / accent / updated_at 等,

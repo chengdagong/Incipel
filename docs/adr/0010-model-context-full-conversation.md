@@ -22,5 +22,5 @@ agent 一轮的模型调用,其对话上下文原先由服务端这样构造:
 ## 后果
 
 - 模型每轮都能看到整段会话,创作连续性不再被"最近 10 条"切断。
-- 每轮模型调用的 token 量随会话长度增长;成本上升,并在**极长**会话下可能逼近模型上下文窗口上限。这是已知取舍:在 compact([issue #49](https://github.com/chengdagong/Incipel/issues/49))落地前,极长会话存在触达上限的风险;但对绝大多数会话,"完整历史"是严格优于"最近 10 条"的正确行为。
+- 每轮模型调用的 token 量随会话长度增长;成本上升,并在**极长**会话下可能逼近模型上下文窗口上限。这是已知取舍:在 compact([issue #49](https://github.com/chengdagong/Incipel/issues/49))实现前,极长会话存在触达上限的风险;但对绝大多数会话,"完整历史"是严格优于"最近 10 条"的正确行为。
 - 客户端侧把恢复历史放进 `agent.messages` 也会随 `/run` 请求体发送(256KB 上限);其规模约束同样归入 compact([issue #49](https://github.com/chengdagong/Incipel/issues/49))。

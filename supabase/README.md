@@ -1,6 +1,6 @@
 # supabase/ — 数据层
 
-「织幕」(Incipel)的数据层:Postgres 表结构、Row Level Security 策略、原子落库函数 `save_turn`,以及本地开发配置。计算层(agent 运行时)与此分离 —— 这里只做数据层,不承载 agent(见系统设计 §4)。
+「织幕」(Incipel)的数据层:Postgres 表结构、Row Level Security 策略、原子写入数据库函数 `save_turn`,以及本地开发配置。计算层(agent 运行时)与此分离 —— 这里只做数据层,不承载 agent(见系统设计 §4)。
 
 ```
 config.toml              本地开发配置(端口、auth、storage 等)
@@ -31,8 +31,9 @@ Supabase 栈共存、互不抢端口(端口定义见 [`config.toml`](./config.to
 - Inbucket(本地收发邮件):`http://127.0.0.1:54524`
 - `anon key` / `service_role key`:从输出读取
 
-> 改了 `config.toml` 的端口,记得同步 `packages/agent/.env` 的 `SUPABASE_URL`
-> 与 `apps/mobile/.env` 的 `EXPO_PUBLIC_SUPABASE_URL`。
+> 改了 `config.toml` 的端口,运行 `pnpm env:sync`;它会更新 `supabase/.env` 的
+> `SUPABASE_URL` / `AGENT_PORT`,以及 `apps/mobile/.env` 的 `EXPO_PUBLIC_SUPABASE_URL` /
+> `EXPO_PUBLIC_AGENT_URL`。
 
 ## 应用到远端项目
 
@@ -63,12 +64,12 @@ v1 默认匿名账号(零摩擦入门,事后可选升级,见系统设计 §15/§
 权限按最小授予,且遵循「agent 是权威数据唯一写入方」的边界(见系统设计 §4):
 
 - **客户端**(`authenticated`,含匿名登录):只**读**自己的 `sessions` / `documents`(history 列表、works 内嵌读 `documents.state`);可**删除**自己的会话(删除经外键 `on delete cascade` 连带清子表);并可**收藏**——即对自己 `sessions` 行的 `starred` 一列做**列级** update(见 migration 0003,只放开 `starred`,改不了 `title` / `accent` / `updated_at` 等)。对 `documents` / `messages` / `document_versions` **没有任何写权限** —— 这三张表的写入一律经 agent 走 `save_turn`,否则用户持公开 anon key 即可绕过服务端校验直接篡改自己的剧本与历史。
-- **agent**(`service_role`):四张表全部 DML,带 `BYPASSRLS`,落库前已自行校验客户端 JWT 与会话归属。
+- **agent**(`service_role`):四张表全部 DML,带 `BYPASSRLS`,写入数据库前已自行校验客户端 JWT 与会话归属。
 - **`save_turn`**:`security definer`(以属主身份执行、绕过 RLS),`EXECUTE` 已从 `PUBLIC` 收回、只授予 `service_role` —— 否则任何登录用户都能经 PostgREST 的 `rpc/save_turn` 跨会话(含他人会话)写入。
 
 ## save_turn(跨包契约)
 
-一轮结束时,agent 通过 `supabase.rpc('save_turn', …)` 在一个语句内原子落库。参数名/顺序/语义与 agent 的 `src/store.ts` 调用严格一致:
+一轮结束时,agent 通过 `supabase.rpc('save_turn', …)` 在一个语句内原子写入数据库。参数名/顺序/语义与 agent 的 `src/store.ts` 调用严格一致:
 
 ```
 save_turn(
@@ -93,10 +94,10 @@ agent 运行时(非本目录,放在 `packages/agent`)需要以下变量读写数
 | 变量 | 说明 |
 |---|---|
 | `SUPABASE_URL` | 项目 API URL(本地为 `http://127.0.0.1:54521`) |
-| `SUPABASE_SERVICE_ROLE_KEY` | service_role 密钥;agent 用它绕过 RLS 落库,**绝不下发到客户端** |
+| `SUPABASE_SERVICE_ROLE_KEY` | service_role 密钥;agent 用它绕过 RLS 写入数据库,**绝不下发到客户端** |
 | `SUPABASE_JWT_SECRET` | 校验 HS256 客户端 JWT 用;本地开发由 `tools/incipel-dev` 写入 `INCIPEL_SUPABASE_JWT_SECRET`,避免在 env-file 中写 `SUPABASE_` 前缀变量 |
 
-本地 edge runtime 还会读取 `INCIPEL_SUPABASE_JWT_ISS` / `INCIPEL_SUPABASE_JWT_AUD`,用于校验 anonymous auth 产生的 JWT。远端项目通常不需要这些变量。
+本地 agent server 还会读取 `INCIPEL_SUPABASE_JWT_ISS` / `INCIPEL_SUPABASE_JWT_AUD`,用于校验 anonymous auth 产生的 JWT。远端项目通常不需要这些变量。
 
 客户端(`apps/mobile`)只需公开的 `SUPABASE_URL` 与 `anon key`。
 

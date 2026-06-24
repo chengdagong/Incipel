@@ -17,7 +17,7 @@ export default function ProtectedLayout() {
   }
 
   // DrawerProvider 把侧边抽屉浮层挂在受保护区的 Stack 之上(任意屏 useDrawer().open());
-  // history / works 的标题由各屏自设(t(),随语言切换),此处为初始/兜底;settings、index 自带顶栏。
+  // history / works 的标题由各屏自设(t(),随语言切换),此处为初始/备用;settings、index 自带顶栏。
   return (
     <DrawerProvider>
       <Stack

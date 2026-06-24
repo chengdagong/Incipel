@@ -25,8 +25,10 @@
 #   - 已装 maestro(curl -fsSL "https://get.maestro.mobile.dev" | bash)与 JDK 17+
 #   - 完整 Xcode(用于 xcodebuild / simctl)与 CocoaPods(brew install cocoapods)
 #   - 首次会自动 `expo prebuild` 生成 ios/ 原生工程并 `pod install`(之后复用,ios/ 已被 gitignore)
-#   - supabase 层另需:`supabase start`,且 packages/agent/.env 填好 SUPABASE_URL / SERVICE_ROLE_KEY /
-#     JWT_SECRET,apps/mobile/.env 填好真实 EXPO_PUBLIC_SUPABASE_ANON_KEY。
+#   - supabase 层另需:`supabase start` 与 `pnpm env:sync`,确保 supabase/.env 填好
+#     SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / INCIPEL_SUPABASE_JWT_SECRET,
+#     apps/mobile/.env 填好真实 EXPO_PUBLIC_SUPABASE_ANON_KEY。若使用 `pnpm e2e:stack up`
+#     生成的隔离栈,可设 INCIPEL_E2E_AGENT_ENV=.worktree-supabase/agent.env。
 set -euo pipefail
 
 # ── 解析参数:第一个非 --flag 当作层(tags);--no-build 跳过构建+安装、直接复用已装包重跑 ──
@@ -48,7 +50,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 MOBILE_DIR="$REPO_ROOT/apps/mobile"
 MOBILE_ENV="$MOBILE_DIR/.env"
-AGENT_ENV="$REPO_ROOT/packages/agent/.env"
+AGENT_ENV="${INCIPEL_E2E_AGENT_ENV:-$REPO_ROOT/supabase/.env}"
 IOS_DIR="$MOBILE_DIR/ios"
 DERIVED="$IOS_DIR/build-release"
 IOS_DEVICE_TYPE="${IOS_DEVICE_TYPE:-iPhone 16 Pro}"
@@ -58,6 +60,25 @@ if printf '%s' "$TIERS" | grep -q 'supabase' && printf '%s' "$TIERS" | grep -qE 
   echo "✗ supabase 层与 frontend-only/stub-agent 层的 EXPO_PUBLIC_DEV_NO_AUTH bundle 不同,不能同跑。"
   echo "  分两次:bash scripts/e2e-ios.sh frontend-only,stub-agent  与  bash scripts/e2e-ios.sh supabase"
   exit 1
+fi
+
+# supabase 层要真实会话(DEV_NO_AUTH 必须留空);frontend-only/stub-agent 层要 DEV_NO_AUTH=1。两者 bundle 不同,不能同跑。
+case "$TIERS" in
+  *supabase*) WANT_DEV_NO_AUTH="" ;;
+  *)          WANT_DEV_NO_AUTH="1" ;;
+esac
+
+# supabase 层的 agent 需要显式导出 env-file。Node entrypoint 不读取 dotenv,因此不能只依赖 cwd。
+if [ -z "$WANT_DEV_NO_AUTH" ]; then
+  [ -f "$AGENT_ENV" ] || {
+    echo "✗ supabase 层需有 agent env-file:$AGENT_ENV"
+    echo "  共用栈请先运行 pnpm env:sync;隔离栈请先运行 pnpm e2e:stack up,并设置 INCIPEL_E2E_AGENT_ENV。"
+    exit 1
+  }
+  set -a
+  # shellcheck disable=SC1090
+  . "$AGENT_ENV"
+  set +a
 fi
 
 # ── 工具链定位(非交互 shell 不读 ~/.zshrc,这里自行接好 PATH / DEVELOPER_DIR)──
@@ -107,6 +128,9 @@ fi
 echo "▸ worktree   : $REPO_ROOT"
 echo "▸ 层 (tags)  : $TIERS"
 echo "▸ Agent 端口 : $AGENT_PORT"
+if [ -z "$WANT_DEV_NO_AUTH" ]; then
+  echo "▸ Agent env  : $AGENT_ENV"
+fi
 echo "▸ 模拟器     : $IOS_SIMULATOR_NAME ($UDID)"
 
 xcrun simctl boot "$UDID" 2>/dev/null || true  # 已开机则忽略
@@ -134,20 +158,16 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# ── 按层确定 bundle 期开关 ──
-case "$TIERS" in
-  *supabase*) WANT_DEV_NO_AUTH="" ;;
-  *)          WANT_DEV_NO_AUTH="1" ;;
-esac
-
 # supabase 层前置检查:真实 anon key 与 agent 的 Supabase 配置必须就位(本脚本不代填密钥)。
 if [ -z "$WANT_DEV_NO_AUTH" ]; then
   anon="$(grep -E '^EXPO_PUBLIC_SUPABASE_ANON_KEY=' "$MOBILE_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
   [ -z "$anon" ] && { echo "✗ supabase 层需在 apps/mobile/.env 填真实 EXPO_PUBLIC_SUPABASE_ANON_KEY(supabase status -o env 取)。"; exit 1; }
-  for k in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY SUPABASE_JWT_SECRET; do
-    v="$(grep -E "^$k=" "$AGENT_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
-    [ -z "$v" ] && { echo "✗ supabase 层需在 packages/agent/.env 填 $k(supabase status -o env 取)。"; exit 1; }
+  for k in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY; do
+    eval "v=\"\${$k:-}\""
+    [ -z "$v" ] && { echo "✗ supabase 层需在 $AGENT_ENV 填 $k(supabase status -o env 取)。"; exit 1; }
   done
+  jwt_secret="${INCIPEL_SUPABASE_JWT_SECRET:-${SUPABASE_JWT_SECRET:-}}"
+  [ -z "$jwt_secret" ] && { echo "✗ supabase 层需在 $AGENT_ENV 填 INCIPEL_SUPABASE_JWT_SECRET(supabase status -o env 取)。"; exit 1; }
 fi
 
 # ── 构建并安装 release 包(除非 --no-build)──
@@ -188,20 +208,19 @@ need_agent=0
 case "$TIERS" in *stub-agent*|*supabase*) need_agent=1 ;; esac
 if [ "$need_agent" = 1 ]; then
   # 先清掉本端口上可能残留的上一轮 agent:tsx 子进程不随父 kill 退出,旧实例若仍答 /health,
-  # 本轮会误用「配置不对」的它(如上一层的内存 store 当本层的 SupabaseStore 用)——见 #36 验证踩坑。
+  # 本轮会误用「配置不对」的它(如上一层的内存 store 当本层的 SupabaseStore 用)——见 #36 的验证记录。
   free_port "$AGENT_PORT"
   echo "▸ 启动 stub agent(MODEL_PROVIDER=stub)…"
-  # 直接跑 tsx(非 watch),cwd=packages/agent 让 agent 的 dotenv/config 读到本包 .env(supabase 层的
-  # SUPABASE_URL / SERVICE_ROLE_KEY / JWT_SECRET 在那里);env 显式传的键优先于 .env。
+  # 直接跑 tsx(非 watch)。supabase 层已在上方导出 agent env-file;env 显式传的键优先。
   case "$TIERS" in
     *supabase*)
       # 真实持久化 + 真实鉴权:显式清掉 STORE / DEV_NO_AUTH,避免 .env 残留把它退回内存/免鉴权。
-      ( cd "$REPO_ROOT/packages/agent" && exec env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE= DEV_NO_AUTH= \
+      ( cd "$REPO_ROOT/packages/agent" && exec env AGENT_PORT="$AGENT_PORT" PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE= DEV_NO_AUTH= \
           node_modules/.bin/tsx src/index.ts ) &
       AGENT_PID=$!
       ;;
     *)
-      ( cd "$REPO_ROOT/packages/agent" && exec env PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1 \
+      ( cd "$REPO_ROOT/packages/agent" && exec env AGENT_PORT="$AGENT_PORT" PORT="$AGENT_PORT" MODEL_PROVIDER=stub STORE=memory DEV_NO_AUTH=1 \
           node_modules/.bin/tsx src/index.ts ) &
       AGENT_PID=$!
       ;;

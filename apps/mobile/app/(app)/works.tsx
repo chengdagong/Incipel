@@ -30,7 +30,7 @@ export default function WorksScreen() {
   const [rows, setRows] = useState<WorkRow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 表头右上汉堡:唤出侧边抽屉(对齐原型作品页顶栏)。
+  // 表头右上汉堡:唤出侧边抽屉(对应原型作品页顶栏)。
   useEffect(() => {
     navigation.setOptions({
       title: t('worksTitle'),

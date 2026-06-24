@@ -120,7 +120,7 @@ describe('runTurnCore — 事件顺序与产物', () => {
 });
 
 describe('runTurnCore — 错误路径', () => {
-  it('loadSession 抛错 → RUN_ERROR{LOAD_FAILED} 且不落库', async () => {
+  it('loadSession 抛错 → RUN_ERROR{LOAD_FAILED} 且不写入数据库', async () => {
     const store = new MemoryStore(); // 未建会话 → loadSession 抛错
     const provider = stubProvider([[{ type: 'text', delta: 'hi' }]]);
     const events = await collect(runTurnCore(input({ threadId: 'missing' }), { provider, store }));

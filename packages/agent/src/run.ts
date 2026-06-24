@@ -5,7 +5,7 @@
 //       · 文本增量        → TEXT_MESSAGE_START/CONTENT/END(流式模型文本)
 //       · 每次内部工具调用 → 经 apply.ts 服务端执行 → 发一条 STATE_DELTA{delta}
 //       · propose_options  → 收集为本轮 options(轮末发一条 CUSTOM options)
-//   → 经 save_turn 落库(有改动才写 version)
+//   → 经 save_turn 写入数据库(有改动才写 version)
 //   → RUN_FINISHED{threadId,runId}
 // 模型调用失败重试一次,仍失败发 RUN_ERROR{message,code}(不编造内容)。
 //
@@ -74,9 +74,9 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     yield ev({ type: EventType.STATE_SNAPSHOT, snapshot: state });
   }
 
-  // 幂等重放(见 docs/known-issues.md KI-2 / Codex 评审 P1):若该 runId 已落库(首次请求已提交、
+  // 幂等重放(见 docs/known-issues.md KI-2 / Codex 评审 P1):若该 runId 已写入数据库(首次请求已提交、
   // 但客户端没收到 RUN_FINISHED 就重发),不再调用模型——当前 documents.state 已含该轮改动(上面的
-  // STATE_SNAPSHOT 已发),只补发已落库的助手文本与本轮 options 后结束。否则会二次跑模型、向客户端
+  // STATE_SNAPSHOT 已发),只补发已写入数据库的助手文本与本轮 options 后结束。否则会二次跑模型、向客户端
   // 流式一份随后被 save_turn 去重丢弃的新回复,造成客户端与库分叉并多花一次模型调用。
   let saved: Awaited<ReturnType<typeof store.findSavedTurn>> = null;
   try {
@@ -112,7 +112,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
 
   const provider = deps.provider ?? (await createModelProvider());
 
-  // 一轮的最终产物(取自成功的那次尝试),供轮末 save_turn 落库与 options 事件。
+  // 一轮的最终产物(取自成功的那次尝试),供轮末 save_turn 写入数据库与 options 事件。
   let committedState: Screenplay = state;
   let deltas: JsonPatchOp[] = [];
   let options: string[] = [];
@@ -121,7 +121,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
 
   // 文本段在整轮内用同一 messageId,轮末只发唯一一条 TEXT_MESSAGE_END。失败尝试若已吐过文本,
   // 不单独补 END、也不换新 messageId——否则客户端会把残文定稿成另一条消息,多出一条重复气泡
-  // 且与落库分叉(见 docs/known-issues.md KI-1)。同一 messageId 下续写,客户端以最终落库文本为准。
+  // 且与写入数据库分叉(见 docs/known-issues.md KI-1)。同一 messageId 下续写,客户端以最终写入数据库文本为准。
   const messageId = nanoid();
   let textStarted = false;
 
@@ -197,8 +197,8 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     yield optionsEvent(options);
   }
 
-  // 轮末原子落库:user/assistant messages + documents.state + sessions.updated_at,
-  // 有改动再写 document_versions。runId 作幂等键:重发同一轮不重复落库(见 KI-2)。
+  // 轮末原子写入数据库:user/assistant messages + documents.state + sessions.updated_at,
+  // 有改动再写 document_versions。runId 作幂等键:重发同一轮不重复写入数据库(见 KI-2)。
   try {
     await store.saveTurn({
       threadId,
@@ -213,7 +213,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
   } catch (err) {
     yield ev({
       type: EventType.RUN_ERROR,
-      message: `落库失败: ${(err as Error).message}`,
+      message: `写入数据库失败: ${(err as Error).message}`,
       code: 'PERSIST_FAILED',
     });
     return;

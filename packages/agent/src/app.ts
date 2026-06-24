@@ -1,10 +1,8 @@
 // Agent 运行时的 Hono app(运行时无关)。
 //
-// 这里只有「应用本身」:路由、鉴权、输入校验、SSE 编排。它不 import 任何 Node 专属东西
-// (没有 dotenv、没有 @hono/node-server),故运行时无关:当前由 Supabase Edge Function
-// (supabase/functions/agent,Deno)用 `Deno.serve(createApp('/agent').fetch)` 托管;Node 入口已删
-// (ADR-0008),真要迁专用主机时,加回一个 ~30 行的 Node 入口 + @hono/node-server 即可。环境变量经
-// env() 读取,屏蔽 Deno.env 与 process.env 的差异。
+// 这里只有「应用本身」:路由、鉴权、输入校验、SSE 编排。它不 import @hono/node-server,
+// 因此仍可用 app.request() 测试;当前由 Mastra Node agent server 通过
+// packages/agent/src/index.ts 托管。环境变量经 env() 读取,屏蔽不同运行时的全局变量差异。
 //
 // 客户端绝不持有模型密钥;所有模型调用都在这一层。每个受保护端点先校验 Supabase JWT。
 //
@@ -12,9 +10,8 @@
 // threadId 即会话标识;据它载入权威剧本(无则建会话与空剧本)。本轮用户消息取 input.messages
 // 里最后一条 role==='user' 的 content。权威剧本以 DB 为准,不信任 input.state。
 //
-// basePath:Supabase Edge Function 对外路径是 `/functions/v1/<函数名>/…`,网关把请求以
-// `/<函数名>/…` 交给运行时。故 Edge 用 createApp('/agent'),路由前缀对齐;无前缀的 createApp()
-// 用于 vitest(app.request('/run'))与将来若重建的 Node 入口。
+// basePath:当前 Node agent server 传空字符串。参数保留是为了测试和历史 Edge 入口兼容;
+// 无前缀的 createApp() 用于 vitest(app.request('/run'))与 Node server。
 
 import type { Message, RunAgentInput } from '@ag-ui/core';
 import { sse } from '@incipel/shared';
@@ -40,7 +37,7 @@ const LoglineBody = z.object({
 });
 
 // /run 输入上限(见 docs/known-issues.md KI-6):约束单条 user 消息与 messages 数组大小,
-// 防止单个大请求推高 token 成本/延迟、撞 Edge CPU 上限,或把大块文本写进 DB。
+// 防止单个大请求推高 token 成本/延迟,或把大块文本写进 DB。
 // §9 的「token 量有上界」原本只覆盖剧本状态与最近 N 轮窗口,这里补上单条新消息的上界。
 const MAX_USER_MESSAGE_CHARS = 8000;
 const MAX_MESSAGES = 200;
@@ -105,9 +102,9 @@ async function readBodyCapped(c: Context, max: number): Promise<string | null> {
   return new TextDecoder().decode(merged);
 }
 
-// 构造 agent 的 Hono app。basePath 为空则不加前缀(Node 本地直连);Edge 传 '/agent'。
+// 构造 agent 的 Hono app。basePath 为空则不加前缀(Node 本地直连)。
 // DEV_NO_AUTH / STORE 在构造时读取(env() 取 Deno.env 或 process.env):
-// 既支持 Edge 启动时读 secret,也兼容测试在 import 前 set/delete process.env 的既有用法。
+// 兼容测试在 import 前 set/delete process.env 的既有用法。
 export function createApp(basePath = ''): Hono {
   const DEV_NO_AUTH = env('DEV_NO_AUTH') === '1';
   const memoryStore: Store | null = env('STORE') === 'memory' ? new MemoryStore() : null;

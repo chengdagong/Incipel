@@ -53,8 +53,8 @@
 
 - 客户端:**React Native / Expo**,UI 用 `@copilotkit/react-native` 的 headless hooks + 自绘组件。
 - 协议:**AG-UI**(文本流 + 共享状态),传输走 **SSE**(每轮一个 run)。
-- Agent 运行时:**薄 TypeScript 端点(Hono)**,v1 不引入 LangGraph;v1 部署到 Supabase Edge Function(见 [ADR-0002](./adr/0002-agent-runtime-hono-edge-sse.md))。
-- 模型:**抽象层可切换**(Vercel AI SDK 之类),默认接最强可用模型;**仅在 tool-use 可靠的 provider 间切换**,不接弱模型(见 ADR-0001)。
+- Agent 运行时:**Mastra Node agent server + Hono**,移动端协议仍是 AG-UI SSE(见 [ADR-0011](./adr/0011-mastra-node-agent-runtime.md))。
+- 模型:**抽象层可切换**,默认通过 Mastra 接 OpenRouter;**仅在 tool-use 可靠的 provider 间切换**,不接弱模型(见 ADR-0001)。
 - 数据:**Supabase**(Auth + Postgres + Storage + Realtime)。
 
 ---
@@ -64,8 +64,8 @@
 | 选型 | 理由 |
 |---|---|
 | AG-UI 协议 | 它的共享状态(STATE_SNAPSHOT / STATE_DELTA)正好就是「对话沉淀成剧本」的形态;tool use 走协议,消灭原型那类解析 bug |
-| RN / Expo + CopilotKit | 唯一能直接复用 CopilotKit headless hooks 的跨平台方案;与 AG-UI、Vercel AI SDK 同为 TS 生态,整套栈不断裂 |
-| 薄 agent,不上 LangGraph | v1 的 agent 逻辑线性(取状态 + 最近对话 → 模型 tool use → 流式回复 + 剧本增量),不需要图编排;TS-only,Edge Function 也能跑 |
+| RN / Expo + CopilotKit | 唯一能直接复用 CopilotKit headless hooks 的跨平台方案;与 AG-UI 同属 TS 生态,整体协作顺畅 |
+| Mastra Node agent server | 让 tool use、streaming、未来 hook / subagent 机制留在 agent 层;AG-UI 事件仍由 Incipel 控制 |
 | 模型抽象层 | China 访问/合规不确定,把 provider 抽象在 agent 层,客户端无感切换;只切 tool-use 可靠的 provider |
 | Supabase 做数据层 | Auth / Postgres / Storage / Realtime 一站齐全;**只做数据层,不承载 agent 运行时** |
 
@@ -94,8 +94,8 @@
 │  · 模型抽象层(只切强 provider)     │      │
 │  · prompt caching                   │      │
 │  · 一次 /logline(便宜模型)         │──────┤ 读写 Postgres / Storage
-│  · Hono;v1 跑 Edge Function,       │      │ (服务端用 service key)
-│    可移植到专用主机(见 ADR-0002)  │      │
+│  · Mastra Node server + Hono       │      │ (服务端用 service key)
+│    (见 ADR-0011)                  │      │
 └───────────────────────────────────┘      │
                                      ┌──────┴──────────────────────┐
                                      │  Supabase (data plane)       │
@@ -112,7 +112,7 @@
 ### 组件职责
 
 - **客户端**:渲染;持有 Supabase 会话(JWT);通过 AG-UI 连到 agent 跑对话;直接用 supabase-js 读列表类数据(会话、作品)。不持有任何模型密钥。
-- **Agent 运行时**:唯一调用模型的地方;管理一轮的编排、tool use 落库、AG-UI 事件发射;模型抽象层与重试在这一层。校验客户端 JWT,把会话限定在该用户。
+- **Agent 运行时**:唯一调用模型的地方;管理一轮的编排、tool use 写入数据库、AG-UI 事件发射;模型抽象层与重试在这一层。校验客户端 JWT,把会话限定在该用户。
 - **Supabase**:账号、结构化数据、文件、可选的实时同步。Postgres 开 Row Level Security,按 `user_id` 隔离。
 
 ---
@@ -180,7 +180,7 @@ Agent ──▶ 模型(system[cached] + 剧本[cached prefix] + 最近对话 + �
 
 **内联卡片 = 本轮产生的那批 STATE_DELTA。** 这直接替换原型里两个手写函数:`diffCard()`(算这轮新增)由 DELTA 天然给出;`mergeDoc()`(增量并入)就是 DELTA 的应用。
 
-**多步生成(见 [ADR-0003](./adr/0003-multi-step-tool-loop.md)):** 模型这一「轮」在 AI SDK 里可能跑多步——第 1 步发起工具调用(我们就地 apply 并发 STATE_DELTA),工具(ack)执行后 SDK 带着结果再生成一步,**这一步才产出给用户的总结文本**(TEXT_MESSAGE_*)。若只跑单步,模型纯接管时会停在 `finishReason: tool-calls`、不产任何文本(空回复)。代价:有改动的轮通常约 2 次模型生成。
+**多步生成(见 [ADR-0003](./adr/0003-multi-step-tool-loop.md)):** 模型这一「轮」在 Mastra agent stream 里可能跑多步——第 1 步发起工具调用(我们就地 apply 并发 STATE_DELTA),工具(ack)执行后 agent 带着结果再生成一步,**这一步才产出给用户的总结文本**(TEXT_MESSAGE_*)。若只跑单步,模型纯接管时可能只完成 tool call、不产任何文本(空回复)。代价:有改动的轮通常约 2 次模型生成。
 
 ---
 
@@ -300,7 +300,7 @@ messages
 
 - **不编造内容**:删掉原型那个「按阶段生成假剧本」的离线引擎(它是为了断网也能演示)。真实产品里改为:模型调用失败时 agent 重试一次,仍失败发 `RUN_ERROR`,客户端显示「网络异常,重试」。
 - **离线**:已同步的作品只读可看,但不能推进(生成必须联网)。
-- **幂等**:一轮的落库(document + message,有改动再加 version)放在一个 Postgres 事务;流式中途断开,客户端可凭最近一次 STATE_SNAPSHOT 恢复,重发本轮不产生脏数据。
+- **幂等**:一轮的数据库写入(document + message,有改动再加 version)放在一个 Postgres 事务;流式中途断开,客户端可凭最近一次 STATE_SNAPSHOT 恢复,重发本轮不产生不一致数据。
 - **流式中断**:客户端重连后,agent 以 `documents.state` 重发 STATE_SNAPSHOT 保持一致;未完成的轮视为未发生。
 - **撤销**:从 `document_versions` 取上一版写回 `documents.state`,发新的 STATE_SNAPSHOT。
 
@@ -310,7 +310,7 @@ messages
 
 - **延迟**:TTFT 主要取决于模型;prompt caching 把系统提示与剧本前缀的处理成本降下来,首 token 更快。
 - **并发**:AG-UI run 是 I/O 密集(大多在等模型),单个轻量主机可扛大量并发 SSE。
-- **计算层部署**:v1 跑 Supabase Edge Function(Hono 编写),且 Edge 是唯一受支持的运行时(见 [ADR-0008](adr/0008-edge-only-agent-runtime.md))。Edge Function 有响应 / CPU 上限,长轮有撞限风险;因 agent 无状态 + `createApp` 仍运行时无关,**触发条件**满足时(单轮时长逼近上限,或并发/冷启动伤体验)迁到专用轻量主机(Cloud Run / Fly / Railway)——加回一个薄 Node 入口即可,不是重写(Node 入口已删,逻辑可移植性仍在,见 ADR-0008 / ADR-0002)。
+- **计算层部署**:agent runtime 是 Mastra Node agent server(见 [ADR-0011](adr/0011-mastra-node-agent-runtime.md))。它适合长轮 SSE 和多步 tool use;部署目标可以是 Cloud Run / Fly / Railway 等 Node 主机。Supabase 只做数据层。
 - **跨设备同步**:v1 打开会话时重新拉取即可;需要实时再上 Supabase Realtime 推 `documents` 变更。
 - **成本主因**:每个有改动的轮约 2 次模型生成(多步:工具步 + 总结步)+ 每次骰子一次调用。控制手段:bounded context、prompt caching、骰子用便宜模型 + 限流。
 
@@ -323,8 +323,8 @@ messages
 | 显式 add/update/remove + 枚举门控(不用 upsert) | 杜绝错误/重复 id 与解析失败 | 工具多、schema 每轮动态生成 | 见 ADR-0001;勿退回 upsert |
 | 只接 tool-use 可靠的模型(替代文本解析) | 一套契约、健壮 | 接不了 tool-use 弱的模型 | 抽象层只切强 provider;真要弱模型由其适配器包装成统一 tool-use 接口 |
 | 状态存 DB + 每轮(有改动)版本,不上 event sourcing | 简单、可查询、够用 | 没有免费的全量时间旅行/审计/分支 | 一版即支持撤销;真要分支再升级 |
-| v1 跑 Edge Function(Hono 可移植) | 简单、与 Supabase 同处、缩到零 | Edge 有时长/CPU 上限 | Hono 可移植,触发条件迁专用主机(ADR-0002) |
-| v1 不上 LangGraph | TS-only、轻、Edge 友好 | 缺图编排 | agent 变多步时再引入 |
+| Mastra Node agent server | 长轮 streaming、tool use 与未来 hook / subagent 更自然 | 需要单独部署 Node server | Supabase 继续只管数据层;部署目标另选 |
+| 暂不引入 LangGraph | TS-only、与 Mastra 同栈 | 缺图编排 | agent 变成多 actor 或显式 workflow 时再评估 |
 | AG-UI + CopilotKit RN | 整套 TS 栈不断裂 | RN 包较新,有坑(Hermes polyfill、自接 Markdown 渲染) | 用 headless hooks + 自绘,绕开未成熟的部分 |
 | v1 仅 AI 写剧本(不开放手编) | 简单,无并发写冲突 | 用户不能直接编辑 | AG-UI 共享状态让 v1.1 加手编是纯增量 |
 | 匿名登录 + 事后可选升级 | 零摩擦入门,保住原型手感 | 升级前卸载重装会丢数据 | 有了值得存的作品再提示升级 ·（认证入场时机已由 [ADR-0005](./adr/0005-auth-entry-in-v1.md) 修订:登录页提前进 v1,匿名退为一次点击) |
@@ -336,7 +336,7 @@ messages
 - **用户直接手编剧本(v1.1)**:人与 AI 并发改同一剧本,可能需要 section 级锁或 CRDT/OT。
 - **导出(Fountain / PDF)**:移出 v1,后续再做(PDF 给整部作品全貌,Fountain 给剧本正文供导入专业工具)。
 - **event sourcing**:若需要审计、版本分支、精细时间旅行。
-- **LangGraph**:若 agent 长出多步规划(自动取材、多角色推演等)。
+- **更强的 workflow framework**:若 agent 长出多 actor、多阶段审批或可恢复 workflow,再评估 LangGraph 等方案。
 - **多人协作 / 多端实时同步**:更大的工程,v1 不做。
 - **超长会话**:对话历史的摘要/压缩策略。
 - **`/run` 的输入大小 / 滥用限制**:目前 `/run` 不限制请求体大小。日后若要加(防滥用或防超大请求),按**请求体字节数**与**本轮用户消息长度**设限,**不要**按 `messages` 条数设限。原因:移动端 `@ag-ui/client` 每轮把累积的整个 `messages` 数组发来(约每轮加 2 条,仅在 `threadId` 变化时清空),而 agent 只取其中最后一条 `role==='user'` 的文本(`lastUserText`,见 `packages/agent/src/app.ts`),真正的 prompt 窗口另从 DB 载入(`loadSession`,最近约 10 条,见 §9)。所以请求里的消息条数与 prompt 窗口、成本无关:按条数封顶会随正常会话变长而误伤——几百轮的长会话即便每条都很短也会被拒——同时对单个超大 payload 又拦不住。

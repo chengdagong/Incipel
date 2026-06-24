@@ -6,7 +6,7 @@
 //
 // 这里用最后一条助手消息的 JSON Patch deltas 反推:把这一轮 add 进来的顶层实体(world/characters/
 // outline/scenes,按 id)从当前剧本里去掉,即得发生前的基线。diffCard(基线, 当前剧本) 便还原出
-// 这一轮的新增。语义对齐 diffCard:只认按顶层 id 全新的实体——给既有人物追加 attrs 不算(attr 的 id
+// 这一轮的新增。语义与 diffCard 一致:只认按顶层 id 全新的实体——给既有人物追加 attrs 不算(attr 的 id
 // 不是任何顶层实体的 id,filter 时不会命中,人物仍留在基线里)。
 
 import type { Screenplay } from '@incipel/shared';

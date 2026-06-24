@@ -37,9 +37,9 @@ const DEFAULT_AUDIENCE = 'authenticated';
 //   · issuer:Supabase GoTrue 把 iss 设为 `${SUPABASE_URL}/auth/v1`;可用 SUPABASE_JWT_ISS 覆盖。
 //   · audience:默认 'authenticated';可用 SUPABASE_JWT_AUD 覆盖。
 //
-// INCIPEL_*(ISS/AUD/SECRET)覆盖项**仅供本地** edge runtime:本地 SUPABASE_URL 与浏览器看到的
-// issuer 不一致,且 env-file 不能写 SUPABASE_ 前缀变量,故用不带前缀的 INCIPEL_* 传本地 issuer /
-// HS256 secret。但「不带 SUPABASE_ 前缀」也意味着它们不受平台「禁设 SUPABASE_ 自定义 secret」的保护——
+// INCIPEL_*(ISS/AUD/SECRET)覆盖项**仅供本地** agent server:本地 SUPABASE_URL 与浏览器看到的
+// issuer 可能不一致,故用不带前缀的 INCIPEL_* 传本地 issuer / HS256 secret。
+// 但「不带 SUPABASE_ 前缀」也意味着它们不受平台「禁设 SUPABASE_ 自定义 secret」的保护——
 // 一旦误入托管生产的 secrets,会点亮 HS256 对称校验旁路(见评审 #1)。因此只有当 SUPABASE_URL 指向
 // 本地(http + loopback/kong)时才采纳 INCIPEL_*;托管生产的 SUPABASE_URL 恒为 https://<ref>.supabase.co
 // 且平台禁止改它,故 INCIPEL_* 即便误入也不会被采纳,生产只走 SUPABASE_URL 推导的 issuer + JWKS。

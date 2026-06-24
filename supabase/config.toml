@@ -4,8 +4,8 @@
 #
 # 端口刻意用 5452x 段(而非 Supabase 默认 5432x):本机可能同时跑别的本地
 # Supabase 栈(默认占 5432x、5442x),本项目独占 5452x,互不抢端口。
-# 改这里的端口后,务必同步 packages/agent/.env(SUPABASE_URL)与
-# apps/mobile/.env(EXPO_PUBLIC_SUPABASE_URL),见 README。
+# 改这里的端口后,运行 pnpm env:sync,同步 supabase/.env(SUPABASE_URL/AGENT_PORT)
+# 与 apps/mobile/.env(EXPO_PUBLIC_SUPABASE_URL/EXPO_PUBLIC_AGENT_URL),见 README。
 project_id = "incipel"
 
 [api]
@@ -95,12 +95,12 @@ skip_nonce_check = true
 
 [edge_runtime]
 enabled = true
-# 本地 Edge Function 的运行策略:oneshot 便于热重载调试。
+# 历史 Edge Function 配置;当前 agent runtime 是 Mastra Node server。
 policy = "oneshot"
 # 留在 5452x 段内,避免与默认 8083 或其他本地服务冲突。
 inspector_port = 54525
 
-# agent 运行时(AG-UI / SSE),见 ADR-0002 与 supabase/functions/agent。
+# 历史 agent Edge Function 配置;当前运行时见 ADR-0011。
 [functions.agent]
 enabled = true
 # 网关层不校验 JWT:鉴权由函数内的 authenticate() 负责(更严,校验 iss/aud/sub),

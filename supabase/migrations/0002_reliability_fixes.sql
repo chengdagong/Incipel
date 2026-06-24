@@ -1,4 +1,4 @@
--- 「芯」(Incipel)可靠性修复:落库幂等 + 同会话并发串行化 + 会话原子创建。
+-- 「芯」(Incipel)可靠性修复:写入数据库幂等 + 同会话并发串行化 + 会话原子创建。
 -- 对应 docs/known-issues.md 的 KI-2 / KI-3 / KI-5。本迁移是对 0001_init.sql 的增量更改。
 --
 -- 跨包契约变更:save_turn 增参 p_run_id(放在 p_session_id 之后),agent 的 src/store.ts
@@ -10,7 +10,7 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 alter table public.messages add column if not exists run_id text;
 
--- save_turn 用 (session_id, run_id) 判断本轮是否已落库;也便于按 run 排查。
+-- save_turn 用 (session_id, run_id) 判断本轮是否已写入数据库;也便于按 run 排查。
 create index if not exists messages_session_run_idx on public.messages (session_id, run_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ begin
   -- 锁随本函数(单事务)结束自动释放。hashtext 把 uuid 文本映射成 lock key。
   perform pg_advisory_xact_lock(hashtext(p_session_id::text));
 
-  -- KI-2:本 run 若已落库(存在带该 run_id 的消息),直接返回,不重复插 messages / version。
+  -- KI-2:本 run 若已写入数据库(存在带该 run_id 的消息),直接返回,不重复插 messages / version。
   -- 与上面的 advisory lock 配合:同一 run 的并发重发也会被串行后命中此早返回。
   if exists (
     select 1 from public.messages
@@ -112,7 +112,7 @@ begin
   values (p_session_id, p_user_id, p_title, p_accent)
   on conflict (id) do nothing;
 
-  -- 归属校验:会话已存在且不属于该用户即拒绝(对齐 0001 的隔离边界)。
+  -- 归属校验:会话已存在且不属于该用户即拒绝(与 0001 的隔离边界一致)。
   select user_id into v_owner from public.sessions where id = p_session_id;
   if v_owner is distinct from p_user_id then
     raise exception '会话已存在且不属于该用户';

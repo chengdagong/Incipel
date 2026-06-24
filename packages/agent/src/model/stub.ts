@@ -4,8 +4,8 @@
 // 工厂 createModelProvider() 在 MODEL_PROVIDER=stub 时返回它;与 openrouter 走同一条
 // 核心循环(run.ts 的 runTurnCore),只是把「真实模型流」换成一段写死的脚本(给罐头答案=stub)。
 //
-// 与真实路径对齐的两点:
-// 1) 文本与 tool-call 交错产出,形状与 ai-sdk-runtime 完全一致(见 model/provider.ts 的 StreamChunk)。
+// 与真实路径保持一致的两点:
+// 1) 文本与 tool-call 交错产出,形状与 model/provider.ts 的 StreamChunk 一致。
 // 2) tool-call 的 args 先过该工具当轮的 Zod schema 校验再产出——真实 ai-sdk 给到的 args 也是「已按
 //    schema 解析」的(见 provider.ts:9 注释)。这样 E2E 跑通即意味着参数形状没偏离真实路径;
 //    某工具当轮未被提供(被 buildToolSchemas 的 id 门控挡掉)时跳过它,等同真实「只能调被提供的工具」。

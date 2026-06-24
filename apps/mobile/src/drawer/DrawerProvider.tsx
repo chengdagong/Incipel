@@ -46,7 +46,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
   const [sessions, setSessions] = useState<DrawerSession[]>([]);
 
   // 抽屉头像首字母:已登录(非匿名,Apple)取邮箱 /「Apple 用户」首字母;匿名 / 无会话留空,
-  // 交由 Drawer 兜底显示「你」(guestName)。与设置页账号区算法一致。
+  // 交由 Drawer 默认显示「你」(guestName)。与设置页账号区算法一致。
   const user = session?.user ?? null;
   const accountInitial =
     user && !user.is_anonymous

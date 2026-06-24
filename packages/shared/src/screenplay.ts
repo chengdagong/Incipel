@@ -42,7 +42,7 @@ export function emptyScreenplay(accent: string = ACCENT_OPTIONS[0]): Screenplay 
 }
 
 // 把(可能为旧结构持久化的)剧本归一到当前形态。documents.state 是 opaque jsonb,
-// 人物从单段 `note` 升级为结构化 `role + attrs[]` 后,载入改动前落库的行时人物可能缺 attrs/role;
+// 人物从单段 `note` 升级为结构化 `role + attrs[]` 后,载入改动前写入数据库的行时人物可能缺 attrs/role;
 // 在载入边界归一(补 attrs=[]、把旧 note 搬进 role),避免下游(idSetsOf / serializeScreenplay /
 // 客户端卡片)对 undefined 取属性而崩。各实体数组也一并兜空,容忍残缺历史数据。
 export function normalizeScreenplay(s: Screenplay): Screenplay {

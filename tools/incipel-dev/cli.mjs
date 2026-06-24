@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // incipel-dev —— 本仓库的开发命令行工具(见 docs/adr/0007)。
 //
-// agent 唯一运行时是 Supabase Edge Function,本地开发与 E2E 都在 Supabase 的 edge runtime 上跑。
+// agent 唯一运行时是 Mastra Node server;Supabase 仍负责本地数据库、Auth、Storage。
 // 这个工具接手原来 dev-agent.sh / worktree-dev-env.sh 里 agent 相关的职责:写好各处环境变量、
-// 起共用栈并 serve agent,以及为 E2E 生成「每 worktree 一套」的隔离栈(派生 project_id + 错开
+// 起共用 Supabase 栈并启动 agent server,以及为 E2E 生成「每 worktree 一套」的隔离栈(派生 project_id + 错开
 // 端口 + --workdir)。选 Node 而非 bash:生成 per-worktree config.toml 要改 TOML、做符号链接,
 // bash 做这些易错。
 //
@@ -11,11 +11,11 @@
 //
 //   node tools/incipel-dev/cli.mjs <command> [--dry-run]
 //
-//   dev              起共用栈(若未起)+ 同步 env + serve agent(前台,带热重载日志)
-//   up               起共用栈(若未起)+ 同步 env + 后台 serve agent(不阻塞;dev:ios/android 会调它)
+//   dev              起共用栈(若未起)+ 同步 env + 启动 agent server(前台,带热重载日志)
+//   up               起共用栈(若未起)+ 同步 env + 后台启动 agent server(不阻塞;dev:ios/android 会调它)
 //   env [sync]       起共用栈(若未起)+ 同步 env:写 apps/mobile/.env 的 EXPO_PUBLIC_*、
 //                    确保 supabase/.env 有本地 JWT 校验配置
-//   agent stop       停止当前 worktree 的后台 agent watcher / serve(不停止数据库 / auth / storage)
+//   agent stop       停止当前 worktree 的后台 agent watcher / server(不停止数据库 / auth / storage)
 //   e2e up           生成隔离 workdir + supabase start --workdir,打印该栈的 URL
 //   e2e down         supabase stop --workdir + 清理 workdir
 //   help
@@ -23,7 +23,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   openSync,
@@ -59,7 +58,7 @@ function fail(msg) {
   process.exit(1);
 }
 // 跑命令;mutate=true 的命令在 --dry-run 下只打印。返回 { code, stdout }。
-function run(bin, cmdArgs, { mutate = true, capture = false, cwd } = {}) {
+function run(bin, cmdArgs, { mutate = true, capture = false, cwd, env } = {}) {
   const shown = `${bin} ${cmdArgs.join(' ')}`;
   if (mutate && DRY) {
     log(`  [dry-run] ${shown}`);
@@ -67,6 +66,7 @@ function run(bin, cmdArgs, { mutate = true, capture = false, cwd } = {}) {
   }
   const res = spawnSync(bin, cmdArgs, {
     cwd,
+    env,
     encoding: 'utf8',
     stdio: capture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
   });
@@ -80,6 +80,9 @@ function repoRoot() {
 // 本 worktree 的稳定短 hash(派生 project_id 与端口偏移用)。
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
+}
+function agentPort(root) {
+  return 4111 + (parseInt(worktreeHash(root).slice(0, 4), 16) % 2000);
 }
 function sha1Text(text) {
   return createHash('sha1').update(text).digest('hex');
@@ -123,9 +126,6 @@ function collectFiles(dir, predicate, out = []) {
 
 function agentSourceFiles(root) {
   const files = [
-    join(root, 'supabase', 'functions', AGENT_FUNCTION, 'index.ts'),
-    join(root, 'supabase', 'functions', AGENT_FUNCTION, 'deno.json'),
-    join(root, 'supabase', 'functions', AGENT_FUNCTION, 'deno.lock'),
     join(root, 'packages', 'agent', 'model.config.json'),
   ];
   collectFiles(join(root, 'packages', 'agent', 'src'), (file) => file.endsWith('.ts'), files);
@@ -193,6 +193,29 @@ function getEnvVar(file, key) {
   const m = text.match(new RegExp(`^${key}=(.*)$`, 'm'));
   return m?.[1];
 }
+function readEnvFile(file) {
+  if (!existsSync(file)) return {};
+  const out = {};
+  for (const raw of readFileSync(file, 'utf8').split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1);
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
+  }
+  return out;
+}
+function agentProcessEnv(root) {
+  return { ...process.env, ...readEnvFile(join(root, 'supabase', '.env')) };
+}
 function unsetEnvVar(file, key) {
   if (!existsSync(file)) return false;
   const before = readFileSync(file, 'utf8').split('\n');
@@ -246,12 +269,6 @@ function googleWebClientId(root) {
   const clientId = tomlString(toml, 'auth.external.google', 'client_id');
   return clientId?.split(',').map((id) => id.trim()).find(Boolean) ?? null;
 }
-function canonicalProjectId(root) {
-  const toml = readFileSync(join(root, 'supabase', 'config.toml'), 'utf8');
-  const m = toml.match(/^project_id\s*=\s*"([^"]+)"/m);
-  return m?.[1] ?? 'incipel';
-}
-
 function parseStatusJson(out) {
   const start = out.indexOf('{');
   const end = out.lastIndexOf('}');
@@ -373,12 +390,13 @@ function syncModelEnvFromPrimary(root, fnEnv) {
 }
 
 // ── env sync:把 agent 路由相关的 env 写到位 ──────────────────────────────────
-// agent 已不再是本地 Node 服务,客户端一律指向 edge function:`<api>/functions/v1/agent`。
+// 客户端指向当前 worktree 的 Mastra Node agent server;Supabase URL 继续指向本地共用栈。
 function envSync(root) {
   const apiPort = canonicalApiPort(root);
   const status = statusVars(root);
   const apiUrl = status?.API_URL || `http://127.0.0.1:${apiPort}`;
-  const agentUrl = `${apiUrl}/functions/v1/agent`;
+  const localAgentPort = agentPort(root);
+  const agentUrl = `http://127.0.0.1:${localAgentPort}`;
   const mobileEnv = join(root, 'apps', 'mobile', '.env');
   const mobileExample = join(root, 'apps', 'mobile', '.env.example');
 
@@ -398,21 +416,21 @@ function envSync(root) {
   // 日常 dev 走 Supabase anonymous auth:显示登录页,点「先随便逛逛」后取得真实 session。
   setEnvVar(mobileEnv, 'EXPO_PUBLIC_DEV_NO_AUTH', '');
 
-  // 确保 agent 的 env-file 存在(supabase functions serve 读它):新 worktree 先从主工作区复制,
+  // 确保 agent server 的 env-file 存在:新 worktree 先从主工作区复制,
   // 复制不到才建模板;不把服务端模型密钥写进仓库。
   const fnEnv = join(root, 'supabase', '.env');
   const copiedFnEnv = copyFnEnvFromPrimaryForNewWorktree(root, fnEnv);
   let agentEnvChanged = copiedFnEnv.changed || false;
   if (!existsSync(fnEnv) && !copiedFnEnv.available) {
     const tmpl = [
-      '# agent edge function 的本地 secret(supabase functions serve --env-file 读取)。',
-      '# SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由本地 edge runtime 自动注入,勿在此设。',
+      '# agent server 的本地环境变量(tools/incipel-dev 会读取并传给 @incipel/agent)。',
+      '# SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 由 tools/incipel-dev env sync 写入。',
       '# 模型 key 只在服务端;填 OpenRouter API key。',
       'MODEL_PROVIDER=openrouter',
       'OPENROUTER_API_KEY=',
       '# 模型 id / temperature / reasoning 配置在 packages/agent/model.config.json。',
       '# 本地 dev 默认走 Supabase anonymous auth,agent 照常校验 JWT 并使用 SupabaseStore。',
-      '# INCIPEL_* 覆盖项只给本地 edge runtime 使用;客户端不会读取这个文件。',
+      '# INCIPEL_* 覆盖项只给本地 agent server 使用;客户端不会读取这个文件。',
       '',
     ].join('\n');
     if (DRY) log(`  [dry-run] write supabase/.env (模板)`);
@@ -423,10 +441,15 @@ function envSync(root) {
     agentEnvChanged = true;
   }
   // dev:* / env:sync 强制 Supabase backend + anonymous auth(见 ADR-0009):始终从 supabase/.env
-  // 移除 DEV_NO_AUTH / STORE,杜绝把 memory / 免鉴权带进日常开发。要 memory-only / 免鉴权调试,
-  // 不要走 dev 脚本——自己 `supabase functions serve --env-file <自备文件>`(unsetEnvVar 会打印移除日志)。
+  // 移除 DEV_NO_AUTH / STORE,避免把 memory / 免鉴权带进日常开发。要 memory-only / 免鉴权调试,
+  // 不要走 dev 脚本——直接用自备 env 启动 agent server(unsetEnvVar 会打印移除日志)。
   agentEnvChanged = unsetEnvVar(fnEnv, 'DEV_NO_AUTH') || agentEnvChanged;
   agentEnvChanged = unsetEnvVar(fnEnv, 'STORE') || agentEnvChanged;
+  agentEnvChanged = setEnvVar(fnEnv, 'SUPABASE_URL', apiUrl) || agentEnvChanged;
+  if (status?.SERVICE_ROLE_KEY) {
+    agentEnvChanged = setEnvVar(fnEnv, 'SUPABASE_SERVICE_ROLE_KEY', status.SERVICE_ROLE_KEY) || agentEnvChanged;
+  }
+  agentEnvChanged = setEnvVar(fnEnv, 'AGENT_PORT', String(localAgentPort)) || agentEnvChanged;
   const modelEnv = existsSync(fnEnv) ? syncModelEnvFromPrimary(root, fnEnv) : { copied: false };
   agentEnvChanged = (modelEnv.changed || false) || agentEnvChanged;
   const modelProvider = existsSync(fnEnv) ? syncModelProviderFromConfiguredKey(fnEnv) : { changed: false };
@@ -458,13 +481,12 @@ function ensureStack(root) {
   }
 }
 
-// agent edge function 是否已在 serve:探 /health(本地 supabase start 不自动 serve 函数,
-// 必须另跑 supabase functions serve,故这是「serve 进程在不在」的可靠信号)。
-async function agentHealthy(apiPort) {
+// agent server 是否已在运行:探当前 worktree 的 /health。
+async function agentHealthy(root) {
   try {
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), 1500);
-    const res = await fetch(`http://127.0.0.1:${apiPort}/functions/v1/agent/health`, { signal: ac.signal });
+    const res = await fetch(`http://127.0.0.1:${agentPort(root)}/health`, { signal: ac.signal });
     clearTimeout(timer);
     return res.ok;
   } catch {
@@ -472,24 +494,9 @@ async function agentHealthy(apiPort) {
   }
 }
 
-// 确保 agent serve 在跑:已在(/health 正常)则跳过;否则 detached 后台拉起一个
-// `supabase functions serve`(日志 / PID 落 tmp),再轮询 /health 几秒。轮询超时不阻断——
-// 首次要编译 npm 依赖图较慢,serve 仍在后台继续,调用方(dev:ios)可照常起 Metro。
-function stopEdgeRuntime(root) {
-  const container = `supabase_edge_runtime_${canonicalProjectId(root)}`;
-  if (DRY) {
-    run('docker', ['stop', container], { cwd: root });
-    log(`  [dry-run] 将重启 ${container}`);
-    return true;
-  }
-  const stopped = run('docker', ['stop', container], { capture: true, cwd: root });
-  if (stopped.code !== 0) {
-    log(`  注意:${container} 未停止;如果 agent 仍使用旧配置,请手动重启 supabase functions serve`);
-    return false;
-  }
-  log(`  已停止 ${container},准备重新启动 agent`);
-  return true;
-}
+// 确保 agent server 在跑:已在(/health 正常)则跳过;否则 detached 后台拉起一个
+// `pnpm --filter @incipel/agent dev`(日志 / PID 写入 tmp),再轮询 /health 几秒。
+// 首次要编译 npm 依赖图较慢,server 仍在后台继续,调用方(dev:ios)可照常起 Metro。
 
 function processAlive(pid) {
   if (!Number.isFinite(pid) || pid <= 0) return false;
@@ -543,7 +550,10 @@ function commandHasWords(command, words) {
 }
 
 function commandLooksLikeAgentServe(command) {
-  return commandHasWords(command, ['supabase', 'functions', 'serve', AGENT_FUNCTION]);
+  return (
+    commandHasWords(command, ['pnpm', '@incipel/agent', 'dev']) ||
+    commandHasWords(command, ['tsx', 'src/index.ts'])
+  );
 }
 
 function commandLooksLikeAgentWatcher(command) {
@@ -651,30 +661,28 @@ async function stopAgent(root) {
     }
   }
 
-  if (stoppedServe) stopEdgeRuntime(root);
   if (!stoppedAny) log('  没有可安全停止的当前 worktree agent 进程');
 }
 
 async function ensureAgentServe(root, { restart = false } = {}) {
-  const apiPort = canonicalApiPort(root);
   const paths = agentPaths(root);
   const snapshot = agentSnapshot(root);
   const meta = readJson(paths.serveMeta);
   const prevEnvHash = existsSync(paths.serveEnvHash) ? readFileSync(paths.serveEnvHash, 'utf8').trim() : null;
   const envFileChanged = prevEnvHash !== snapshot.envHash;
-  const healthy = await agentHealthy(apiPort);
+  const healthy = await agentHealthy(root);
   if (healthy) {
     let reason = null;
     if (meta) {
       if (meta.repoRoot !== root || meta.functionName !== AGENT_FUNCTION) {
         reason = 'agent serve metadata does not match current worktree, restarting';
       } else if (restart || meta.sourceHash !== snapshot.sourceHash || meta.envHash !== snapshot.envHash) {
-        reason = 'agent source/env changed, restarting agent edge runtime';
+        reason = 'agent source/env changed, restarting agent server';
       } else if (!DRY && !pidMatches(Number(meta.pid), commandLooksLikeAgentServe, root)) {
-        reason = 'agent serve metadata pid is stale, restarting agent edge runtime';
+        reason = 'agent serve metadata pid is stale, restarting agent server';
       }
     } else if (restart || envFileChanged) {
-      reason = 'agent env-file 内容已变化,重启 agent edge runtime';
+      reason = 'agent env-file 内容已变化,重启 agent server';
     } else {
       reason = 'agent serve metadata does not match current worktree, restarting';
     }
@@ -682,23 +690,28 @@ async function ensureAgentServe(root, { restart = false } = {}) {
     if (reason) {
       log(`  ${reason}`);
       await stopKnownAgentServe(paths, isCurrentAgentMeta(meta, root) ? meta : null, root);
-      stopEdgeRuntime(root);
     } else {
-      log('  agent edge function 已在 serve(/health 正常),跳过');
+      log('  agent server 已在运行(/health 正常),跳过');
       return;
     }
   }
-  const serveArgs = ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'];
+  const serveArgs = ['--filter', '@incipel/agent', 'dev'];
+  const serveCommand = `pnpm ${serveArgs.join(' ')}`;
   if (DRY) {
-    log(`  [dry-run] detached: supabase ${serveArgs.join(' ')}`);
+    log(`  [dry-run] detached: ${serveCommand}`);
     log(`  [dry-run] 日志 ${paths.serveLog} / pid ${paths.servePid} / metadata ${paths.serveMeta}`);
     return;
   }
-  // detached + unref + stdio 重定向到日志文件:Node 退出后该 serve 仍继续跑。
+  // detached + unref + stdio 重定向到日志文件:Node 退出后该 server 仍继续跑。
   const fd = openSync(paths.serveLog, 'a');
-  const child = spawn('supabase', serveArgs, { cwd: root, detached: true, stdio: ['ignore', fd, fd] });
-  // 监听早退:serve 因 Deno 解析 / env / 端口错误立刻退出时,别让健康检查超时后还谎报「仍在编译」、
-  // 把 Metro 指向一个根本没在跑的 agent(评审 A)。父进程(本 CLI)存活期间 'exit' 照常触发。
+  const child = spawn('pnpm', serveArgs, {
+    cwd: root,
+    detached: true,
+    env: agentProcessEnv(root),
+    stdio: ['ignore', fd, fd],
+  });
+  // 监听早退:server 因 env / 端口错误立刻退出时,别让健康检查超时后还误报为仍在编译。
+  // 父进程(本 CLI)存活期间 'exit' 照常触发。
   let serveExited = false;
   let serveExitCode = null;
   child.on('exit', (code) => {
@@ -711,7 +724,7 @@ async function ensureAgentServe(root, { restart = false } = {}) {
     repoRoot: root,
     functionName: AGENT_FUNCTION,
     pid: child.pid ?? null,
-    command: `supabase ${serveArgs.join(' ')}`,
+    command: serveCommand,
     logPath: paths.serveLog,
     sourceHash: snapshot.sourceHash,
     envHash: snapshot.envHash,
@@ -720,20 +733,20 @@ async function ensureAgentServe(root, { restart = false } = {}) {
     status: 'pending',
     updatedAt: new Date().toISOString(),
   });
-  log(`  已后台启动 agent serve(pid ${child.pid ?? '?'});日志 ${paths.serveLog}`);
+  log(`  已后台启动 agent server(pid ${child.pid ?? '?'});日志 ${paths.serveLog}`);
   log(`  停止它:kill \$(cat ${paths.servePid})  (停整个栈:supabase stop)`);
   for (let i = 0; i < 20; i++) {
     await sleep(500);
     if (serveExited) {
-      fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'})——多半是 Deno 解析 / env / 端口问题;看日志:${paths.serveLog}`);
+      fail(`agent server 启动即退出(exit ${serveExitCode ?? '?'});多半是 env / 端口问题;看日志:${paths.serveLog}`);
     }
-    if (await agentHealthy(apiPort)) {
+    if (await agentHealthy(root)) {
       writeFileSync(paths.serveEnvHash, `${snapshot.envHash}\n`);
       writeJson(paths.serveMeta, {
         repoRoot: root,
         functionName: AGENT_FUNCTION,
         pid: child.pid ?? null,
-        command: `supabase ${serveArgs.join(' ')}`,
+        command: serveCommand,
         logPath: paths.serveLog,
         sourceHash: snapshot.sourceHash,
         envHash: snapshot.envHash,
@@ -747,9 +760,9 @@ async function ensureAgentServe(root, { restart = false } = {}) {
     }
   }
   if (serveExited) {
-    fail(`agent serve 启动即退出(exit ${serveExitCode ?? '?'});看日志:${paths.serveLog}`);
+    fail(`agent server 启动即退出(exit ${serveExitCode ?? '?'});看日志:${paths.serveLog}`);
   }
-  log('  agent 仍在后台编译启动(首次较慢),稍候即可;有问题看上面的日志。');
+  log('  agent server 仍在后台编译启动(首次较慢),稍候即可;有问题看上面的日志。');
 }
 
 async function ensureAgentWatcher(root) {
@@ -858,28 +871,29 @@ async function watchAgent(root) {
   }
 }
 
-// ── dev:起共用栈(若未起)+ env sync + 前台 serve agent(带热重载日志)──────────
+// ── dev:起共用栈(若未起)+ env sync + 前台 agent server(带热重载日志)──────────
 function dev(root) {
   log('▸ 检查共用 Supabase 栈');
   ensureStack(root);
   log('▸ 同步 env');
   envSync(root);
-  log('▸ serve agent(前台,网关不校验 JWT,鉴权由 app 内 authenticate 决定)');
-  const r = run('supabase', ['functions', 'serve', 'agent', '--env-file', 'supabase/.env', '--no-verify-jwt'], {
+  log('▸ 启动 agent server(前台)');
+  const r = run('pnpm', ['--filter', '@incipel/agent', 'dev'], {
     cwd: root,
+    env: agentProcessEnv(root),
   });
-  // 传递 serve 的失败退出码(端口占用 / Deno 解析错 / Docker 问题),别把启动失败当成功退出。
+  // 传递 server 的失败退出码(端口占用 / env 错误),别把启动失败当成功退出。
   if (r.code !== 0) process.exit(r.code);
 }
 
-// ── up:确保「共用栈 + agent serve」就绪(serve 走后台,不阻塞)──────────────────
+// ── up:确保「共用栈 + agent server」就绪(server 走后台,不阻塞)──────────────────
 // 供 dev:ios / dev:android 在起 Metro 前调用,使一条 `pnpm dev:ios` 就把后端也带起来。
 async function up(root) {
   log('▸ 确保共用 Supabase 栈在运行');
   ensureStack(root);
   log('▸ 同步 env');
   const synced = envSync(root);
-  log('▸ 确保 agent edge function 在 serve');
+  log('▸ 确保 agent server 在运行');
   await ensureAgentServe(root, { restart: synced.agentEnvChanged });
   log('▸ 确保 agent watcher 在监控当前 worktree');
   await ensureAgentWatcher(root);
@@ -927,16 +941,13 @@ function planIsolatedStack(root) {
   text = text.replace(/(\bapi_url\s*=\s*"http:\/\/127\.0\.0\.1:)(\d+)(")/, `$1${apiPort}$3`);
   return { projectId, delta, apiPort, configText: text };
 }
+function isolatedAgentPort(root, plan) {
+  return agentPort(root) + 2000 + plan.delta;
+}
 function replaceDirSymlink(src, dst) {
   if (!existsSync(src)) return false;
   if (existsSync(dst)) rmSync(dst, { recursive: true, force: true });
   symlinkSync(src, dst, 'dir');
-  return true;
-}
-function copyDirFresh(src, dst) {
-  if (!existsSync(src)) return false;
-  if (existsSync(dst)) rmSync(dst, { recursive: true, force: true });
-  cpSync(src, dst, { recursive: true });
   return true;
 }
 function e2eUp(root) {
@@ -950,8 +961,6 @@ function e2eUp(root) {
     log(`  [dry-run] mkdir -p ${sb}`);
     log(`  [dry-run] write ${join(sb, 'config.toml')}  (project_id + 端口已偏移)`);
     log(`  [dry-run] symlink migrations / seed(若有) -> ${sb}`);
-    log(`  [dry-run] copy supabase/functions -> ${join(sb, 'functions')}`);
-    log(`  [dry-run] symlink packages -> ${join(workdir, 'packages')}`);
   } else {
     mkdirSync(sb, { recursive: true });
     writeFileSync(join(sb, 'config.toml'), plan.configText);
@@ -960,8 +969,6 @@ function e2eUp(root) {
       const dst = join(sb, name);
       replaceDirSymlink(src, dst);
     }
-    copyDirFresh(join(root, 'supabase', 'functions'), join(sb, 'functions'));
-    replaceDirSymlink(join(root, 'packages'), join(workdir, 'packages'));
     // workdir 不该入库:再写一份 .gitignore 作为额外保护(根 .gitignore 也已忽略)。
     writeFileSync(join(workdir, '.gitignore'), '*\n');
   }
@@ -971,13 +978,14 @@ function e2eUp(root) {
   if (started.code !== 0 && !DRY) fail('隔离栈 supabase start 失败');
 
   const isoApi = `http://127.0.0.1:${plan.apiPort}`;
-  const agentUrl = `${isoApi}/functions/v1/agent`;
+  const isoAgentPort = isolatedAgentPort(root, plan);
+  const agentUrl = `http://127.0.0.1:${isoAgentPort}`;
   // 为隔离栈生成专属 agent env-file:用隔离栈自己的 API 端口(issuer)与 JWT secret。否则若复用共用栈的
   // supabase/.env,其 INCIPEL_SUPABASE_JWT_ISS 指向 54521,而隔离栈签出的 token issuer 是
   // 127.0.0.1:<apiPort>,authenticate() 优先用这个本地覆盖 → /run、/logline 全部 401(评审 B)。
   const isoEnvFile = join(workdir, 'agent.env');
   if (DRY) {
-    log(`  [dry-run] write ${isoEnvFile}(隔离栈 issuer/secret + 从 supabase/.env 复制的模型 env)`);
+    log(`  [dry-run] write ${isoEnvFile}(隔离栈 Supabase URL/service key/issuer/secret + agent 端口)`);
   } else {
     const isoRes = run('supabase', ['status', '--workdir', workdir, '-o', 'json'], { mutate: false, capture: true, cwd: root });
     const isoStatus = isoRes.code === 0 ? parseStatusJson(isoRes.stdout) : null;
@@ -987,6 +995,9 @@ function e2eUp(root) {
       const v = existsSync(sharedFnEnv) ? getEnvVar(sharedFnEnv, k) : null;
       if (v) lines.push(`${k}=${v}`);
     }
+    lines.push(`SUPABASE_URL=${isoApi}`);
+    if (isoStatus?.SERVICE_ROLE_KEY) lines.push(`SUPABASE_SERVICE_ROLE_KEY=${isoStatus.SERVICE_ROLE_KEY}`);
+    lines.push(`AGENT_PORT=${isoAgentPort}`);
     lines.push(`INCIPEL_SUPABASE_JWT_ISS=${isoApi}/auth/v1`);
     lines.push('INCIPEL_SUPABASE_JWT_AUD=authenticated');
     if (isoStatus?.JWT_SECRET) lines.push(`INCIPEL_SUPABASE_JWT_SECRET=${isoStatus.JWT_SECRET}`);
@@ -999,8 +1010,8 @@ function e2eUp(root) {
   log(`  EXPO_PUBLIC_SUPABASE_URL = ${isoApi}`);
   log(`  EXPO_PUBLIC_AGENT_URL    = ${agentUrl}`);
   log(`  anon key / service key:supabase status --workdir ${workdir}`);
-  log(`  serve agent:supabase functions serve agent --workdir ${workdir} --env-file ${isoEnvFile} --no-verify-jwt`);
-  log(`  (${isoEnvFile} 已写好隔离栈自己的 INCIPEL_SUPABASE_JWT_ISS=${isoApi}/auth/v1,避免用共用栈 issuer 校验导致 401)`);
+  log(`  start agent:(set -a; . ${isoEnvFile}; set +a; pnpm --filter @incipel/agent start)`);
+  log(`  (${isoEnvFile} 已写好隔离栈自己的 SUPABASE_URL 与 INCIPEL_SUPABASE_JWT_ISS=${isoApi}/auth/v1)`);
 }
 function e2eDown(root) {
   const workdir = e2eWorkdir(root);

@@ -1,15 +1,4 @@
 {
-  "//": "agent Edge Function 的依赖映射(Supabase 推荐每个函数各持一份 deno.json)。所有 npm: 版本与 monorepo 的 pnpm-lock.yaml 锁定一致,避免 Edge 与 Node 两端漂移;改 packages/agent 的依赖版本时同步这里。@incipel/shared 指向 Deno 专用入口 index.deno.ts(显式 .ts 扩展名)。",
-  "imports": {
-    "@incipel/shared": "../../../packages/shared/src/index.deno.ts",
-    "@ag-ui/core": "npm:@ag-ui/core@0.0.57",
-    "@openrouter/ai-sdk-provider": "npm:@openrouter/ai-sdk-provider@0.7.3",
-    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.108.2",
-    "ai": "npm:ai@4.3.19",
-    "hono": "npm:hono@4.12.25",
-    "hono/": "npm:/hono@4.12.25/",
-    "jose": "npm:jose@5.10.0",
-    "nanoid": "npm:nanoid@5.1.11",
-    "zod": "npm:zod@3.25.76"
-  }
+  "//": "Deprecated historical Edge Function config. The supported agent runtime is packages/agent/src/index.ts with Mastra Node server.",
+  "imports": {}
 }
