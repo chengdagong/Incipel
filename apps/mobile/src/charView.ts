@@ -3,8 +3,9 @@
 
 import type { Character, CharacterAttr } from '@incipel/shared';
 
-// 这些属性单列(身份→徽标、年龄/性别→一行、背景→小传),不进标签 chip。
-const HIDDEN = new Set(['身份', '年龄', '性别', '背景']);
+// 这些标签各有专属呈现位(年龄/性别→一行、背景→小传),不进标签 chip。
+// 「身份」单独判断(见下):标准值→徽标、非标准值视情况充当小传或退为普通标签。
+const HIDDEN = new Set(['年龄', '性别', '背景']);
 
 // 身份徽标只接受这三种标准类别(对齐原型 idMap)。助手自由命名属性,常把整段人物小传
 // 写进「身份」(字面就是「这人是谁」);这类描述性长文不是徽标,会把 header 徽标位撑成
@@ -17,13 +18,22 @@ export function charView(c: Character): CharView {
   const attr = (label: string) => c.attrs.find((a) => a.label === label)?.value ?? '';
   const rawIdentity = attr('身份').trim();
   const isBadge = IDENTITY_BADGES.has(rawIdentity);
+  const background = attr('背景');
+  // 非标准「身份」(如「反派」或被误塞的整段小传):没有「背景」时充当小传;
+  // 有「背景」时不丢弃——退为普通标签照常显示(否则该值会在界面上彻底消失)。
+  const identityAsBio = !isBadge && !!rawIdentity && !background;
   return {
     // 仅标准类别作徽标;非标准的「身份」值不渲染徽标(渲染处回退到「人物」eyebrow)。
     identity: isBadge ? rawIdentity : '',
     ageGender: [attr('年龄'), attr('性别')].filter(Boolean).join(' · '),
     // 小传优先取「背景」;若无,则把被误塞进「身份」的描述性长文当作小传,放进正文。
-    bio: attr('背景') || (isBadge ? '' : rawIdentity),
-    tags: c.attrs.filter((a) => !HIDDEN.has(a.label)),
+    bio: background || (identityAsBio ? rawIdentity : ''),
+    // 「身份」仅在已被用作徽标或小传时从标签里隐藏;否则保留为标签,避免已存值消失。
+    tags: c.attrs.filter((a) => {
+      if (HIDDEN.has(a.label)) return false;
+      if (a.label === '身份') return !(isBadge || identityAsBio);
+      return true;
+    }),
   };
 }
 

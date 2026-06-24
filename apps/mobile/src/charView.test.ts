@@ -31,6 +31,16 @@ describe('charView', () => {
     expect(v.bio).toBe('游戏里的 AI 居民');
   });
 
+  it('非标准身份(反派)+ 背景:身份不当徽标也不丢,退为标签保留', () => {
+    const v = charView(char([a('身份', '反派'), a('背景', '某段往事'), a('性格', '阴鸷')]));
+    expect(v.identity).toBe(''); // 反派非标准类别,不作徽标
+    expect(v.bio).toBe('某段往事'); // 小传取背景
+    // 关键:反派值不消失——以「身份」标签保留,值仍可在文档详情点开看到。
+    const idTag = v.tags.find((t) => t.label === '身份');
+    expect(idTag?.value).toBe('反派');
+    expect(v.tags.map((t) => t.label)).toEqual(['身份', '性格']);
+  });
+
   it('身份缺失时徽标为空,小传仍取背景', () => {
     const v = charView(char([a('背景', '某段往事'), a('外貌', '戴墨镜')]));
     expect(v.identity).toBe('');

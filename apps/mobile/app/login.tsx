@@ -53,9 +53,9 @@ export default function LoginScreen() {
 
   const showApple = Platform.OS === 'ios';
 
-  function comingSoon(label: string) {
+  function comingSoon(feature: string) {
     setError(null);
-    setNotice(`${label}即将开放`);
+    setNotice(t('comingSoon', { feature }));
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
     noticeTimer.current = setTimeout(() => setNotice(null), 2600);
   }
@@ -75,7 +75,7 @@ export default function LoginScreen() {
         return;
       }
       console.warn('[login] Apple 登录失败:', e);
-      setError('登录失败,请重试。');
+      setError(t('loginFailed'));
       setBusy(false);
     }
   }
@@ -113,7 +113,7 @@ export default function LoginScreen() {
       await signInAnonymously();
     } catch (e) {
       console.warn('[login] 匿名登录失败:', e);
-      setError('没能进入,请稍后重试。');
+      setError(t('enterFailed'));
       setBusy(false);
     }
   }
@@ -161,7 +161,7 @@ export default function LoginScreen() {
 
         <Pressable
           style={[styles.btn, { borderColor: palette.border, backgroundColor: palette.cardBg }]}
-          onPress={() => comingSoon('邮箱登录')}
+          onPress={() => comingSoon(t('emailBtn'))}
           accessibilityRole="button"
           accessibilityLabel={t('emailBtn')}
         >
