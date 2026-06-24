@@ -1,4 +1,4 @@
-// prompt.ts 单元测试(testing-strategy §3.6):剧本序列化、每轮 prompt 拼装、logline prompt。
+// prompt.ts 单元测试(testing-strategy §3.6):剧本序列化、每次回应的 prompt 拼装、logline prompt。
 
 import { describe, it, expect } from 'vitest';
 import { emptyScreenplay, type Screenplay } from '@incipel/shared';
@@ -48,7 +48,7 @@ describe('serializeScreenplay', () => {
 });
 
 describe('buildPrompt', () => {
-  it('system 为 buildSystem() 输出(默认助手名);prompt 含剧本快照、对话历史与本轮消息', () => {
+  it('system 为 buildSystem() 输出(默认助手名);prompt 含剧本快照、对话历史与本次用户消息', () => {
     const history: PromptMessage[] = [
       { role: 'user', text: '想写末日废土' },
       { role: 'assistant', text: '好,先定个 logline' },
@@ -59,7 +59,16 @@ describe('buildPrompt', () => {
     expect(prompt).toContain('# 对话历史');
     expect(prompt).toContain('用户: 想写末日废土');
     expect(prompt).toContain('主管编剧: 好,先定个 logline'); // 助手发言用默认显示名标注
-    expect(prompt).toContain('# 本轮用户消息\n给两个人物');
+    expect(prompt).toContain('# 本次用户消息\n给两个人物');
+  });
+
+  it('system 不再要求模型先判断「引导 / 接管」模式', () => {
+    const system = buildSystem();
+    expect(system).toContain('# 每次如何回应用户');
+    expect(system).toContain('如果用户意图清楚,而且足以推进剧本');
+    expect(system).not.toContain('引导');
+    expect(system).not.toContain('接管');
+    expect(system).not.toContain('当前模式');
   });
 
   it('完整对话历史不截断:全部历史消息都进入 prompt(ADR-0010)', () => {
@@ -76,7 +85,7 @@ describe('buildPrompt', () => {
   it('无对话历史时,「对话历史」段被过滤掉', () => {
     const { prompt } = buildPrompt({ state: emptyScreenplay(), history: [], userMessage: 'x' });
     expect(prompt).not.toContain('# 对话历史');
-    expect(prompt).toContain('# 本轮用户消息');
+    expect(prompt).toContain('# 本次用户消息');
   });
 });
 
