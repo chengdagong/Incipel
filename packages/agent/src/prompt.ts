@@ -22,6 +22,9 @@ export const DEFAULT_ASSISTANT_NAME = '主管编剧';
 // 助手名最长字符数。这是 display name,不需要长;超出即截断。
 const ASSISTANT_NAME_MAX = 24;
 
+// 题材最长字符数。题材是短标签(最长如「サイバーパンク」),给足余量即可;超出即截断。
+const GENRE_MAX = 24;
+
 // 助手名来自客户端(/run 的 forwardedProps.assistantName),会被插进 system 角色的提示里。
 // 必须当「数据」而非「指令」处理:去掉换行 / 控制字符、去掉用作名字边界的「」、折叠空白并截断;
 // 清洗后为空则回落默认名。否则带换行或额外指令的名字会成为高优先级的 system 文本,
@@ -35,6 +38,19 @@ export function sanitizeAssistantName(name?: string): string {
     .trim()
     .slice(0, ASSISTANT_NAME_MAX);
   return cleaned.length > 0 ? cleaned : DEFAULT_ASSISTANT_NAME;
+}
+
+// 题材同样来自客户端 forwardedProps,可被任意构造。注入 prompt 前必须当「数据」清洗:
+// 控制字符 / 换行 → 空格、去掉用作边界的「」、折叠空白并截到短长度——杜绝长文本或指令式
+// 内容绕过 MAX_USER_MESSAGE_CHARS 与固定题材列表做 prompt injection。空 / 非字符串 → 空串(不注入)。
+export function sanitizeGenre(genre?: string): string {
+  if (typeof genre !== 'string') return '';
+  return genre
+    .replace(/\p{Cc}/gu, ' ')
+    .replace(/[「」]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, GENRE_MAX);
 }
 
 // 助手的人格与硬约束。同一助手名下稳定不变,作为 prompt caching 的命中前缀。
@@ -162,9 +178,11 @@ export type BuiltPrompt = {
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   const assistantName = sanitizeAssistantName(input.assistantName);
   // 题材偏好只在首轮(还没有历史)注入,作低调的定调提示——单列成段,不混进用户消息正文。
+  // 客户端传来的题材先清洗(防 prompt injection),清洗后为空则不注入。
+  const genre = sanitizeGenre(input.genre);
   const genreHint =
-    input.genre && input.history.length === 0
-      ? `# 用户选定题材\n${input.genre}\n（界面注入的题材偏好,仅用于定调;不代表用户语言,回复语言仍只跟随用户自己写的正文。）`
+    genre && input.history.length === 0
+      ? `# 用户选定题材\n${genre}\n（界面注入的题材偏好,仅用于定调;不代表用户语言,回复语言仍只跟随用户自己写的正文。）`
       : '';
   const parts = [
     serializeScreenplay(input.state),
