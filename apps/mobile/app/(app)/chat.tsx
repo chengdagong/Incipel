@@ -15,7 +15,7 @@ import {
 } from '@incipel/shared';
 import { useScreenplayAgent, newThreadId } from '../../src/agui/client';
 import { Composer, type ComposerHandle } from '../../src/components/Composer';
-import { DocSheet } from '../../src/components/DocPanel';
+import { DocSheet, type DocTarget } from '../../src/components/DocPanel';
 import { PortraitSheet } from '../../src/components/PortraitSheet';
 import { PortraitProvider } from '../../src/portrait';
 import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
@@ -91,6 +91,12 @@ export default function ChatScreen() {
 
   // 「作品」入口可带 view=doc 直接进文档视图。
   const [docOpen, setDocOpen] = useState(params.view === 'doc');
+  // 卡片页脚的定向跳转目标;openDoc() 不带目标 = 顶栏文档键,落到目录。
+  const [docTarget, setDocTarget] = useState<DocTarget | null>(null);
+  const openDoc = (next?: DocTarget) => {
+    setDocTarget(next ?? null);
+    setDocOpen(true);
+  };
 
   // 聚焦标签(#12):瞬时;发送时拼进消息、随即清空。
   const [chips, setChips] = useState<FocusChip[]>([]);
@@ -203,7 +209,10 @@ export default function ChatScreen() {
         stageLabel={stageLabel}
         docOpen={docOpen}
         onBack={() => router.back()}
-        onToggleDoc={() => setDocOpen((v) => !v)}
+        onToggleDoc={() => {
+          setDocTarget(null);
+          setDocOpen((v) => !v);
+        }}
       />
 
       <ScrollView style={styles.thread} contentContainerStyle={styles.threadContent}>
@@ -220,7 +229,7 @@ export default function ChatScreen() {
               card={isLastAssistant ? card : undefined}
               options={isLastAssistant ? options : undefined}
               onSend={sendPlain}
-              onOpenDoc={() => setDocOpen(true)}
+              onOpenDoc={openDoc}
               onFocusAttr={focusAttr}
               onFocusCharacter={focusCharacter}
             />
@@ -233,7 +242,7 @@ export default function ChatScreen() {
 
         {/* 正在流式打字的 assistant 气泡(本轮尚未落定为一条消息)。 */}
         {isRunning && !!streamingText && (
-          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={() => setDocOpen(true)} />
+          <MessageBubble role="assistant" text={streamingText} streaming onSend={sendPlain} onOpenDoc={openDoc} />
         )}
 
         {!!error && (
@@ -268,6 +277,7 @@ export default function ChatScreen() {
         open={docOpen}
         onClose={() => setDocOpen(false)}
         screenplay={screenplay}
+        target={docTarget}
         onFocusCharacter={focusCharacter}
         onFocusAttr={focusAttr}
       />
@@ -346,7 +356,7 @@ function MessageBubble({
   card?: InlineCardData;
   options?: string[];
   onSend: (text: string) => void;
-  onOpenDoc: () => void;
+  onOpenDoc: (target: DocTarget) => void;
   onFocusAttr?: (c: Character, a: CharacterAttr) => void;
   onFocusCharacter?: (c: Character) => void;
 }) {

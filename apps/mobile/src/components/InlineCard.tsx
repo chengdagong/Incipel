@@ -7,6 +7,7 @@ import type { Act, Character, CharacterAttr, Scene, WorldSection } from '@incipe
 import { defaultTheme, palette, type Theme } from '../theme';
 import { useI18n, VOL_I18N } from '../i18n';
 import { badgeBox, charView } from '../charView';
+import type { DocTarget } from './DocPanel';
 import { PortraitThumb } from './PortraitThumb';
 
 // 本轮卡片只承载「新增/改动的实体切片」,各区可空。
@@ -20,8 +21,8 @@ export type InlineCardData = {
 type Props = {
   data: InlineCardData;
   theme?: Theme;
-  // 点页脚打开文档全文(system-design §2.1)。
-  onOpenDoc?: () => void;
+  // 点页脚打开文档,并定向跳到该区对应的卷/人物(system-design §2.1,对齐原型 onOpenWorld/onOpenCard/…)。
+  onOpenDoc?: (target: DocTarget) => void;
   // 聚焦标签(#12):点人物标签 chip。
   onFocusAttr?: (c: Character, a: CharacterAttr) => void;
   // 兼容旧签名(整人物聚焦)——本设计页脚改为「打开人物卡片」,不再单列「聊聊 TA」。
@@ -39,7 +40,7 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
   return (
     <View style={styles.wrap}>
       {!!data.world?.length && (
-        <SectionCard label="secWorld" footer={openLabel(vol.world)} onOpen={onOpenDoc} theme={theme}>
+        <SectionCard label="secWorld" footer={openLabel(vol.world)} onOpen={() => onOpenDoc?.({ view: 'world' })} theme={theme}>
           {data.world.map((w) => (
             <Text key={w.id} style={[styles.bodyPara, { color: palette.textBody }]}>
               {w.title ? `${w.title} — ${w.text}` : w.text}
@@ -49,11 +50,18 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
       )}
 
       {data.characters?.map((c) => (
-        <CharacterCard key={c.id} c={c} theme={theme} onOpen={onOpenDoc} onFocusAttr={onFocusAttr} footer={vol.charCard} />
+        <CharacterCard
+          key={c.id}
+          c={c}
+          theme={theme}
+          onOpen={() => onOpenDoc?.({ view: 'charDetail', characterId: c.id })}
+          onFocusAttr={onFocusAttr}
+          footer={vol.charCard}
+        />
       ))}
 
       {!!data.outline?.length && (
-        <SectionCard label="secOutline" footer={openLabel(vol.beats)} onOpen={onOpenDoc} theme={theme}>
+        <SectionCard label="secOutline" footer={openLabel(vol.beats)} onOpen={() => onOpenDoc?.({ view: 'beats' })} theme={theme}>
           {data.outline.map((a) => (
             <Text key={a.id} style={[styles.outlineItem, { color: palette.textSecondary }]}>
               <Text style={{ color: palette.textPrimary, fontWeight: '700' }}>{a.act}</Text>
@@ -64,7 +72,7 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
       )}
 
       {!!data.scenes?.length && (
-        <SectionCard label="secScenes" footer={openLabel(vol.script)} onOpen={onOpenDoc} theme={theme}>
+        <SectionCard label="secScenes" footer={openLabel(vol.script)} onOpen={() => onOpenDoc?.({ view: 'script' })} theme={theme}>
           {data.scenes.map((s) => (
             <View key={s.id} style={styles.scene}>
               <Text style={[styles.sceneSlug, { color: palette.textSecondary }]}>{s.slug}</Text>

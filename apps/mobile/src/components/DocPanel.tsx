@@ -29,11 +29,19 @@ const DOTTED = '#D6CFC3'; // 目录点线引导色
 
 type DocView = 'contents' | 'world' | 'chars' | 'charDetail' | 'beats' | 'script';
 
+// 卡片页脚「打开世界设定 / 人物卡片 / 故事节拍 / 剧本正文」的定向跳转目标:
+// 打开文档面板时直接落到对应卷;人物则落到该人物详情。无 target(顶栏文档键)→ 目录。
+export type DocTarget =
+  | { view: 'world' | 'beats' | 'script' }
+  | { view: 'charDetail'; characterId: string };
+
 type Props = {
   open: boolean;
   onClose: () => void;
   screenplay: Screenplay;
   theme?: Theme;
+  // 打开时的定向跳转目标(对齐原型 onOpenWorld / onOpenCard / onOpenBeats / onOpenScript)。
+  target?: DocTarget | null;
   onFocusCharacter?: (character: Character) => void;
   // 点人物标签 chip:聚焦该属性(#12 聚焦标签)。
   onFocusAttr?: (character: Character, attr: CharacterAttr) => void;
@@ -55,7 +63,7 @@ function parseScript(content: string): Block[] {
   return out;
 }
 
-export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, onFocusAttr }: Props) {
+export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, target, onFocusAttr }: Props) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const { accent } = theme;
@@ -76,6 +84,21 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, onFo
     }).start();
   }, [open, anim]);
   const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [height, 0] });
+
+  // 每次打开按 target 定位:footer 带目标 → 跳到对应卷/人物;无目标(顶栏文档键)→ 回目录。
+  // 只在「关→开」沿触发,避免流式更新 characters 时重置用户已在文档里的浏览位置。
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      if (!target) setView('contents');
+      else if (target.view === 'charDetail') {
+        const idx = screenplay.characters.findIndex((c) => c.id === target.characterId);
+        setSelIdx(idx >= 0 ? idx : 0);
+        setView('charDetail');
+      } else setView(target.view);
+    }
+    wasOpen.current = open;
+  }, [open, target, screenplay.characters]);
 
   const { meta, world, characters, outline, scenes } = screenplay;
   const title = meta.title?.trim() || t('untitled');
