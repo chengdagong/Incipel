@@ -2,8 +2,8 @@
 // 渲染消息、流式打字气泡、内联卡片(本轮剧本相对上一版的新增实体)、可点选项、输入栏;
 // 右上「文档」开关 DocPanel。
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -22,6 +22,8 @@ import { InlineCard, type InlineCardData } from '../../src/components/InlineCard
 import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
 import { useT } from '../../src/i18n';
+import { supabase } from '../../src/supabase';
+import { normalizeSessionTitle } from '../../src/session-title';
 import { defaultTheme } from '../../src/theme';
 
 // 助手正文行内 **加粗** 渲染(对齐原型 parseInline:**…** → 加粗、主色)。
@@ -92,7 +94,7 @@ export default function ChatScreen() {
   const reopening = !!params.sessionId;
   // 欢迎屏带来的题材(仅新建创作时有);转发给 agent 作首轮定调,不进用户消息。
   const genre = typeof params.genre === 'string' ? params.genre : undefined;
-  const { messages, screenplay, streamingText, options, isRunning, thinking, error, hydratedBaseline, hydrating, sendMessage, retry } =
+  const { messages, screenplay, streamingText, options, isRunning, thinking, error, hydratedBaseline, hydrating, sendMessage, retry, applyLocalTitle } =
     useScreenplayAgent(threadId, { hydrate: reopening, genre });
 
   // 「作品」入口可带 view=doc 直接进文档视图。
@@ -108,7 +110,25 @@ export default function ChatScreen() {
   const [chips, setChips] = useState<FocusChip[]>([]);
   const composerRef = useRef<ComposerHandle>(null);
 
-  const title = screenplay.meta.title?.trim() || t('draftTitle');
+  const rawTitle = screenplay.meta.title?.trim() || '';
+  const title = rawTitle || t('untitled');
+  const saveTitle = useCallback(
+    async (input: string) => {
+      const nextTitle = normalizeSessionTitle(input);
+      if (nextTitle === normalizeSessionTitle(screenplay.meta.title ?? '')) return;
+      const { data, error } = await supabase.rpc('update_session_title', {
+        p_session_id: threadId,
+        p_title: nextTitle,
+      });
+      if (error) throw error;
+      const rows = data as { title?: unknown; updated_at?: unknown }[] | null;
+      const row = Array.isArray(rows) ? rows[0] : null;
+      const savedTitle = typeof row?.title === 'string' ? row.title : nextTitle;
+      const savedUpdatedAt = typeof row?.updated_at === 'string' ? row.updated_at : undefined;
+      applyLocalTitle(savedTitle, savedUpdatedAt);
+    },
+    [applyLocalTitle, screenplay.meta.title, threadId],
+  );
   const hasGeneratedState =
     Boolean(screenplay.meta.title?.trim()) ||
     Boolean(screenplay.meta.logline?.trim()) ||
@@ -209,8 +229,10 @@ export default function ChatScreen() {
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]} testID={chatStateTestID}>
       <Header
         title={title}
+        rawTitle={rawTitle}
         docOpen={docOpen}
         onBack={() => router.back()}
+        onSaveTitle={saveTitle}
         onToggleDoc={() => {
           setDocTarget(null);
           setDocOpen((v) => !v);
@@ -306,18 +328,58 @@ export default function ChatScreen() {
 
 function Header({
   title,
+  rawTitle,
   docOpen,
   onBack,
+  onSaveTitle,
   onToggleDoc,
 }: {
   title: string;
+  rawTitle: string;
   docOpen: boolean;
   onBack: () => void;
+  onSaveTitle: (title: string) => Promise<void>;
   onToggleDoc: () => void;
 }) {
   const { palette } = defaultTheme;
   const insets = useSafeAreaInsets();
   const t = useT();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(rawTitle);
+  const [saving, setSaving] = useState(false);
+  const committingRef = useRef(false);
+
+  useEffect(() => {
+    if (!editing) setDraft(rawTitle);
+  }, [editing, rawTitle]);
+
+  const commitTitle = useCallback(async () => {
+    if (committingRef.current || saving) return;
+    committingRef.current = true;
+    const next = normalizeSessionTitle(draft);
+    const current = normalizeSessionTitle(rawTitle);
+    if (next === current) {
+      setDraft(rawTitle);
+      setEditing(false);
+      committingRef.current = false;
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSaveTitle(next);
+      setDraft(next);
+      setEditing(false);
+    } catch (e) {
+      console.warn('[chat] 标题保存失败:', e instanceof Error ? e.message : String(e));
+      setDraft(rawTitle);
+      setEditing(false);
+      Alert.alert(t('renameTitleFailed'));
+    } finally {
+      setSaving(false);
+      committingRef.current = false;
+    }
+  }, [draft, onSaveTitle, rawTitle, saving, t]);
+
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6, borderColor: palette.divider }]}>
       <View style={styles.headerInner}>
@@ -325,11 +387,38 @@ function Header({
           <Text style={[styles.backChevron, { color: palette.textSecondary }]}>‹</Text>
         </Pressable>
 
-        <View style={styles.headerCenter} pointerEvents="none">
-          <Text style={[styles.headerTitle, { color: palette.textSecondary }]} numberOfLines={1}>
-            {title}
-          </Text>
-        </View>
+        {editing ? (
+          <TextInput
+            autoFocus
+            editable={!saving}
+            maxLength={80}
+            returnKeyType="done"
+            selectTextOnFocus
+            style={[styles.headerTitleInput, { color: palette.textPrimary, borderColor: palette.borderControl, backgroundColor: palette.cardBg }]}
+            value={draft}
+            onBlur={() => void commitTitle()}
+            onChangeText={setDraft}
+            onSubmitEditing={() => void commitTitle()}
+            placeholder={t('untitled')}
+            placeholderTextColor={palette.placeholder}
+            testID="chat-title-input"
+          />
+        ) : (
+          <Pressable
+            style={styles.headerCenter}
+            onPress={() => {
+              setDraft(rawTitle);
+              setEditing(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t('renameTitle')}
+            testID="chat-title-edit"
+          >
+            <Text style={[styles.headerTitle, { color: palette.textSecondary }]} numberOfLines={1}>
+              {title}
+            </Text>
+          </Pressable>
+        )}
 
         <Pressable
           onPress={onToggleDoc}
@@ -533,6 +622,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { fontSize: 14, fontWeight: '500', maxWidth: 200 },
+  headerTitleInput: {
+    position: 'absolute',
+    left: 76,
+    right: 76,
+    top: 0,
+    bottom: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 0,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '500',
+  },
   docChip: {
     flexDirection: 'row',
     alignItems: 'center',
