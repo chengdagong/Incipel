@@ -18,9 +18,10 @@ AI 原生编剧助手「织幕」。项目背景见 [README.md](README.md),领�
 1. **起开发服务或模拟器,用 worktree 感知的脚本,不要用裸命令**:
    - `pnpm dev:ios` —— Metro 固定 8081 + 共享 iOS simulator `incipel-development`(按 UDID 定向);起 Metro 前会自动起共用 Supabase 栈并写好 env,但不启动、不检查 agent
    - `pnpm dev:android` —— Metro 固定 8081 + 显式指定的 Android 设备 / 模拟器(按 serial 定向);起 Metro 前会自动起共用 Supabase 栈并写好 env,但不启动、不检查 agent
-   - `pnpm dev:agent` —— **前台**起共用栈 + serve agent(需要 agent 或想看 agent 热重载日志时用;日常 dev agent 端口默认是 `4111`,若被占用会询问是否临时改用下一个可用端口,见 [ADR-0011](docs/adr/0011-mastra-node-agent-runtime.md))
-   - `pnpm dx agent stop` —— 停止当前 worktree 元数据记录的后台 agent watcher / serve;不停止本地 Supabase 数据库、auth、storage 等其它容器
-   它们用固定的 Metro 8081(+ 本 worktree 独立的 Metro 缓存),并把 `apps/mobile/.env` 与 `supabase/.env` 写好。`pnpm dev:ios` 在任一 worktree 中都打开同一个 `incipel-development` simulator;`pnpm e2e:ios` 仍使用 worktree 专属 simulator。新 worktree 第一次需要 `supabase/.env` 时,`tools/incipel-dev` 必须先从主工作区完整复制该文件,再写本地 JWT 校验变量。机制与取舍见 [docs/worktree-dev.md](docs/worktree-dev.md)。
+   - `pnpm dev:agent` —— **前台**起共用栈并启动 agent server(需要 agent 或想看 agent 日志时用;日常 dev agent 端口默认是 `4111`,若被占用会询问是否临时改用下一个可用端口,见 [ADR-0011](docs/adr/0011-mastra-node-agent-runtime.md))
+   - `pnpm dx up` —— **后台**启动当前 worktree 的 agent server 和 watcher;仅在明确需要后台 agent 时用
+   - `pnpm dx agent stop` —— 停止当前 worktree 元数据记录的后台 agent watcher / server;不停止本地 Supabase 数据库、auth、storage 等其它容器
+   两个客户端脚本用固定的 Metro 8081(+ 本 worktree 独立的 Metro 缓存),并把 `apps/mobile/.env` 与 `supabase/.env` 写好。`pnpm dev:ios` 在任一 worktree 中都打开同一个 `incipel-development` simulator;`pnpm e2e:ios` 仍使用 worktree 专属 simulator。新 worktree 第一次需要 `supabase/.env` 时,`tools/incipel-dev` 必须先从主工作区完整复制该文件,再写本地 JWT 校验变量。机制与取舍见 [docs/worktree-dev.md](docs/worktree-dev.md)。
 
 2. **跑会启动模拟器或长驻服务的自动化测试前**,先确认模拟器 / 共用栈不会和别处冲突:
    走上面的脚本,或显式指定设备(`expo run:ios --device <UDID>`、`adb -s <serial>`)。

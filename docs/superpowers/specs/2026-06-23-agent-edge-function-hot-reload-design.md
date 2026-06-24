@@ -5,9 +5,11 @@ Date: 2026-06-23
 Branch: `codex/agent-edge-hot-reload`
 Worktree: `/Users/chengdagong/Documents/Projects/Incipel/.worktrees/agent-edge-hot-reload`
 
+> Historical note: this design has been superseded by the Mastra Node agent runtime and the later mobile startup change. The current command behavior is: `pnpm dev:ios` and `pnpm dev:android` call `tools/incipel-dev env sync`, start Metro, and open the target simulator/device; they do not check, start, serve, or watch the agent. Start the agent separately with `pnpm dev:agent`, or use `pnpm dx up` only when a background agent is needed.
+
 ## Context
 
-`pnpm dev:ios` and `pnpm dev:android` call `tools/incipel-dev up` before starting Metro. Today `up` confirms that the shared local Supabase stack is running, syncs `apps/mobile/.env` and `supabase/.env`, then checks `/functions/v1/agent/health`.
+At the time this design was written, `pnpm dev:ios` and `pnpm dev:android` called `tools/incipel-dev up` before starting Metro. That is no longer the current behavior.
 
 That health check proves that some local `agent` function can respond. It does not prove that the running function belongs to the current Git `worktree`, or that it has re-read files changed after `up` started. The current code also restarts the local Edge Runtime when `supabase/.env` changes at startup, but it does not actively monitor source files after startup.
 
@@ -15,7 +17,7 @@ The project currently has one Edge Function, `supabase/functions/agent`. This de
 
 ## Goals
 
-- `pnpm dev:ios` and `pnpm dev:android` must confirm that the served `agent` function belongs to the current `worktree`.
+- Historical requirement: `pnpm dev:ios` and `pnpm dev:android` were expected to confirm that the served `agent` function belonged to the current `worktree`. Current mobile development scripts do not manage the agent.
 - The file watcher must also belong to the current `worktree` and monitor paths under that same `worktree`.
 - After files that affect `agent` change, the next local request should use the current source and environment variables.
 - Existing commands should remain the entry points: `pnpm dev:ios`, `pnpm dev:android`, `pnpm dev:agent`, and `pnpm dx up`.
@@ -31,7 +33,7 @@ The project currently has one Edge Function, `supabase/functions/agent`. This de
 
 ## Proposed design
 
-`tools/incipel-dev up` will continue to be the single preparation step used by mobile development scripts. After stack and env sync, `up` confirms two local background processes:
+`tools/incipel-dev up` was intended to be the single preparation step used by mobile development scripts. Current mobile development scripts use `tools/incipel-dev env sync` instead. When `up` is run manually, it confirms two local background processes:
 
 - `agent serve`: the detached `supabase functions serve agent --env-file supabase/.env --no-verify-jwt` process.
 - `agent watcher`: a detached Node process owned by `tools/incipel-dev` that watches files affecting the `agent` function and restarts `agent serve` when their content changes.
@@ -155,7 +157,7 @@ Both passed in the isolated `worktree`.
 
 Update these documents during implementation:
 
-- `CLAUDE.md`: `pnpm dev:ios` and `pnpm dev:android` confirm that the current `worktree`'s `agent` is being served and watched.
+- `CLAUDE.md`: current docs must say that `pnpm dev:ios` and `pnpm dev:android` do not start or check the agent. Agent startup is separate: `pnpm dev:agent` for foreground, `pnpm dx up` for background.
 - `docs/worktree-dev.md`: describe watcher responsibility, watched paths, metadata and log locations, the explicit stop command, and the shared Edge Runtime restart effect.
 - `supabase/functions/README.md`: explain that local `up` handles both env changes and source changes for `agent`, and that `pnpm dx agent stop` performs explicit cleanup.
 

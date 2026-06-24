@@ -14,6 +14,7 @@ pnpm dev:android -- --go      # Android 设备 + Expo Go + Metro 8081 + 共用 S
 pnpm dev:ios -- --devbuild    # iOS development build + Metro 8081 + 共用 Supabase 栈
 pnpm dev:android -- --devbuild
 pnpm dev:agent        # (前台)起共用 Supabase 栈 + 启动 agent server;需要 agent 或想看 agent 日志时用
+pnpm dx up            # (后台)启动当前 worktree 的 agent server 和 watcher;明确需要后台 agent 时用
 pnpm dx agent stop    # 停止当前 worktree 的后台 agent watcher / server,保留本地 Supabase 数据库等容器
 ```
 
