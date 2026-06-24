@@ -4,7 +4,7 @@
 # 职责:确定「本 worktree」的开发隔离参数(Metro 端口 / E2E iOS simulator 名 / Android serial),
 # 持久化到本 worktree 根目录的 .worktree-dev.env(已被 .gitignore 忽略,每个 worktree 各持一份)。
 #   - EXPO_PORT          : Metro 端口,固定 8081(我们总是只跑一个 dev 环境,不再 per-worktree 错开)
-#   - DEV_AGENT_PORT     : 日常 dev agent server 端口,固定 4111(与 worktree 无关)
+#   - DEV_AGENT_PORT     : 日常 dev agent server 端口,默认 4111;dev:agent 用户同意 fallback 后会保存为所选端口
 #   - E2E_AGENT_PORT     : E2E runner 的 agent server 端口,按 worktree 真实路径派生
 #   - AGENT_PORT         : 兼容旧脚本的 dev agent server 端口,等于 DEV_AGENT_PORT
 #   - IOS_SIMULATOR_NAME : pnpm e2e:ios 使用的本 worktree 专属 iOS simulator 名;由分支名派生
@@ -13,7 +13,7 @@
 # 写 apps/mobile/.env 与 supabase/.env、起共用栈,统一交给
 # `node tools/incipel-dev/cli.mjs env sync`(dev:ios / dev:android 会在起 Metro 前调它);本文件不碰 .env。
 # agent server 需要单独运行 `pnpm dev:agent` 或手动 `pnpm dx up`;移动端脚本不启动也不检查它。
-# dev agent 端口由 tools/incipel-dev 固定为 4111,并写入 apps/mobile/.env。
+# dev agent 端口由 tools/incipel-dev 写入 apps/mobile/.env。
 #
 # 兼容 macOS 自带的 bash 3.2,不使用 mapfile/readarray 等 bash 4 特性。
 
@@ -24,7 +24,6 @@ ROOT_HASH="$(printf '%s' "$ROOT_REALPATH" | shasum | awk '{print $1}')"
 AGENT_HASH_PREFIX="${ROOT_HASH:0:4}"
 DEV_AGENT_PORT=4111
 E2E_AGENT_PORT=$((6111 + (16#$AGENT_HASH_PREFIX % 2000)))
-AGENT_PORT="$DEV_AGENT_PORT"
 
 set_env_var() {
   file="$1"
@@ -49,6 +48,9 @@ if [ -f "$ENV_FILE" ]; then
   . "$ENV_FILE"
   set +a
 fi
+
+DEV_AGENT_PORT="${DEV_AGENT_PORT:-4111}"
+AGENT_PORT="$DEV_AGENT_PORT"
 
 # 1.5) 新 worktree 直接可运行:apps/mobile 任一直接依赖缺失时,先安装依赖。
 #      Expo 会在读取 app.json 时解析 config plugin;只检查 expo 不足以发现新增 plugin 缺失。
@@ -97,6 +99,8 @@ ANDROID_SERIAL="${ANDROID_SERIAL:-}"
 cat > "$ENV_FILE" <<EOF
 # 本 worktree 的开发隔离配置(由 scripts/lib/worktree-dev-env.sh 自动生成,可手改)。
 # 该文件已被 .gitignore 忽略,每个 worktree 各持一份。说明见 docs/worktree-dev.md。
+# 日常 dev agent server 端口;pnpm dev:agent 发现默认端口被占用且用户同意后,会写入所选端口。
+DEV_AGENT_PORT="$DEV_AGENT_PORT"
 IOS_SIMULATOR_NAME="$IOS_SIMULATOR_NAME"
 # 留空则 dev-android.sh 在仅一台 emulator 在线时自动选用;多台在线时请填 adb serial(如 emulator-5556)。
 ANDROID_SERIAL="$ANDROID_SERIAL"

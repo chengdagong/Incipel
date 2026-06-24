@@ -85,18 +85,35 @@ const AGENT_FUNCTION = 'agent';
 const DEV_AGENT_PORT = 4111;
 const E2E_AGENT_PORT_BASE = 6111;
 
+function worktreeDevEnvFile(root) {
+  return join(root, '.worktree-dev.env');
+}
+
+function positiveInteger(value) {
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 ? port : null;
+}
+
 // 本 worktree 的稳定短 hash(派生 project_id 与 E2E 端口偏移用)。
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
-// 日常 dev agent 端口固定为 DEV_AGENT_PORT(见 ADR-0011);INCIPEL_DEV_AGENT_PORT 是覆盖钩子,
-// 主要给测试用——让测试套件能用本机临时端口,不必占用真 dev 的 4111,从而可与在跑的 dev 共存。
-function agentPort() {
-  const override = Number(process.env.INCIPEL_DEV_AGENT_PORT);
-  return Number.isInteger(override) && override > 0 ? override : DEV_AGENT_PORT;
+// 日常 dev agent 端口默认是 DEV_AGENT_PORT(见 ADR-0011);INCIPEL_DEV_AGENT_PORT 是显式覆盖项,
+// 主要给测试用。DEV_AGENT_PORT 可由 .worktree-dev.env 保存 dev:agent 已确认的 fallback 端口。
+function agentPort(root = null) {
+  const explicitOverride = positiveInteger(process.env.INCIPEL_DEV_AGENT_PORT);
+  if (explicitOverride) return explicitOverride;
+  const envPort = positiveInteger(process.env.DEV_AGENT_PORT);
+  if (envPort) return envPort;
+  if (root) {
+    const persistedPort = positiveInteger(readEnvFile(worktreeDevEnvFile(root)).DEV_AGENT_PORT);
+    if (persistedPort) return persistedPort;
+  }
+  return DEV_AGENT_PORT;
 }
-function setDevAgentPort(port) {
+function setDevAgentPort(root, port) {
   process.env.INCIPEL_DEV_AGENT_PORT = String(port);
+  setEnvVar(worktreeDevEnvFile(root), 'DEV_AGENT_PORT', String(port));
 }
 async function portAvailable(port) {
   return await new Promise((resolve, reject) => {
@@ -131,8 +148,8 @@ async function askYesNo(question) {
     rl.close();
   }
 }
-async function chooseDevAgentPort() {
-  const preferredPort = agentPort();
+async function chooseDevAgentPort(root) {
+  const preferredPort = agentPort(root);
   if (DRY) return preferredPort;
   let available = false;
   try {
@@ -152,7 +169,7 @@ async function chooseDevAgentPort() {
   if (!(await askYesNo(`  ${message}`))) {
     fail(`agent 端口 ${preferredPort} 已被占用;已取消启动`);
   }
-  setDevAgentPort(fallbackPort);
+  setDevAgentPort(root, fallbackPort);
   log(`  本次 agent 改用端口 ${fallbackPort}`);
   return fallbackPort;
 }
@@ -1081,7 +1098,7 @@ async function watchAgent(root) {
 // ── dev:起共用栈(若未起)+ env sync + 前台 agent server(带热重载日志)──────────
 async function dev(root) {
   log('▸ 检查 agent 端口');
-  await chooseDevAgentPort();
+  await chooseDevAgentPort(root);
   log('▸ 检查共用 Supabase 栈');
   ensureStack(root);
   log('▸ 同步 env');
