@@ -16,6 +16,8 @@ agent/
 - Node server 入口:`packages/agent/src/index.ts`
 - Hono app:`packages/agent/src/app.ts`
 
+`pnpm dev:ios` / `pnpm dev:android` 只同步 env、启动 Metro 并打开目标设备;它们不检查也不启动 agent server。
+
 客户端的 `EXPO_PUBLIC_AGENT_URL` 应指向 Node agent server 的 base URL,例如 `http://127.0.0.1:<agent-port>`。客户端会在其后追加 `/run`、`/logline`。
 
 ## Secret

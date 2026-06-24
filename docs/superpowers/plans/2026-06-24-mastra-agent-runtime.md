@@ -1,6 +1,8 @@
 # Mastra Agent Runtime Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> Current command note: later work changed mobile startup. `pnpm dev:ios` and `pnpm dev:android` now call `tools/incipel-dev env sync`, start Metro, and open the target simulator/device; they do not check, start, serve, or watch the agent. Daily development uses fixed agent port `4111`; E2E uses worktree-derived agent ports. Start the agent separately with `pnpm dev:agent`, or use `pnpm dx up` only when a background agent is needed.
 
 **Goal:** Convert Incipel's agent backend from the current AI SDK on Supabase Edge Function runtime to a Mastra-backed Node agent server while preserving the existing AG-UI mobile contract and Supabase data layer.
 
@@ -20,7 +22,7 @@
 - Create `packages/agent/src/index.ts`: Node server entry for `createApp()`, with host/port environment variables.
 - Modify `packages/agent/src/app.ts`: update comments and keep runtime behavior stable.
 - Modify `packages/agent/src/logline.ts`: keep the public function but make it use the Mastra-backed provider through the existing factory.
-- Modify `tools/incipel-dev/cli.mjs`: change local development from `supabase functions serve agent` to `pnpm --filter @incipel/agent dev`, assign a deterministic per-worktree agent port, write `EXPO_PUBLIC_AGENT_URL=http://127.0.0.1:<port>`, and manage Node agent metadata.
+- Modify `tools/incipel-dev/cli.mjs`: change local development from `supabase functions serve agent` to the Node agent server, use fixed daily dev agent port `4111`, keep worktree-derived agent ports for E2E, write `EXPO_PUBLIC_AGENT_URL=http://127.0.0.1:<port>`, and manage Node agent metadata.
 - Modify `tools/incipel-dev/cli.test.mjs`: update tests to verify Node agent server metadata, health checks, env sync, stop behavior, and watcher restart behavior.
 - Modify `supabase/functions/agent/index.ts` and `supabase/functions/agent/deno.json`: mark the Edge Function entry as deprecated for runtime use, without using it in local dev.
 - Modify `README.md`, `apps/mobile/README.md`, `supabase/functions/README.md`, `docs/system-design.md`, `docs/worktree-dev.md`, `docs/adr/0002-agent-runtime-hono-edge-sse.md`, `docs/adr/0008-edge-only-agent-runtime.md`: document Mastra Node runtime and Supabase as data layer.
@@ -298,7 +300,7 @@ Update fake health server to respond to `/health`. Update fake serve command to 
 pnpm --filter @incipel/agent dev
 ```
 
-Expected metadata command:
+Expected metadata command for foreground development:
 
 ```text
 pnpm --filter @incipel/agent dev
@@ -319,7 +321,7 @@ Expected: FAIL because CLI still serves the Edge Function.
 Change `envSync(root)` to:
 
 - keep `EXPO_PUBLIC_SUPABASE_URL` from the Supabase stack;
-- calculate `agentPort = 4111 + (parseInt(worktreeHash(root).slice(0, 4), 16) % 2000)`;
+- use fixed daily dev `agentPort = 4111`; E2E stack setup still uses a worktree-derived agent port;
 - set `EXPO_PUBLIC_AGENT_URL=http://127.0.0.1:${agentPort}`;
 - write `AGENT_PORT=${agentPort}` into `supabase/.env` or a dedicated agent env file used by the process.
 
@@ -332,7 +334,7 @@ http://127.0.0.1:<agentPort>/health
 Change detached serve to:
 
 ```bash
-pnpm --filter @incipel/agent dev
+pnpm --filter @incipel/agent start
 ```
 
 with environment variables loaded from `supabase/.env`, plus `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and JWT settings already written by `envSync`.

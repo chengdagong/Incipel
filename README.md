@@ -15,7 +15,7 @@ packages/shared   @incipel/shared — 类型、AG-UI 事件、工具 schema(契�
 packages/agent    @incipel/agent  — Mastra Node agent server(Hono / AG-UI SSE / 鉴权 / tool use)
 apps/mobile       Expo 客户端(React Native + CopilotKit headless hooks)
 supabase/         Postgres migration + RLS + 本地配置
-tools/incipel-dev 开发命令行工具(起 Supabase 栈 / 启动 agent server / 隔离 E2E 栈)
+tools/incipel-dev 开发命令行工具(同步本地 env / 启动 agent server / 隔离 E2E 栈)
 ```
 
 数据层(Supabase)与计算层(agent)分开;agent 由 Mastra Node server 承载,Supabase 负责数据库、Auth、Storage。模型密钥只放在 agent 的环境变量里,**客户端绝不持有**(见系统设计 §4)。
@@ -27,15 +27,16 @@ tools/incipel-dev 开发命令行工具(起 Supabase 栈 / 启动 agent server /
 ```bash
 pnpm install
 
-# 本地 Supabase + 应用 migration
-supabase start
-supabase db reset
+# 客户端:只启动共用 Supabase 栈、写好 env、打开模拟器并启动 Metro;不检查或启动 agent
+pnpm dev:ios -- --devbuild
+pnpm dev:android -- --devbuild
 
-# Agent(起共用 Supabase 栈 + 同步 env + 启动 Mastra Node server)
+# Agent:需要 AI 生成时另开终端前台启动;需要后台 agent 时用 pnpm dx up
 pnpm dev:agent
+pnpm dx up
 
-# 客户端
-pnpm mobile:start
+# 需要重置本地数据库或应用新 migration 时再手动运行
+supabase db reset
 ```
 
 > 骨架阶段:文件树、配置与契约源码已就位,逻辑体多为 TODO。依赖未安装、云端 Supabase 项目未创建——按需自行执行。

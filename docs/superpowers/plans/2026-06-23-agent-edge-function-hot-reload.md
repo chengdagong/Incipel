@@ -1,8 +1,10 @@
 # Agent Edge Function Local Reload Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+>
+> Historical note: this plan has been superseded by the Mastra Node agent runtime and the later mobile startup change. The current command behavior is: `pnpm dev:ios` and `pnpm dev:android` call `tools/incipel-dev env sync`, start Metro, and open the target simulator/device; they do not check, start, serve, or watch the agent. Start the agent separately with `pnpm dev:agent`, or use `pnpm dx up` only when a background agent is needed.
 
-**Goal:** Make `pnpm dev:ios` and `pnpm dev:android` serve and watch the current `worktree`'s `agent` Edge Function, and provide an explicit stop command for local cleanup.
+**Historical goal:** Make `pnpm dev:ios` and `pnpm dev:android` serve and watch the current `worktree`'s `agent` Edge Function, and provide an explicit stop command for local cleanup. This is no longer the current command contract.
 
 **Architecture:** Extend `tools/incipel-dev/cli.mjs` without adding runtime dependencies. `up` will validate JSON metadata for the current `worktree`, compute source/env hashes, start a detached `supabase functions serve agent` process, and start a detached Node polling watcher. The watcher recomputes hashes for the `agent` inputs and restarts serving when the current `worktree` changes.
 
@@ -14,7 +16,7 @@
 
 - Modify `tools/incipel-dev/cli.mjs`: add agent metadata helpers, source snapshot hashing, current-`worktree` serve validation, detached watcher mode, restart logic, and `pnpm dx agent stop`.
 - Modify `tools/incipel-dev/cli.test.mjs`: add CLI tests using temporary git repositories, fake `supabase` / `docker` commands, and temporary metadata files.
-- Modify `CLAUDE.md`: document that dev scripts verify and watch the current `worktree`'s `agent`.
+- Modify `CLAUDE.md`: historical plan item; current docs must say that mobile dev scripts do not start or check the agent.
 - Modify `docs/worktree-dev.md`: document watcher behavior, watched inputs, metadata/log locations, explicit stop command, and shared Edge Runtime restart effect.
 - Modify `supabase/functions/README.md`: document source/env restart handling and `pnpm dx agent stop`.
 - Keep `docs/superpowers/specs/2026-06-23-agent-edge-function-hot-reload-design.md` unchanged unless implementation discovers a design mismatch that must be recorded.
@@ -474,13 +476,13 @@ CODEX_DOCS_REVIEWED=1 git commit -m "feat(dev): add explicit agent stop command"
 
 - [x] **Step 1: Update `CLAUDE.md`**
 
-Change the `pnpm dev:ios` / `pnpm dev:android` bullets to say that `up` confirms the current `worktree`'s `agent` is being served and watched. Add `pnpm dx agent stop` as the explicit cleanup command.
+Historical task: change the `pnpm dev:ios` / `pnpm dev:android` bullets to say that `up` confirms the current `worktree`'s `agent` is being served and watched. Current docs must instead say that mobile dev scripts do not start or check the agent; use `pnpm dev:agent` for foreground agent startup and `pnpm dx up` only for a background agent.
 
 - [x] **Step 2: Update `docs/worktree-dev.md`**
 
 In the Agent section, describe:
 
-- `up` validates `repoRoot` metadata before reusing a healthy endpoint.
+- historical behavior for manual `up`: validates `repoRoot` metadata before reusing a healthy endpoint.
 - watched inputs are `supabase/functions/agent`, `packages/agent/src`, `packages/agent/model.config.json`, `packages/shared/src`, and `supabase/.env`.
 - metadata/log files live under `os.tmpdir()` with `incipel-agent-serve-<hash>` and `incipel-agent-watcher-<hash>` names.
 - `Ctrl+C` in Metro does not stop background agent processes.
