@@ -1,5 +1,5 @@
 // AG-UI 连接(方案 B):用 @ag-ui/client 的 HttpAgent 直连我们的 AG-UI 端点。
-// - HttpAgent.run() 向 `${EXPO_PUBLIC_AGENT_URL}/run` POST 一个 RunAgentInput,服务端 SSE 回事件;
+// - HttpAgent.run() 向当前 Agent base URL 的 `/run` POST 一个 RunAgentInput,服务端 SSE 回事件;
 //   事件应用、消息与状态维护由 SDK 内部完成(见 references/client-sdk.md)。
 // - 请求头带 Supabase 匿名 JWT,agent 端据此校验归属(system-design §4)。
 // - 共享状态(AG-UI 的 state)就是一份 Screenplay —— 类型只来自 @incipel/shared,不在客户端重定义。
@@ -9,36 +9,22 @@ import { fetch as expoFetch } from 'expo/fetch';
 import {
   AbstractAgent,
   HttpAgent,
-  type AgentSubscriber,
   randomUUID,
 } from '@ag-ui/client';
+import type { AgentSubscriber } from '@ag-ui/client';
 import {
-  type Message,
-  type Screenplay,
   OPTIONS_EVENT_NAME,
   emptyScreenplay,
   normalizeScreenplay,
 } from '@incipel/shared';
+import type { Message, Screenplay } from '@incipel/shared';
 import { getAccessToken, supabase } from '../supabase';
-import { orderStoredMessages, type StoredMessageRow } from './order-messages';
+import { orderStoredMessages } from './order-messages';
+import type { StoredMessageRow } from './order-messages';
 import { baselineBeforeLastTurn } from './reopen-baseline';
 import { applyScreenplayTitle } from '../session-title';
-
-const AGENT_URL = process.env.EXPO_PUBLIC_AGENT_URL;
-
-if (!AGENT_URL) {
-  console.warn('[agui] 缺少 EXPO_PUBLIC_AGENT_URL,请参照 .env.example 配置。');
-}
-
-// AG-UI run 的端点:每轮一个 run,POST 发消息、SSE 流式回事件(system-design §6.2)。
-export function runEndpoint(): string {
-  return `${AGENT_URL ?? ''}/run`;
-}
-
-// /logline 端点:欢迎页 🎲 调用(便宜模型,一次性 completion,见 system-design §10)。
-export function loglineEndpoint(): string {
-  return `${AGENT_URL ?? ''}/logline`;
-}
+import { runEndpoint } from '../agentEndpoint';
+export { loglineEndpoint, runEndpoint } from '../agentEndpoint';
 
 // 组装带匿名 JWT 的请求头;agent 端用它校验归属。
 export async function authHeaders(): Promise<Record<string, string>> {

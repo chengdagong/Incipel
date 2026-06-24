@@ -42,6 +42,8 @@ agent 当前运行时是 Mastra application,通过 Hono server adapter 在 Node 
 - `EXPO_PUBLIC_SUPABASE_URL`:共用 Supabase 栈的 API URL,默认来自 `supabase/config.toml` 的 `[api].port`。
 - `EXPO_PUBLIC_AGENT_URL`:日常 dev agent server base URL,默认为 `http://127.0.0.1:4111`;E2E release runner 会在构建时临时改成 worktree 相关测试端口。
 
+Expo Go / development build 的设置页可临时改 Agent 地址,支持 `IP:port`、`host:port` 与完整 `http/https` URL。这个值只保存在 app 的 AsyncStorage 中,不写回 `.env`;release build 不显示该设置,也不读取这份保存值。
+
 `pnpm dev:ios` / `dev:android` 经 `tools/incipel-dev env sync` 只确保共用 Supabase 栈在运行并写好 env。它们不探 `/health`,不读取 agent metadata,不启动 agent server,也不启动 watcher。想启动 agent 就单独运行 `pnpm dev:agent`。如果需要后台 agent,手动运行 `pnpm dx up`;`up` 会读取 `os.tmpdir()/incipel-agent-serve-<worktree-hash>.json` 和 `os.tmpdir()/incipel-agent-watcher-<worktree-hash>.json`,确认其中的 `repoRoot` 等于当前 worktree,并核对源码 hash、`supabase/.env` hash 与 watcher 监控路径。watcher 监控 `packages/agent/src/**/*.ts`、`packages/agent/model.config.json`、`packages/shared/src/**/*.ts` 与 `supabase/.env`;这些文件变化后会重启当前 worktree 的 agent server。
 
 - **Mastra Studio 本地 Screenplay tools**:Mastra Studio 里用于手工调试工具的 Agent 是 `studio-screenwriter`。它使用与生产 `screenwriter` 相同的静态 instructions 和 screenplay tool schema,但工具结果只写入 `packages/agent/.mastra-studio-screenplay.json`。使用 `read_studio_screenplay` 查看这份本地调试状态,使用 `reset_studio_screenplay` 重置为空 Screenplay。生产 `/run` 继续使用 `screenwriter` 和每轮动态生成的 `toolsets`,不会读写这份本地文件。

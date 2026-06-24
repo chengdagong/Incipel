@@ -13,6 +13,7 @@ import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme } from '../src/theme';
 import { I18nProvider } from '../src/i18n';
 import { ReadingPrefsProvider } from '../src/readingPrefs';
+import { AgentEndpointProvider } from '../src/agentEndpoint';
 
 export default function RootLayout() {
   // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0005)。
@@ -33,7 +34,9 @@ function RootNavigator() {
   // 后者持久化阅读区字号 / 行距偏好(见 src/readingPrefs);两者都不影响 AI 回复语言(见 ADR-0004)。
   return (
     <I18nProvider>
-      <ReadingPrefsProvider>{ready ? <AppShell /> : <Preparing />}</ReadingPrefsProvider>
+      <AgentEndpointProvider>
+        <ReadingPrefsProvider>{ready ? <AppShell /> : <Preparing />}</ReadingPrefsProvider>
+      </AgentEndpointProvider>
     </I18nProvider>
   );
 }
