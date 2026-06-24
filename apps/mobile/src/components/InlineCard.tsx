@@ -3,6 +3,7 @@
 // 世界观 / 大纲 / 分场各为带「打开…」页脚的卡片。点标签 chip 生成聚焦标签(#12);点页脚打开文档。
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ReaderText } from './ReaderText';
 import type { Act, Character, CharacterAttr, Scene, WorldSection } from '@incipel/shared';
 import { defaultTheme, palette, type Theme } from '../theme';
 import { useI18n, VOL_I18N } from '../i18n';
@@ -42,9 +43,9 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
       {!!data.world?.length && (
         <SectionCard label="secWorld" footer={openLabel(vol.world)} onOpen={() => onOpenDoc?.({ view: 'world' })} theme={theme}>
           {data.world.map((w) => (
-            <Text key={w.id} style={[styles.bodyPara, { color: palette.textBody }]}>
+            <ReaderText key={w.id} style={[styles.bodyPara, { color: palette.textBody }]}>
               {w.title ? `${w.title} — ${w.text}` : w.text}
-            </Text>
+            </ReaderText>
           ))}
         </SectionCard>
       )}
@@ -64,11 +65,11 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
         <SectionCard label="secOutline" footer={openLabel(vol.beats)} onOpen={() => onOpenDoc?.({ view: 'beats' })} theme={theme}>
           {data.outline.map((a, i) => (
             <View key={a.id} style={i > 0 ? styles.outlineActGap : undefined}>
-              <Text style={[styles.outlineAct, { color: palette.textPrimary }]}>{a.act}</Text>
+              <ReaderText style={[styles.outlineAct, { color: palette.textPrimary }]}>{a.act}</ReaderText>
               {splitBeat(a.beat).map((para, j) => (
-                <Text key={j} style={[styles.outlineBeat, { color: palette.textBody }, j > 0 && styles.outlineBeatGap]}>
+                <ReaderText key={j} style={[styles.outlineBeat, { color: palette.textBody }, j > 0 && styles.outlineBeatGap]}>
                   {para}
-                </Text>
+                </ReaderText>
               ))}
             </View>
           ))}
@@ -79,8 +80,8 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
         <SectionCard label="secScenes" footer={openLabel(vol.script)} onOpen={() => onOpenDoc?.({ view: 'script' })} theme={theme}>
           {data.scenes.map((s) => (
             <View key={s.id} style={styles.scene}>
-              <Text style={[styles.sceneSlug, { color: palette.textSecondary }]}>{s.slug}</Text>
-              <Text style={[styles.sceneContent, { color: palette.textBody }]}>{s.content}</Text>
+              <ReaderText style={[styles.sceneSlug, { color: palette.textSecondary }]}>{s.slug}</ReaderText>
+              <ReaderText style={[styles.sceneContent, { color: palette.textBody }]}>{s.content}</ReaderText>
             </View>
           ))}
         </SectionCard>
@@ -149,15 +150,15 @@ function CharacterCard({
           ) : (
             <Text style={[styles.noIdentity, { color: palette.placeholder }]}>{t('secChars')}</Text>
           )}
-          <Text style={[styles.charName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</Text>
-          {!!c.role && <Text style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</Text>}
-          {!!ageGender && <Text style={[styles.charAge, { color: palette.textSecondary }]}>{ageGender}</Text>}
+          <ReaderText style={[styles.charName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</ReaderText>
+          {!!c.role && <ReaderText style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</ReaderText>}
+          {!!ageGender && <ReaderText style={[styles.charAge, { color: palette.textSecondary }]}>{ageGender}</ReaderText>}
         </View>
         <PortraitThumb character={c} variant="card" />
       </View>
 
       <View style={styles.charBody}>
-        {!!bio && <Text style={[styles.bio, { color: palette.textPrimaryAlt }]}>{bio}</Text>}
+        {!!bio && <ReaderText style={[styles.bio, { color: palette.textPrimaryAlt }]}>{bio}</ReaderText>}
         {tags.length > 0 && (
           <View style={[styles.tags, !!bio && { marginTop: 12 }]}>
             {tags.map((tg) => (
@@ -167,7 +168,7 @@ function CharacterCard({
                 style={[styles.tag, { borderColor: palette.borderChip, backgroundColor: palette.cardBg }]}
                 accessibilityRole="button"
               >
-                <Text style={[styles.tagText, { color: palette.textSecondary }]}>{tg.label}</Text>
+                <ReaderText style={[styles.tagText, { color: palette.textSecondary }]}>{tg.label}</ReaderText>
               </Pressable>
             ))}
           </View>
