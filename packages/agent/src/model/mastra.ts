@@ -1,4 +1,3 @@
-import { Agent } from '@mastra/core/agent';
 import type { ToolsInput } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
@@ -15,20 +14,39 @@ import type {
   StreamTurnInput,
 } from './provider.ts';
 import { env } from '../env.ts';
+import { getMastraApp, type IncipelAgentName } from '../mastra-app.ts';
 
 const MAX_TURN_STEPS = 8;
 
-export function createMastraProvider(config: ModelRuntimeConfig = getModelConfig()): ModelProvider {
+type MastraAgentLike = {
+  stream(
+    prompt: string,
+    options: Record<string, unknown>,
+  ): Promise<{
+    fullStream: AsyncIterable<MastraChunk>;
+    text: Promise<string>;
+  }>;
+};
+
+type MastraAgentRegistry = {
+  getAgent(name: IncipelAgentName): MastraAgentLike;
+};
+
+export function createMastraProvider(
+  config: ModelRuntimeConfig = getModelConfig(),
+  mastra?: MastraAgentRegistry,
+): ModelProvider {
   if (config.provider !== 'openrouter') {
     throw new Error(`Mastra provider 不支持 MODEL_PROVIDER=${config.provider}`);
   }
   if (!env('OPENROUTER_API_KEY')) {
     throw new Error('OPENROUTER_API_KEY 未配置');
   }
+  const registry = mastra ?? (getMastraApp(config) as MastraAgentRegistry);
 
   return {
     async *streamTurn(input: StreamTurnInput): AsyncIterable<StreamChunk> {
-      const agent = createAgent('incipel-screenwriter', 'Incipel Screenwriter', config.turn);
+      const agent = registry.getAgent('screenwriter');
       const stream = await agent.stream(input.prompt, {
         system: input.system,
         maxSteps: MAX_TURN_STEPS,
@@ -46,7 +64,7 @@ export function createMastraProvider(config: ModelRuntimeConfig = getModelConfig
     },
 
     async completeLogline(input: CompleteLoglineInput): Promise<string> {
-      const agent = createAgent('incipel-logline', 'Incipel Logline', config.logline);
+      const agent = registry.getAgent('logline');
       const stream = await agent.stream(input.prompt, {
         system: input.system,
         maxSteps: 1,
@@ -57,19 +75,6 @@ export function createMastraProvider(config: ModelRuntimeConfig = getModelConfig
       return (await stream.text).trim();
     },
   };
-}
-
-function createAgent(id: string, name: string, useConfig: ModelUseConfig): Agent {
-  return new Agent({
-    id,
-    name,
-    instructions: '',
-    model: mastraModelId(useConfig.model),
-  });
-}
-
-function mastraModelId(model: string): string {
-  return model.startsWith('openrouter/') ? model : `openrouter/${model}`;
 }
 
 function modelSettings(useConfig: ModelUseConfig): Record<string, unknown> | undefined {

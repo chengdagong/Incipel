@@ -7,6 +7,8 @@ const h = vi.hoisted(() => ({
   streamChunks: [] as any[],
   generatedText: '一句测试 logline',
   lastAgentConfig: null as any,
+  getAgentCalls: [] as string[],
+  lastAgentName: null as string | null,
   lastStreamMessages: null as any,
   lastStreamOptions: null as any,
   createdTools: [] as any[],
@@ -31,6 +33,27 @@ vi.mock('@mastra/core/agent', () => ({
   },
 }));
 
+vi.mock('../src/mastra-app.ts', () => ({
+  getMastraApp: () => ({
+    getAgent: (name: string) => {
+      h.getAgentCalls.push(name);
+      return {
+        stream: async (messages: any, options: any) => {
+          h.lastAgentName = name;
+          h.lastStreamMessages = messages;
+          h.lastStreamOptions = options;
+          return {
+            fullStream: (async function* () {
+              for (const chunk of h.streamChunks) yield chunk;
+            })(),
+            text: Promise.resolve(h.generatedText),
+          };
+        },
+      };
+    },
+  }),
+}));
+
 vi.mock('@mastra/core/tools', () => ({
   createTool: (definition: any) => {
     h.createdTools.push(definition);
@@ -42,6 +65,8 @@ beforeEach(() => {
   h.streamChunks = [];
   h.generatedText = '一句测试 logline';
   h.lastAgentConfig = null;
+  h.getAgentCalls = [];
+  h.lastAgentName = null;
   h.lastStreamMessages = null;
   h.lastStreamOptions = null;
   h.createdTools = [];
@@ -101,11 +126,9 @@ describe('createMastraProvider.streamTurn', () => {
       { type: 'tool-call-start', toolCallId: '1', toolName: 'add_character' },
       { type: 'tool-call', call: { toolCallId: '1', toolName: 'add_character', args: { name: '林深' } } },
     ]);
-    expect(h.lastAgentConfig).toMatchObject({
-      id: 'incipel-screenwriter',
-      name: 'Incipel Screenwriter',
-      model: 'openrouter/openai/gpt-test',
-    });
+    expect(h.lastAgentConfig).toBeNull();
+    expect(h.getAgentCalls).toEqual(['screenwriter']);
+    expect(h.lastAgentName).toBe('screenwriter');
     expect(h.lastStreamMessages).toBe('PR');
     expect(h.lastStreamOptions).toMatchObject({
       system: 'SYS',
@@ -133,6 +156,7 @@ describe('createMastraProvider.streamTurn', () => {
     const provider = createMastraProvider(config());
 
     await expect(collect(provider.streamTurn({ system: 's', prompt: 'p', tools: {} }))).rejects.toThrow('model down');
+    expect(h.getAgentCalls).toEqual(['screenwriter']);
   });
 });
 
@@ -145,11 +169,9 @@ describe('createMastraProvider.completeLogline', () => {
     const out = await provider.completeLogline({ system: 'SYS', prompt: 'PR' });
 
     expect(out).toBe('一句新的 logline');
-    expect(h.lastAgentConfig).toMatchObject({
-      id: 'incipel-logline',
-      name: 'Incipel Logline',
-      model: 'openrouter/openai/gpt-logline',
-    });
+    expect(h.lastAgentConfig).toBeNull();
+    expect(h.getAgentCalls).toEqual(['logline']);
+    expect(h.lastAgentName).toBe('logline');
     expect(h.lastStreamMessages).toBe('PR');
     expect(h.lastStreamOptions).toMatchObject({
       system: 'SYS',

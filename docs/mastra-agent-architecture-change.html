@@ -479,13 +479,13 @@
       <p class="eyebrow">Architecture Change · 2026-06-24</p>
       <h1>Incipel agent architecture 变更说明</h1>
       <p class="lead">
-        本文记录本次将 agent runtime 从 Supabase Edge Function 改为
-        Mastra Node agent server 的设计背景、代码边界、运行流程、本地开发变化和后续部署影响。
+        本文记录本次将 agent runtime 从 Supabase Edge Function 迁移到
+        Mastra application + Hono server adapter 的设计背景、代码边界、运行流程、本地开发变化和后续部署影响。
         移动端继续消费 AG-UI SSE 事件，Supabase 继续负责 Auth、Postgres 和 Storage。
       </p>
       <div class="meta-row" aria-label="变更摘要">
         <span class="pill">状态：已实现并通过验证</span>
-        <span class="pill">运行时：Mastra Node server</span>
+        <span class="pill">运行时：Mastra application</span>
         <span class="pill">协议：AG-UI over SSE</span>
         <span class="pill">数据层：Supabase</span>
       </div>
@@ -520,9 +520,8 @@
             <span class="tag">Changed</span>
             <h3>agent runtime 改为 Node server</h3>
             <p>
-              <code>packages/agent/src/index.ts</code> 启动 Hono app，
-              <code>packages/agent/src/model/mastra.ts</code> 用 Mastra
-              <code>Agent</code> 承接模型 streaming 和 tool use。
+              <code>packages/agent/src/mastra-app.ts</code> 注册 Mastra application、
+              agents 和 custom API routes，<code>@mastra/hono</code> 负责把它接到 Hono app。
             </p>
           </article>
 
@@ -581,17 +580,17 @@
 
           <article class="lane">
             <div class="lane-title">
-              <h3>Mastra Node agent server</h3>
+              <h3>Mastra application server</h3>
               <span>新方案</span>
             </div>
             <div class="lane-body">
               <div class="box">
                 <strong>agent 行为放在 agent 层</strong>
-                <p>Mastra 负责 <code>Agent</code>、tool 注册、streaming chunk 和模型调用。</p>
+                <p>Mastra application 负责注册 <code>Agent</code>、custom API routes、tool 注册、streaming chunk 和模型调用。</p>
               </div>
               <div class="box">
                 <strong>协议边界仍由项目控制</strong>
-                <p>Hono app 继续输出 AG-UI SSE，不让 Mastra 接管移动端协议。</p>
+                <p>Mastra custom API routes 继续输出 AG-UI SSE，不让 Mastra 接管移动端协议。</p>
               </div>
               <div class="box">
                 <strong>为后续机制保留空间</strong>
@@ -643,7 +642,7 @@
           <article class="lane">
             <div class="lane-title">
               <h3>After</h3>
-              <span>Mastra Node runtime</span>
+              <span>Mastra application runtime</span>
             </div>
             <div class="lane-body">
               <div class="box">
@@ -652,8 +651,8 @@
               </div>
               <div class="arrow">↓ HTTPS + JWT</div>
               <div class="box">
-                <strong>Mastra Node agent server</strong>
-                <p><code>@hono/node-server</code> 启动 Hono app，暴露 <code>/run</code>、<code>/logline</code> 和 <code>/health</code>。</p>
+                <strong>Mastra application + Hono adapter</strong>
+                <p><code>@mastra/hono</code> 初始化 Hono app，注册 <code>/run</code>、<code>/logline</code> 和 <code>/health</code> custom API routes；<code>@hono/node-server</code> 只负责监听 HTTP。</p>
               </div>
               <div class="arrow">↓ Mastra Agent.stream</div>
               <div class="box">
@@ -674,8 +673,8 @@
         <div class="section-head">
           <h2>4. 运行流程</h2>
           <p>
-            外层 run orchestration 仍由 Incipel 实现。Mastra 只接管模型调用与 tool execution
-            的 framework 部分，AG-UI 事件生成、数据库事务和产品状态更新仍在项目代码内完成。
+            外层 run orchestration 仍由 Incipel 实现。Mastra application 接管 agent registry、
+            custom API routes 和模型调用的 framework 部分，AG-UI 事件生成、数据库事务和产品状态更新仍在项目代码内完成。
           </p>
         </div>
 
@@ -685,7 +684,7 @@
             <div class="flow" aria-label="/run 时序">
               <div class="flow-step">
                 <div class="flow-num">1</div>
-                <p>Hono route 校验客户端 JWT，并确认用户可以访问目标 session。</p>
+                <p>Mastra custom API route 校验客户端 JWT，并确认用户可以访问目标 session。</p>
               </div>
               <div class="flow-step">
                 <div class="flow-num">2</div>
@@ -756,15 +755,23 @@
         <div class="file-list">
           <div class="file-row">
             <strong>packages/agent/src/index.ts</strong>
-            <span>Node server entrypoint。读取 <code>HOST</code>、<code>AGENT_PORT</code> 或 <code>PORT</code>，用 <code>@hono/node-server</code> 启动 Hono app。</span>
+            <span>Node server entrypoint。读取 <code>HOST</code>、<code>AGENT_PORT</code> 或 <code>PORT</code>，创建 Hono app，交给 <code>MastraServer</code> 初始化后再启动 HTTP server。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/mastra-app.ts</strong>
+            <span>Mastra application registry。注册 <code>screenwriter</code>、<code>logline</code> agents，配置 custom API routes 和 Mastra framework storage。</span>
+          </div>
+          <div class="file-row">
+            <strong>packages/agent/src/routes.ts</strong>
+            <span>Custom API route handlers。负责 <code>/run</code>、<code>/logline</code>、<code>/health</code>、authentication、SSE response 和 store 注入。</span>
           </div>
           <div class="file-row">
             <strong>packages/agent/src/app.ts</strong>
-            <span>HTTP app 边界。继续定义 <code>/run</code>、<code>/logline</code>、<code>/health</code>，并处理 authentication、SSE response 和 store 注入。</span>
+            <span>测试用 Hono wrapper。让既有 <code>app.request()</code> 测试继续覆盖同一组 route handlers。</span>
           </div>
           <div class="file-row">
             <strong>packages/agent/src/model/mastra.ts</strong>
-            <span>Mastra provider adapter。把 Incipel prompt、tool definitions 和 model config 映射为 Mastra <code>Agent</code> 与 <code>createTool</code>。</span>
+            <span>Mastra provider adapter。从 Mastra application registry 获取已注册 agents，再把 Incipel prompt、tool definitions 和 model config 映射为 <code>Agent.stream()</code> 与 <code>createTool()</code>。</span>
           </div>
           <div class="file-row">
             <strong>packages/agent/src/model/provider.ts</strong>
@@ -803,17 +810,27 @@
             <tr>
               <td>新增</td>
               <td><code>@mastra/core</code></td>
-              <td>提供 Mastra <code>Agent</code>、tool registration 和 streaming runtime。</td>
+              <td>提供 Mastra application、<code>Agent</code>、tool registration、custom API routes 和 streaming runtime。</td>
+            </tr>
+            <tr>
+              <td>新增</td>
+              <td><code>@mastra/hono</code></td>
+              <td>提供 Hono server adapter，用 <code>MastraServer</code> 初始化 Hono app 并注册 Mastra routes。</td>
             </tr>
             <tr>
               <td>新增</td>
               <td><code>@hono/node-server</code></td>
-              <td>在 Node 环境启动已有 Hono app。</td>
+              <td>在 Node 环境监听 HTTP；当前使用 1.19.14 以满足 <code>@mastra/hono</code> 的 peer dependency。</td>
             </tr>
             <tr>
-              <td>升级</td>
+              <td>保留</td>
+              <td><code>hono</code></td>
+              <td>承载 AG-UI SSE routes，同时作为 Mastra Hono adapter 的 app 容器。</td>
+            </tr>
+            <tr>
+              <td>保留</td>
               <td><code>ai</code></td>
-              <td>升级到 v6，以匹配 Mastra 当前依赖生态。</td>
+              <td>继续使用 v6；Mastra 也基于 AI SDK 运行模型调用。</td>
             </tr>
             <tr>
               <td>移除</td>
@@ -875,7 +892,7 @@
             <tr>
               <td><code>EXPO_PUBLIC_AGENT_URL</code></td>
               <td><code>apps/mobile/.env</code></td>
-              <td>移动端访问 Node agent server 的 base URL。</td>
+              <td>移动端访问 Mastra application agent server 的 base URL。</td>
             </tr>
             <tr>
               <td><code>AGENT_PORT</code></td>
@@ -1025,7 +1042,7 @@
             <span class="tag amber">Extend</span>
             <h3>设计 skill / hook / subagent</h3>
             <p>
-              以 Mastra agent layer 为扩展点，但保持 AG-UI 事件和 <code>Screenplay</code>
+              以 Mastra application 为扩展点，但保持 AG-UI 事件和 <code>Screenplay</code>
               mutation contract 由 Incipel 负责。
             </p>
           </article>

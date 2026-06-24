@@ -1,38 +1,63 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => ({
-  fetch: (() => undefined) as unknown as typeof fetch,
+  mastra: { id: 'test-mastra-app' },
   serveOptions: null as any,
+  serverConfig: null as any,
+  initCalls: 0,
+  initCompleted: false,
+  initCompletedAtServe: false,
 }));
 
 vi.mock('@hono/node-server', () => ({
   serve: (options: any) => {
+    h.initCompletedAtServe = h.initCompleted;
     h.serveOptions = options;
     return { close: () => undefined };
   },
 }));
 
-vi.mock('../src/app.ts', () => ({
-  createApp: () => ({ fetch: h.fetch }),
+vi.mock('@mastra/hono', () => ({
+  MastraServer: class {
+    constructor(config: any) {
+      h.serverConfig = config;
+    }
+
+    async init() {
+      h.initCalls += 1;
+      h.initCompleted = true;
+    }
+  },
+}));
+
+vi.mock('../src/mastra-app.ts', () => ({
+  getMastraApp: () => h.mastra,
 }));
 
 beforeEach(() => {
   vi.resetModules();
   h.serveOptions = null;
+  h.serverConfig = null;
+  h.initCalls = 0;
+  h.initCompleted = false;
+  h.initCompletedAtServe = false;
   delete process.env.HOST;
   delete process.env.PORT;
   delete process.env.AGENT_PORT;
 });
 
 describe('Node agent server entry', () => {
-  it('默认监听 127.0.0.1:4111 并托管 createApp().fetch', async () => {
+  it('默认监听 127.0.0.1:4111,并在 MastraServer 初始化后托管 Hono app', async () => {
     await import('../src/index');
 
+    expect(h.serverConfig?.mastra).toBe(h.mastra);
+    expect(h.initCalls).toBe(1);
+    expect(h.initCompletedAtServe).toBe(true);
     expect(h.serveOptions).toMatchObject({
-      fetch: h.fetch,
       hostname: '127.0.0.1',
       port: 4111,
     });
+    expect(h.serveOptions.fetch).toBe(h.serverConfig.app.fetch);
   });
 
   it('AGENT_PORT 优先于 PORT,HOST 可配置', async () => {

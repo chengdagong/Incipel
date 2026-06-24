@@ -1,6 +1,6 @@
 // 运行时无关的环境变量读取。
 //
-// agent 当前由 Mastra Node server 托管;保留 Deno.env 读取只是为了历史入口和测试兼容。
+// agent 当前由 Mastra application + Hono server adapter 托管;保留 Deno.env 读取只是为了历史入口和测试兼容。
 // 不同运行时取环境变量的入口不同:Deno 用 `Deno.env.get()`,Node 用 `process.env`。
 // 把这层差异收在这里,业务代码只调 env(),不直接耦合某个全局对象。
 //

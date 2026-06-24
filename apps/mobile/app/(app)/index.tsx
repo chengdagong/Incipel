@@ -104,6 +104,9 @@ export default function WelcomeScreen() {
           placeholderTextColor={palette.placeholder}
           testID="welcome-idea"
           multiline
+          returnKeyType="done"
+          blurOnSubmit
+          onSubmitEditing={start}
         />
         <Pressable
           style={styles.dice}

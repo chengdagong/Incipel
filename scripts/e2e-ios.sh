@@ -46,7 +46,7 @@ TIERS="${TIERS:-frontend-only,stub-agent}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/worktree-dev-env.sh
 . "$SCRIPT_DIR/lib/worktree-dev-env.sh"  # → REPO_ROOT / EXPO_PORT / AGENT_PORT / IOS_SIMULATOR_NAME；
-                                         #   写好 apps/mobile/.env 的 EXPO_PUBLIC_AGENT_URL；导出 set_env_var()
+                                         #   导出 set_env_var()
 
 MOBILE_DIR="$REPO_ROOT/apps/mobile"
 MOBILE_ENV="$MOBILE_DIR/.env"
@@ -114,13 +114,13 @@ fi
 
 # ── 找/建本 worktree 专属模拟器(镜像 dev-ios.sh:机型不可用时自动回退)──
 udid_for_name() { xcrun simctl list devices 2>/dev/null | grep -F "$1 (" | grep -oE '[0-9A-Fa-f-]{36}' | head -1; }
-UDID="$(udid_for_name "$IOS_SIMULATOR_NAME" || true)"
+UDID="$(udid_for_name "${IOS_SIMULATOR_NAME}" || true)"
 if [ -z "$UDID" ]; then
-  echo "▸ 模拟器「$IOS_SIMULATOR_NAME」不存在,正在创建(机型: $IOS_DEVICE_TYPE)…"
-  UDID="$(xcrun simctl create "$IOS_SIMULATOR_NAME" "$IOS_DEVICE_TYPE" 2>/dev/null || true)"
+  echo "▸ 模拟器「${IOS_SIMULATOR_NAME}」不存在,正在创建(机型: ${IOS_DEVICE_TYPE})…"
+  UDID="$(xcrun simctl create "${IOS_SIMULATOR_NAME}" "${IOS_DEVICE_TYPE}" 2>/dev/null || true)"
   if [ -z "$UDID" ]; then
     alt="$(xcrun simctl list devicetypes 2>/dev/null | grep -oE 'com\.apple\.CoreSimulator\.SimDeviceType\.iPhone[^ )]*' | tail -1)"
-    [ -n "$alt" ] && { echo "  机型 \"$IOS_DEVICE_TYPE\" 不可用,改用 $alt"; UDID="$(xcrun simctl create "$IOS_SIMULATOR_NAME" "$alt" 2>/dev/null || true)"; }
+    [ -n "$alt" ] && { echo "  机型 \"${IOS_DEVICE_TYPE}\" 不可用,改用 ${alt}"; UDID="$(xcrun simctl create "${IOS_SIMULATOR_NAME}" "${alt}" 2>/dev/null || true)"; }
   fi
   [ -z "$UDID" ] && { echo "✗ 创建模拟器失败。可设 IOS_DEVICE_TYPE 后重试。"; exit 1; }
 fi
@@ -131,13 +131,14 @@ echo "▸ Agent 端口 : $AGENT_PORT"
 if [ -z "$WANT_DEV_NO_AUTH" ]; then
   echo "▸ Agent env  : $AGENT_ENV"
 fi
-echo "▸ 模拟器     : $IOS_SIMULATOR_NAME ($UDID)"
+echo "▸ 模拟器     : ${IOS_SIMULATOR_NAME} (${UDID})"
 
 xcrun simctl boot "$UDID" 2>/dev/null || true  # 已开机则忽略
 open -a Simulator >/dev/null 2>&1 || true
 
 # ── 清理与 .env 还原(EXPO_PUBLIC_DEV_NO_AUTH 是 bundle 期开关,构建前临时按层改、退出时还原)──
 ORIG_DEV_NO_AUTH="$(grep -E '^EXPO_PUBLIC_DEV_NO_AUTH=' "$MOBILE_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
+ORIG_AGENT_URL="$(grep -E '^EXPO_PUBLIC_AGENT_URL=' "$MOBILE_ENV" 2>/dev/null | head -1 | sed 's/^[^=]*=//' || true)"
 AGENT_PID=""
 # 按端口收尾 agent:tsx 等会另起子进程,kill 父 PID 未必带走真正监听端口的那个;按端口杀最可靠。
 free_port() { # $1 = port
@@ -155,6 +156,7 @@ cleanup() {
   [ -n "$AGENT_PID" ] && kill "$AGENT_PID" 2>/dev/null || true
   free_port "$AGENT_PORT"
   set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "$ORIG_DEV_NO_AUTH" >/dev/null 2>&1 || true
+  set_env_var "$MOBILE_ENV" EXPO_PUBLIC_AGENT_URL "$ORIG_AGENT_URL" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
@@ -173,6 +175,7 @@ fi
 # ── 构建并安装 release 包(除非 --no-build)──
 if [ "$NO_BUILD" = 0 ]; then
   set_env_var "$MOBILE_ENV" EXPO_PUBLIC_DEV_NO_AUTH "$WANT_DEV_NO_AUTH" >/dev/null 2>&1 || true
+  set_env_var "$MOBILE_ENV" EXPO_PUBLIC_AGENT_URL "http://127.0.0.1:$AGENT_PORT" >/dev/null 2>&1 || true
 
   # 首次:生成 ios/ 原生工程(--no-install 跳过包管理,随后单独 pod install),再 pod install。
   if ! ls "$IOS_DIR"/*.xcworkspace >/dev/null 2>&1; then

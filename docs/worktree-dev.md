@@ -19,7 +19,7 @@ pnpm dx agent stop    # 停止当前 worktree 的后台 agent watcher / server,�
 INCIPEL_SKIP_AGENT=1 pnpm dev:ios -- --go # 不自动起 agent(你已在别处前台跑 dev:agent 时)
 ```
 
-`pnpm dev:ios` / `dev:android` 必须显式传 `--go` 或 `--devbuild`;不带参数会打印用法后退出。Google Sign-In 需要 development build,不能用 Expo Go 验证。启动脚本起 Metro 前会先调 `tools/incipel-dev up`:确保共用 Supabase 栈在运行、确认当前 worktree 的 Mastra Node agent server 正在运行,并在**后台**启动 watcher 监控当前 worktree 的 agent 源码与 `supabase/.env`,所以平时一条带参数的命令就把客户端和服务端都启动。新 worktree 首跑时,或 `apps/mobile/package.json` 新增直接依赖后,若 `apps/mobile` 依赖不完整,会先自动 `pnpm install`(pnpm 用全局 content-addressable store,命中时通常只是创建硬链接,不会重复下载,所以每个 worktree 装一次很轻;无需也无法靠全局安装 Expo 省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库);这个文件仍给 Android serial 与 E2E 的 iOS simulator 名称使用,但 `pnpm dev:ios` 会忽略其中的 `IOS_SIMULATOR_NAME`,始终使用 `incipel-development`。脚本会按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量与 agent 端口;如果已有旧 env 文件,它也会从主工作区补充 Google iOS client id 与 Supabase Google client secret。`Ctrl+C` 退出 Metro 不会自动停止后台 agent watcher / server;需要清理时运行 `pnpm dx agent stop`。agent 端口按 worktree 路径派生,写入 `apps/mobile/.env` 的 `EXPO_PUBLIC_AGENT_URL` 与 `supabase/.env` 的 `AGENT_PORT`。
+`pnpm dev:ios` / `dev:android` 必须显式传 `--go` 或 `--devbuild`;不带参数会打印用法后退出。Google Sign-In 需要 development build,不能用 Expo Go 验证。启动脚本起 Metro 前会先调 `tools/incipel-dev up`:确保共用 Supabase 栈在运行、确认当前 worktree 的 Mastra application agent server 正在运行,并在**后台**启动 watcher 监控当前 worktree 的 agent 源码与 `supabase/.env`,所以平时一条带参数的命令就把客户端和服务端都启动。新 worktree 首跑时,或 `apps/mobile/package.json` 新增直接依赖后,若 `apps/mobile` 依赖不完整,会先自动 `pnpm install`(pnpm 用全局 content-addressable store,命中时通常只是创建硬链接,不会重复下载,所以每个 worktree 装一次很轻;无需也无法靠全局安装 Expo 省掉)。首次运行还会在本 worktree 根目录生成 `.worktree-dev.env`(已被忽略,不入库);这个文件仍给 Android serial 与 E2E 的 iOS simulator 名称使用,但 `pnpm dev:ios` 会忽略其中的 `IOS_SIMULATOR_NAME`,始终使用 `incipel-development`。脚本会按需把 `apps/mobile/.env`、`supabase/.env` 写好。`supabase/.env` 本身也是 ignored 文件,新 worktree 没有这份文件时,`tools/incipel-dev` 会先从主工作区完整复制,再写入当前本地栈的 JWT 校验变量与 agent 端口;如果已有旧 env 文件,它也会从主工作区补充 Google iOS client id 与 Supabase Google client secret。`Ctrl+C` 退出 Metro 不会自动停止后台 agent watcher / server;需要清理时运行 `pnpm dx agent stop`。agent 端口按 worktree 路径派生,写入 `apps/mobile/.env` 的 `EXPO_PUBLIC_AGENT_URL` 与 `supabase/.env` 的 `AGENT_PORT`。
 
 首次使用 `--devbuild` 前,脚本会在目标设备缺少 `com.incipel.app` 时自动构建并安装 development build。这个步骤可能需要几分钟,完成后脚本会继续启动 Metro。iOS simulator 路径由脚本执行 `expo prebuild`、`pod install`、`xcodebuild` 与 `simctl install`;CocoaPods 需要的 `modular_headers` 由 `expo-build-properties` 写入生成配置,脚本不会直接修改 `Podfile`。本地 simulator build 使用 ad-hoc signing,使 app 携带 Keychain entitlement;Google 登录返回 `com.google.GIDSignIn Code=-2 "keychain error"` 时,先卸载旧 app 安装包再让脚本重建。不要手动用 `expo run:ios --device <UDID>` 代替,该命令在某些 Xcode / Expo CLI 组合下会走需要 code signing 的 device build 分支。
 
@@ -39,7 +39,7 @@ INCIPEL_SKIP_AGENT=1 pnpm dev:ios -- --go # 不自动起 agent(你已在别处�
 
 ## Agent 与 Supabase
 
-agent 当前运行时是 Mastra Node agent server。Supabase 仍负责本地数据库、Auth、Storage。两者的 URL 分开:
+agent 当前运行时是 Mastra application,通过 Hono server adapter 在 Node server 中运行。Supabase 仍负责本地数据库、Auth、Storage。两者的 URL 分开:
 
 - `EXPO_PUBLIC_SUPABASE_URL`:共用 Supabase 栈的 API URL,默认来自 `supabase/config.toml` 的 `[api].port`。
 - `EXPO_PUBLIC_AGENT_URL`:当前 worktree 的 agent server base URL,形如 `http://127.0.0.1:<agent-port>`。

@@ -111,14 +111,17 @@ importers:
         specifier: 0.0.57
         version: 0.0.57
       '@hono/node-server':
-        specifier: 2.0.6
-        version: 2.0.6(hono@4.12.25)
+        specifier: 1.19.14
+        version: 1.19.14(hono@4.12.25)
       '@incipel/shared':
         specifier: workspace:*
         version: link:../shared
       '@mastra/core':
-        specifier: 1.45.0
-        version: 1.45.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76)
+        specifier: 1.46.0
+        version: 1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76)
+      '@mastra/hono':
+        specifier: 1.5.1
+        version: 1.5.1(@hono/node-server@1.19.14(hono@4.12.25))(@mastra/core@1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76))(hono@4.12.25)(zod@3.25.76)
       '@supabase/supabase-js':
         specifier: ^2.45.0
         version: 2.108.2
@@ -129,7 +132,7 @@ importers:
         specifier: ^17.4.2
         version: 17.4.2
       hono:
-        specifier: ^4.6.0
+        specifier: ^4.12.25
         version: 4.12.25
       jose:
         specifier: ^5.9.0
@@ -1222,11 +1225,12 @@ packages:
     peerDependencies:
       hono: ^4
 
-  '@hono/node-server@2.0.6':
-    resolution: {integrity: sha512-7DeRlKG57JDBNZ5Qj2jwVdgwQy4b0tLubRLl3zCf91/rCf9i7p1V5FtW/yWibm1uUHE493ts9ZXH/7g/LQWl+g==}
-    engines: {node: '>=20'}
+  '@hono/node-ws@1.3.1':
+    resolution: {integrity: sha512-vo/MwCnpJAVHBkGzWjCJ28wF45fYHAfbPZcH2rodZODHtch2GHA94KtMfusmVycTUtsLAsaNsHhtY6P8X3RQsA==}
+    engines: {node: '>=18.14.1'}
     peerDependencies:
-      hono: ^4
+      '@hono/node-server': ^1.19.11
+      hono: ^4.6.0
 
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
@@ -1299,16 +1303,30 @@ packages:
     resolution: {integrity: sha512-qC72D4+CDdjGqJvkFMMEAtancHUQ7/d/tAiHf64z8MopFDmcrtbcJuerDtFceuAfQJ2pDSfCKCtbqoGBNnwg0w==}
     engines: {node: '>=8'}
 
-  '@mastra/core@1.45.0':
-    resolution: {integrity: sha512-UPpNL+iJVfypfc7IOKL9fhmoKKDe6IA6y+DwZDRSTN+uz/ft194e+TrB4LnBdYtTTeLhDO96mxW2rp9LK0ULhg==}
+  '@mastra/core@1.46.0':
+    resolution: {integrity: sha512-8w0O+7R9L125svWXHkTVLdHGjaWhvmJAJKfmvSLjgTfK0q0FZI29JlrCwcjqwY1kQTqb1yPzk6GJXh8xrJXiFA==}
     engines: {node: '>=22.13.0'}
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
+
+  '@mastra/hono@1.5.1':
+    resolution: {integrity: sha512-cj8I0Vqw9vLPRtaholfNeY3Dhz2HpgM1BmHiqEApfjSPni65WWw0OOUiLj75/FpeEU1tcXvtJ6g73rhzi9n5KA==}
+    engines: {node: '>=22.13.0'}
+    peerDependencies:
+      '@mastra/core': '>=1.34.0-0 <2.0.0-0'
+      hono: ^4.12.8
 
   '@mastra/schema-compat@1.3.0':
     resolution: {integrity: sha512-VAWCXGuWuTqnljkheb3zKUujNK6rdGhFISxdSoSz3/d3HJWZOHY10mUnXw5lg0s73FdFDGg4tehbq28fAZz+lA==}
     engines: {node: '>=22.13.0'}
     peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+
+  '@mastra/server@1.46.0':
+    resolution: {integrity: sha512-0kV9rGMiG2G9epR2YhkmkGLiK/EDju8r7xS/Qmgz7PZaioRsLNrLItnVSUy6wan7pBwRv5uGyc5CHS0z5MeFqA==}
+    engines: {node: '>=22.13.0'}
+    peerDependencies:
+      '@mastra/core': '>=1.34.0-0 <2.0.0-0'
       zod: ^3.25.0 || ^4.0.0
 
   '@modelcontextprotocol/sdk@1.29.0':
@@ -2834,6 +2852,9 @@ packages:
 
   fetch-nodeshim@0.4.10:
     resolution: {integrity: sha512-m6I8ALe4L4XpdETy7MJZWs6L1IVMbjs99bwbpIKphxX+0CTns4IKDWJY0LWfr4YsFjfg+z1TjzTMU8lKl8rG0w==}
+
+  fetch-to-node@2.1.0:
+    resolution: {integrity: sha512-Wq05j6LE1GrWpT2t1YbCkyFY6xKRJq3hx/oRJdWEJpZlik3g25MmdJS6RFm49iiMJw6zpZuBOrgihOgy2jGyAA==}
 
   figures@6.1.0:
     resolution: {integrity: sha512-d+l3qxjSesT4V7v2fh+QnmFnUWv9lSpjarhShNTgBOfA0ttejbQUAlHLitbjkoRiDulW0OPoQPYIGhIC8ohejg==}
@@ -5933,9 +5954,14 @@ snapshots:
     dependencies:
       hono: 4.12.25
 
-  '@hono/node-server@2.0.6(hono@4.12.25)':
+  '@hono/node-ws@1.3.1(@hono/node-server@1.19.14(hono@4.12.25))(hono@4.12.25)':
     dependencies:
+      '@hono/node-server': 1.19.14(hono@4.12.25)
       hono: 4.12.25
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@isaacs/cliui@8.0.2':
     dependencies:
@@ -6043,7 +6069,7 @@ snapshots:
     dependencies:
       '@lukeed/csprng': 1.1.0
 
-  '@mastra/core@1.45.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76)':
+  '@mastra/core@1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76)':
     dependencies:
       '@a2a-js/sdk': 0.3.13(@bufbuild/protobuf@2.12.0)(express@5.2.1)
       '@ai-sdk/provider-utils-v5': '@ai-sdk/provider-utils@3.0.25(zod@3.25.76)'
@@ -6086,6 +6112,20 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  '@mastra/hono@1.5.1(@hono/node-server@1.19.14(hono@4.12.25))(@mastra/core@1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76))(hono@4.12.25)(zod@3.25.76)':
+    dependencies:
+      '@hono/node-ws': 1.3.1(@hono/node-server@1.19.14(hono@4.12.25))(hono@4.12.25)
+      '@mastra/core': 1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76)
+      '@mastra/server': 1.46.0(@mastra/core@1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76))(zod@3.25.76)
+      fetch-to-node: 2.1.0
+      hono: 4.12.25
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - '@hono/node-server'
+      - bufferutil
+      - utf-8-validate
+      - zod
+
   '@mastra/schema-compat@1.3.0(zod@3.25.76)':
     dependencies:
       json-schema-to-zod: 2.8.1
@@ -6093,6 +6133,12 @@ snapshots:
       zod-from-json-schema: 0.5.3
       zod-from-json-schema-v3: zod-from-json-schema@0.0.5
       zod-to-json-schema: 3.25.2(zod@3.25.76)
+
+  '@mastra/server@1.46.0(@mastra/core@1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76))(zod@3.25.76)':
+    dependencies:
+      '@mastra/core': 1.46.0(@bufbuild/protobuf@2.12.0)(ai@6.0.209(zod@3.25.76))(express@5.2.1)(rxjs@7.8.1)(zod@3.25.76)
+      hono: 4.12.25
+      zod: 3.25.76
 
   '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
     dependencies:
@@ -7768,6 +7814,8 @@ snapshots:
       - encoding
 
   fetch-nodeshim@0.4.10: {}
+
+  fetch-to-node@2.1.0: {}
 
   figures@6.1.0:
     dependencies:
