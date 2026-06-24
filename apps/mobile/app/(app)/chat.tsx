@@ -412,18 +412,37 @@ function MessageBubble({
         />
       )}
 
-      {/* 可点选项(quick reply):带分隔线的列表,点击即以用户身份发该文本。 */}
+      {/* 可点选项:本轮内联卡片之后的一组卡片,点击即以用户身份发该文本。 */}
       {!!options?.length && (
         <View style={styles.options}>
-          {options.map((opt) => (
+          {options.map((opt, index) => (
             <Pressable
-              key={opt}
-              style={[styles.optionRow, { borderTopColor: palette.dividerOptions }]}
+              key={`${index}-${opt}`}
+              style={({ pressed }) => [
+                styles.optionCard,
+                {
+                  backgroundColor: pressed ? palette.controlBgHover : palette.cardBg,
+                  borderColor: pressed ? defaultTheme.accentSoftBorder : palette.borderCard,
+                },
+              ]}
               onPress={() => onSend(opt)}
               accessibilityRole="button"
+              accessibilityLabel={`选择:${opt}`}
+              testID={`chat-option-card-${index}`}
             >
-              <Text style={[styles.optionArrow, { color: defaultTheme.accent }]}>▸</Text>
+              <View
+                style={[
+                  styles.optionIndex,
+                  {
+                    backgroundColor: defaultTheme.accentSoft,
+                    borderColor: defaultTheme.accentSoftBorder,
+                  },
+                ]}
+              >
+                <Text style={[styles.optionIndexText, { color: defaultTheme.accent }]}>{index + 1}</Text>
+              </View>
               <Text style={[styles.optionLabel, { color: palette.textPrimary }]}>{opt}</Text>
+              <Text style={[styles.optionChevron, { color: defaultTheme.accent }]}>›</Text>
             </Pressable>
           ))}
         </View>
@@ -553,18 +572,30 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', gap: 5, paddingVertical: 6 },
   dot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#BDB8AE' },
 
-  // 选项列表
-  options: { marginTop: 6 },
-  optionRow: {
+  // 可点选项卡片
+  options: { marginTop: 14, gap: 9 },
+  optionCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
+    minHeight: 54,
+    borderWidth: 1,
+    borderRadius: 8,
     paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderTopWidth: 1,
+    paddingHorizontal: 12,
   },
-  optionArrow: { fontSize: 13 },
-  optionLabel: { fontSize: 14 },
+  optionIndex: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  optionIndexText: { fontSize: 12, lineHeight: 15, fontWeight: '700' },
+  optionLabel: { flex: 1, fontSize: 14, lineHeight: 21, fontWeight: '500' },
+  optionChevron: { fontSize: 20, lineHeight: 22, fontWeight: '500', marginTop: 1 },
 
   errorRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   error: { fontSize: 13, fontWeight: '600' },

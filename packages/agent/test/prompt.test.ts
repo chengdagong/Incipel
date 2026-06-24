@@ -72,6 +72,13 @@ describe('buildPrompt', () => {
     expect(system).not.toContain('当前模式');
   });
 
+  it('system 要求可点选项只通过 propose_options 发出,不写进回复文本', () => {
+    const system = buildSystem();
+    expect(system).toContain('可点选项只通过 propose_options 发出');
+    expect(system).toContain('不要把可点选项写进回复文本');
+    expect(system).toContain('客户端会把这些选项显示在本轮内联卡片之后');
+  });
+
   it('完整对话历史不截断:全部历史消息都进入 prompt(ADR-0010)', () => {
     const history: PromptMessage[] = Array.from({ length: 30 }, (_, i) => ({
       role: 'user' as const,

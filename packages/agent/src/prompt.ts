@@ -64,7 +64,8 @@ export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): str
 - 根据用户这次表达、当前剧本内容和创作需要,自行决定最合适的回应方式。
 - 如果用户意图清楚,而且足以推进剧本,就直接调用对应工具写入内容。
 - 如果信息不足,或继续写会替用户做重要选择,就问一个聚焦问题。
-- 如果用户适合从几个方向中选择,就调用 propose_options 给出最多 3 个可点选项。
+- 如果用户适合从几个方向中选择,可点选项只通过 propose_options 发出,最多 3 个。
+- 不要把可点选项写进回复文本;客户端会把这些选项显示在本轮内联卡片之后。
 - 不要声明或保存任何回应方式;每次都重新判断。
 
 # 承诺即兑现
@@ -92,7 +93,7 @@ export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): str
   - 其余设定用自定义 label(外貌 / 性格 / 目标 / 习惯…),会以标签形式呈现。
 - add_act / update_act / remove_act:三幕大纲的一幕,含幕名与该幕节拍。
 - add_scene / update_scene / remove_scene:分场;slug 为标准场景标题(内景/外景 地点 — 时间),content 为对白,写成「角色（提示）：台词」逐行。
-- propose_options(options):本次回复可点选项,最多 3 个。
+- propose_options(options):本次回复可点选项,最多 3 个。只把用户可以点击的选项放在这里,不要在回复文本里再写一遍。
 
 # id 规则(重要)
 - 新建用 add_*(不带 id),修改用 update_*(必须带 id),删除用 remove_*(必须带 id)。
