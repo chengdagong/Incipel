@@ -26,6 +26,7 @@ import { PortraitThumb } from './PortraitThumb';
 import { ReaderText } from './ReaderText';
 import { useReadingPrefs } from '../readingPrefs';
 import { scaleGap } from '../readingScale';
+import { DOCUMENT_TEXT_STYLES } from '../docTypography';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace' });
 const DOTTED = '#D6CFC3'; // 目录点线引导色
@@ -531,7 +532,7 @@ const styles = StyleSheet.create({
   facetLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   facetDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 8 },
   facetLabel: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 13.5, fontWeight: '600' },
-  facetBody: { fontSize: 13, lineHeight: 23 },
+  facetBody: { ...DOCUMENT_TEXT_STYLES.worldBody },
 
   // 人物表 roster
   rosterRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: palette.dividerSoft },
@@ -555,7 +556,7 @@ const styles = StyleSheet.create({
   detailAge: { fontSize: 12.5, marginTop: 10 },
   detailBody: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 18 },
   bioLabel: { fontSize: 13, fontWeight: '600', marginBottom: 5 },
-  bio: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, lineHeight: 26 },
+  bio: { fontFamily: defaultTheme.fonts.serifTitle, ...DOCUMENT_TEXT_STYLES.characterBio },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7 },
   tagText: { fontSize: 12.5, fontWeight: '500' },
@@ -570,7 +571,7 @@ const styles = StyleSheet.create({
   // 故事节拍
   beatCard: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 14 },
   beatAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 15, fontWeight: '600', marginBottom: 6 },
-  beatText: { fontSize: 13, lineHeight: 23 },
+  beatText: { ...DOCUMENT_TEXT_STYLES.beatBody },
 
   // 剧本正文
   sceneMark: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 12, fontWeight: '600', letterSpacing: 3, textAlign: 'center', marginBottom: 12 },

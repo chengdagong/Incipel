@@ -12,6 +12,7 @@ import type { DocTarget } from './DocPanel';
 import { PortraitThumb } from './PortraitThumb';
 import { useReadingPrefs } from '../readingPrefs';
 import { scaleGap } from '../readingScale';
+import { DOCUMENT_TEXT_STYLES } from '../docTypography';
 
 // 本轮卡片只承载「新增/改动的实体切片」,各区可空。
 export type InlineCardData = {
@@ -204,10 +205,10 @@ const styles = StyleSheet.create({
   secLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   secLabel: { fontSize: 11, letterSpacing: 1, fontWeight: '600' },
   secLine: { flex: 1, height: 1, marginLeft: 7 },
-  bodyPara: { fontSize: 13, lineHeight: 23 },
+  bodyPara: { ...DOCUMENT_TEXT_STYLES.worldBody },
   // 大纲:幕名独占一行(衬线小标题),节拍逐段排开;段间留白让多点草案读得开。
   outlineAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22, marginBottom: 7 },
-  outlineBeat: { fontSize: 13, lineHeight: 23 },
+  outlineBeat: { ...DOCUMENT_TEXT_STYLES.beatBody },
   sceneSlug: { fontFamily: defaultTheme.fonts.mono, fontSize: 11, letterSpacing: 1, marginBottom: 7 },
   sceneContent: { fontFamily: defaultTheme.fonts.mono, fontSize: 12.5, lineHeight: 22 },
 
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
   charRole: { fontSize: 12, marginTop: 2 },
   charAge: { fontSize: 12, marginTop: 9 },
   charBody: { paddingHorizontal: 15, paddingTop: 14, paddingBottom: 15 },
-  bio: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14, lineHeight: 25 },
+  bio: { fontFamily: defaultTheme.fonts.serifTitle, ...DOCUMENT_TEXT_STYLES.characterBio },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5 },
   tagText: { fontSize: 12, fontWeight: '500' },
