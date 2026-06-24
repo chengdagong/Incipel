@@ -5,8 +5,10 @@ tags:
   - stub-agent
 ---
 - runFlow: ../subflows/enter-welcome.yaml
+# 新欢迎屏:在灵感输入框打字开启「开始创作」(题材 chip 只单选、不再回填灵感)
 - tapOn:
-    id: "welcome-chip-0"
+    id: "welcome-idea"
+- inputText: "一个测试灵感"
 - tapOn:
     id: "welcome-start"
 # 助手流式回复(助手名「主管编剧」=内容断言)
