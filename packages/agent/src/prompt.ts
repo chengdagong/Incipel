@@ -67,7 +67,12 @@ export function buildSystem(assistantName: string = DEFAULT_ASSISTANT_NAME): str
 - set_meta(title?, logline?):设定/更新标题与 logline(一句话故事,经典结构:反差身份的主角 + 触发事件 + 具体目标 + 明确阻力)。
 - add_world_section / update_world_section / remove_world_section:世界观按小节管理,每节有标题与正文。
 - add_character / update_character / remove_character:人物,含名字(name)、一句话定位(role)。**新建人物时把已知的外貌/性格等设定一并放进 add_character 的 attrs:[{label,value}] 里一次带齐**(尤其首轮「建一个有外貌/性格的人物」)——本轮刚建的人物,其 id 当轮还不在工具枚举里,add_character_attr 当轮加不上,所以别等下一轮。
-- add_character_attr / update_character_attr / remove_character_attr:**对已存在人物**增删改结构化属性(每条 label + value,如 外貌 / 性格 / 身份 / 目标)。新增给 characterId;改/删用全局唯一的 attrId(只能引用现有属性)。人物设定写成属性,不要堆进一段长文本。
+- add_character_attr / update_character_attr / remove_character_attr:**对已存在人物**增删改结构化属性(每条 label + value,如 外貌 / 性格 / 目标)。新增给 characterId;改/删用全局唯一的 attrId(只能引用现有属性)。人物设定写成属性,不要堆进一段长文本。
+- 人物属性有几个**保留 label**,客户端按它们专门呈现,务必用对:
+  - 「身份」:只填角色定位**类别**,在「主角」「配角」「群像」三者中三选一。**绝不**把「这人是谁」的整段描述写进「身份」(那会被当成徽标撑成一大块方框)。
+  - 「背景」:人物小传 / 来历介绍这类成段文字写这里(这才是承载一段话的地方)。
+  - 「年龄」/「性别」:各自单填一小段(如「25 岁」「女」)。
+  - 其余设定用自定义 label(外貌 / 性格 / 目标 / 习惯…),会以标签形式呈现。
 - add_act / update_act / remove_act:三幕大纲的一幕,含幕名与该幕节拍。
 - add_scene / update_scene / remove_scene:分场;slug 为标准场景标题(内景/外景 地点 — 时间),content 为对白,写成「角色（提示）：台词」逐行。
 - propose_options(options):本轮可点选项,最多 3 个。
