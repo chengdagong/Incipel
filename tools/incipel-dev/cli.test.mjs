@@ -154,7 +154,7 @@ function matchingServeMetadata(root) {
     repoRoot: root,
     functionName: 'agent',
     pid: 12345,
-    command: 'pnpm --filter @incipel/agent dev',
+    command: 'pnpm --filter @incipel/agent start',
     logPath: path.join(tmpdir(), `incipel-agent-serve-${sha1(root).slice(0, 8)}.log`),
     sourceHash: hashFiles(root, files),
     envHash: sha1(readFileSync(path.join(root, 'supabase', '.env'), 'utf8')),
@@ -654,6 +654,34 @@ test('up dry-run restarts agent when source hash changes despite healthy endpoin
     });
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /agent source\/env changed, restarting agent server/);
+    assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent start/);
+  } finally {
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up dry-run restarts agent when serve metadata records the old dev command despite healthy endpoint', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const health = await startHealthServer(agentPort(tmp));
+  const port = health.port;
+
+  try {
+    writeAgentFixture(tmp, port);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), command: 'pnpm --filter @incipel/agent dev' }, null, 2),
+    );
+
+    const res = run('node', [cli, 'up', '--dry-run'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout, /agent serve 启动命令已变化,重启 agent server/);
     assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent start/);
   } finally {
     const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;

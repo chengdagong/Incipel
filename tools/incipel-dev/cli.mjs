@@ -806,6 +806,11 @@ async function ensureAgentServe(root, { restart = false } = {}) {
   const paths = agentPaths(root);
   const snapshot = agentSnapshot(root);
   const meta = readJson(paths.serveMeta);
+  // 后台 serve 用不带 watch 的 start(tsx src/index.ts):避免再起一个 chokidar/FSEvents
+  // 文件监听——源码热重载由本 CLI 的 agent watcher(轮询)负责,二者职责不重叠。
+  // 前台 dev:agent(dev() 里的 `dev`)仍用 tsx watch,保留它的快速热重载与日志。
+  const serveArgs = ['--filter', '@incipel/agent', 'start'];
+  const serveCommand = `pnpm ${serveArgs.join(' ')}`;
   const prevEnvHash = existsSync(paths.serveEnvHash) ? readFileSync(paths.serveEnvHash, 'utf8').trim() : null;
   const envFileChanged = prevEnvHash !== snapshot.envHash;
   const healthy = await agentHealthy(root);
@@ -816,6 +821,9 @@ async function ensureAgentServe(root, { restart = false } = {}) {
         reason = 'agent serve metadata does not match current worktree, restarting';
       } else if (restart || meta.sourceHash !== snapshot.sourceHash || meta.envHash !== snapshot.envHash) {
         reason = 'agent source/env changed, restarting agent server';
+      } else if (meta.command && meta.command !== serveCommand) {
+        // 升级前用旧命令(如 `dev` / tsx watch)起的后台 serve,即便源码/env 未变也要换成新命令。
+        reason = 'agent serve 启动命令已变化,重启 agent server';
       } else if (!DRY && !pidMatches(Number(meta.pid), commandLooksLikeAgentServe, root)) {
         reason = 'agent serve metadata pid is stale, restarting agent server';
       }
@@ -833,11 +841,6 @@ async function ensureAgentServe(root, { restart = false } = {}) {
       return;
     }
   }
-  // 后台 serve 用不带 watch 的 start(tsx src/index.ts):避免再起一个 chokidar/FSEvents
-  // 文件监听——源码热重载由本 CLI 的 agent watcher(轮询)负责,二者职责不重叠。
-  // 前台 dev:agent(dev() 里的 `dev`)仍用 tsx watch,保留它的快速热重载与日志。
-  const serveArgs = ['--filter', '@incipel/agent', 'start'];
-  const serveCommand = `pnpm ${serveArgs.join(' ')}`;
   if (DRY) {
     log(`  [dry-run] detached: ${serveCommand}`);
     log(`  [dry-run] 日志 ${paths.serveLog} / pid ${paths.servePid} / metadata ${paths.serveMeta}`);
