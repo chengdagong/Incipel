@@ -231,9 +231,9 @@ function makeFakeAgentServe(root, port) {
     path.join(root, 'bin', 'pnpm'),
     [
       '#!/bin/sh',
-      'if [ "$1" = "--filter" ] && [ "$2" = "@incipel/agent" ] && [ "$3" = "dev" ]; then',
+      'if [ "$1" = "--filter" ] && [ "$2" = "@incipel/agent" ] && { [ "$3" = "dev" ] || [ "$3" = "start" ]; }; then',
       '  printf "%s\\n" "pnpm $*" >> "$INC_TEST_SERVE_LOG"',
-      `  exec "${process.execPath}" -e 'setInterval(() => {}, 1000)' pnpm --filter @incipel/agent dev`,
+      `  exec "${process.execPath}" -e 'setInterval(() => {}, 1000)' pnpm --filter @incipel/agent "$3"`,
       'fi',
       'printf "%s\\n" "unexpected pnpm command: $*" >&2',
       'exit 1',
@@ -551,7 +551,7 @@ test('up dry-run restarts agent when env-file hash is missing despite healthy en
     });
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /agent env-file 内容已变化,重启 agent server/);
-    assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent dev/);
+    assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent start/);
   } finally {
     health.child.kill();
     rmSync(tmp, { recursive: true, force: true });
@@ -588,7 +588,7 @@ test('up dry-run restarts agent when healthy serve metadata belongs to another w
     });
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /agent serve metadata does not match current worktree, restarting/);
-    assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent dev/);
+    assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent start/);
   } finally {
     const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
     cleanupMetadata(root);
@@ -627,7 +627,7 @@ test('up dry-run restarts agent when source hash changes despite healthy endpoin
     });
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /agent source\/env changed, restarting agent server/);
-    assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent dev/);
+    assert.match(res.stdout, /\[dry-run\] detached: pnpm --filter @incipel\/agent start/);
   } finally {
     const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
     cleanupMetadata(root);
@@ -659,12 +659,12 @@ test('up writes current-worktree serve metadata when starting detached agent', a
       },
     });
     assert.equal(res.status, 0, res.stderr);
-    assert.match(readFileSync(serveLog, 'utf8'), /pnpm --filter @incipel\/agent dev/);
+    assert.match(readFileSync(serveLog, 'utf8'), /pnpm --filter @incipel\/agent start/);
 
     const meta = JSON.parse(readFileSync(metadataPaths(root).serveMeta, 'utf8'));
     assert.equal(meta.repoRoot, root);
     assert.equal(meta.functionName, 'agent');
-    assert.equal(meta.command, 'pnpm --filter @incipel/agent dev');
+    assert.equal(meta.command, 'pnpm --filter @incipel/agent start');
     assert.equal(typeof meta.pid, 'number');
     assert.equal(meta.logPath.endsWith(`incipel-agent-serve-${sha1(root).slice(0, 8)}.log`), true);
     assert.match(meta.sourceHash, /^[a-f0-9]{40}$/);
@@ -772,7 +772,7 @@ test('agent watcher restarts serve once for repeated watched source changes', as
     writeFileSync(path.join(tmp, 'packages', 'agent', 'src', 'app.ts'), 'export const app = "changed-1";\n');
     writeFileSync(path.join(tmp, 'packages', 'agent', 'src', 'app.ts'), 'export const app = "changed-2";\n');
 
-    await waitFor(() => existsSync(serveLog) && readFileSync(serveLog, 'utf8').includes('pnpm --filter @incipel/agent dev'));
+    await waitFor(() => existsSync(serveLog) && readFileSync(serveLog, 'utf8').includes('pnpm --filter @incipel/agent start'));
     await sleep(1500);
     const serveLines = readFileSync(serveLog, 'utf8').trim().split('\n').filter(Boolean);
     assert.equal(serveLines.length, 1);
@@ -1008,6 +1008,39 @@ test('agent stop does not signal agent-looking processes from another cwd', asyn
   }
 });
 
+test('agent stop stops a current-worktree serve started via the start script', { skip: !hasLsof() }, async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  let serve;
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    serve = spawn(
+      process.execPath,
+      ['-e', 'setInterval(() => {}, 1000)', 'pnpm', '--filter', '@incipel/agent', 'start'],
+      { cwd: root, stdio: ['ignore', 'ignore', 'ignore'] },
+    );
+    await waitFor(() => isProcessAlive(serve.pid));
+
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: serve.pid, logPath: '/tmp/serve.log' }, null, 2),
+    );
+
+    const res = run('node', [cli, 'agent', 'stop'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    await waitFor(() => !isProcessAlive(serve.pid), { timeoutMs: 3000 });
+  } finally {
+    await stopChild(serve);
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('agent stop cleans current-worktree agent listener when metadata pid is stale', { skip: !hasLsof() }, async () => {
   const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
   const dockerLog = path.join(tmp, 'docker.log');
@@ -1043,6 +1076,57 @@ test('agent stop cleans current-worktree agent listener when metadata pid is sta
     const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
     cleanupMetadata(root);
     rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('agent stop --all stops tracked and orphan agents across worktrees but spares outsiders', { skip: !hasLsof() }, async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const outside = mkdtempSync(path.join(tmpdir(), 'incipel-dev-outside-'));
+  const child = path.join(tmp, 'child');
+  let mainServe;
+  let childOrphan;
+  let outsider;
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+    mustRun('git', ['add', '-A'], tmp);
+    mustRun('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    mustRun('git', ['worktree', 'add', '-b', 'child', child], tmp);
+    const childRoot = mustRun('git', ['rev-parse', '--show-toplevel'], child).stdout.trim();
+
+    const spawnAgentLike = (cwd) =>
+      spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'pnpm', '--filter', '@incipel/agent', 'start'], {
+        cwd,
+        stdio: ['ignore', 'ignore', 'ignore'],
+      });
+    mainServe = spawnAgentLike(root);
+    childOrphan = spawnAgentLike(childRoot);
+    outsider = spawnAgentLike(outside);
+    await waitFor(() => isProcessAlive(mainServe.pid) && isProcessAlive(childOrphan.pid) && isProcessAlive(outsider.pid));
+
+    // main worktree's serve is tracked in metadata; child's orphan is NOT tracked.
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: mainServe.pid, logPath: '/tmp/serve.log' }, null, 2),
+    );
+
+    const res = run('node', [cli, 'agent', 'stop', '--all'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    await waitFor(() => !isProcessAlive(mainServe.pid), { timeoutMs: 3000 });
+    await waitFor(() => !isProcessAlive(childOrphan.pid), { timeoutMs: 3000 });
+    assert.equal(isProcessAlive(outsider.pid), true);
+  } finally {
+    await stopChild(mainServe);
+    await stopChild(childOrphan);
+    await stopChild(outsider);
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 
