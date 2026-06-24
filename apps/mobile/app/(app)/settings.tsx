@@ -20,7 +20,7 @@ import { signOut } from '../../src/supabase';
 import { defaultTheme, palette } from '../../src/theme';
 import { useReadingPrefs } from '../../src/readingPrefs';
 import { ReaderText } from '../../src/components/ReaderText';
-import type { FontLevel, LineLevel } from '../../src/readingScale';
+import { scaleGap, type FontLevel, type LineLevel, type ParaLevel } from '../../src/readingScale';
 
 // 设置页各处用色统一引自通用 palette(过去这里是逐项对原型取色的字面色表,已归并)。
 // back / 副标题 / 标签 / 行值原先是 #9A958C / #A39E94 等浅灰(对比 ~2.x:1),现走 palette.textSecondary;
@@ -51,7 +51,7 @@ export default function SettingsScreen() {
   const { t, lang, setLang } = useI18n();
   const { accent, accentSoft, accentSoftBorder } = defaultTheme;
   const reading = READING_I18N[lang];
-  const { fontLevel, lineLevel, setFontLevel, setLineLevel } = useReadingPrefs();
+  const { fontLevel, lineLevel, paraLevel, setFontLevel, setLineLevel, setParaLevel, paraScale } = useReadingPrefs();
   const fontOptions: { value: FontLevel; label: string }[] = [
     { value: 'small', label: reading.fontSmall },
     { value: 'standard', label: reading.fontStandard },
@@ -59,6 +59,11 @@ export default function SettingsScreen() {
     { value: 'xlarge', label: reading.fontXLarge },
   ];
   const lineOptions: { value: LineLevel; label: string }[] = [
+    { value: 'compact', label: reading.lineCompact },
+    { value: 'standard', label: reading.lineStandard },
+    { value: 'loose', label: reading.lineLoose },
+  ];
+  const paraOptions: { value: ParaLevel; label: string }[] = [
     { value: 'compact', label: reading.lineCompact },
     { value: 'standard', label: reading.lineStandard },
     { value: 'loose', label: reading.lineLoose },
@@ -268,12 +273,27 @@ export default function SettingsScreen() {
               accentSoftBorder={accentSoftBorder}
             />
           </View>
+          <View style={styles.readingDivider} />
+          <View style={styles.readingRow}>
+            <Text style={styles.readingLabel}>{reading.paraSpacing}</Text>
+            <Segmented
+              options={paraOptions}
+              value={paraLevel}
+              onChange={setParaLevel}
+              accent={accent}
+              accentSoft={accentSoft}
+              accentSoftBorder={accentSoftBorder}
+            />
+          </View>
         </View>
         <Text style={styles.langDesc}>{reading.desc}</Text>
         <View style={styles.previewCard}>
           <Text style={[styles.previewEyebrow, { color: accent }]}>{reading.previewLabel}</Text>
           <ReaderText style={[styles.previewAct, { color: palette.textPrimary }]}>{reading.sampleAct}</ReaderText>
           <ReaderText style={[styles.previewBeat, { color: palette.textBody }]}>{reading.sampleBeat}</ReaderText>
+          <ReaderText style={[styles.previewBeat, { color: palette.textBody }, { marginTop: scaleGap(9, paraScale) }]}>
+            {reading.sampleBeat2}
+          </ReaderText>
         </View>
 
         {/* 登出(仅已登录态)。二次确认后清会话,(app) 门控自动回登录页。 */}
