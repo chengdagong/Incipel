@@ -1,7 +1,7 @@
 # 织幕法务静态站点
 
 「织幕」(Incipel)的对外法务页面:服务条款与隐私政策。纯静态 HTML,无构建步骤。
-App Store 上架强制要有一个真实可访问的隐私政策 URL(见 [ADR-0005](../docs/adr/0005-auth-entry-in-v1.md)),本目录就是它的落地。
+App Store 上架强制要有一个真实可访问的隐私政策 URL(见 [ADR-0005](../docs/adr/0005-auth-entry-in-v1.md)),本目录保存并发布这些页面。
 
 ## 页面与发布地址
 
