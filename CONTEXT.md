@@ -7,7 +7,7 @@
 区分三个层面,不要混用:
 
 - **产品名:织幕**(暂定)。面向用户的品牌名;app 名、页面标题、文档标题都用它。旧名「芯」已弃用。
-- **AI 助手角色名:主管编剧**(默认)。用户在对话里打交道的那位助手的显示名;是助手的角色名,**不是**产品名。默认「主管编剧」,且**可由用户自定义**——默认值集中在 `packages/agent/src/prompt.ts` 的 `DEFAULT_ASSISTANT_NAME` 与 `apps/mobile/src/config.ts`,经 `/run` 的 `forwardedProps.assistantName` 贯穿到 system prompt。
+- **AI 助手角色名:主管编剧**(默认)。用户在对话里打交道的那位助手的显示名;是助手的角色名,**不是**产品名。默认「主管编剧」,且**可由用户自定义**——默认值集中在 `packages/agent/src/prompt.ts` 的 `DEFAULT_ASSISTANT_NAME` 与 `apps/mobile/src/config.ts`,经 `/run` 的 `forwardedProps.assistantName` 写进动态 prompt 的「当前助手显示名」段;Mastra Agent 的静态 instructions 不含助手显示名。
 - **代号:Incipel**。仅用于仓库 / 包名(`@incipel/*`)、slug、bundleId,**不向用户呈现**,保持不变。
 
 ## Language

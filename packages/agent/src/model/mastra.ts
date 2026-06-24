@@ -48,7 +48,6 @@ export function createMastraProvider(
     async *streamTurn(input: StreamTurnInput): AsyncIterable<StreamChunk> {
       const agent = registry.getAgent('screenwriter');
       const stream = await agent.stream(input.prompt, {
-        system: input.system,
         maxSteps: MAX_TURN_STEPS,
         toolsets: { screenplay: toMastraTools(input.tools) },
         toolChoice: 'auto',
@@ -66,7 +65,6 @@ export function createMastraProvider(
     async completeLogline(input: CompleteLoglineInput): Promise<string> {
       const agent = registry.getAgent('logline');
       const stream = await agent.stream(input.prompt, {
-        system: input.system,
         maxSteps: 1,
         toolChoice: 'none',
         modelSettings: modelSettings(config.logline),

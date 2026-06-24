@@ -115,7 +115,6 @@ describe('createMastraProvider.streamTurn', () => {
     const provider = createMastraProvider(config());
     const chunks = await collect(
       provider.streamTurn({
-        system: 'SYS',
         prompt: 'PR',
         tools: { add_character: z.object({ name: z.string() }) },
       }),
@@ -131,12 +130,12 @@ describe('createMastraProvider.streamTurn', () => {
     expect(h.lastAgentName).toBe('screenwriter');
     expect(h.lastStreamMessages).toBe('PR');
     expect(h.lastStreamOptions).toMatchObject({
-      system: 'SYS',
       maxSteps: 8,
       toolChoice: 'auto',
       modelSettings: { temperature: 0.2 },
       providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
     });
+    expect(h.lastStreamOptions).not.toHaveProperty('system');
     expect(Object.keys(h.lastStreamOptions.toolsets.screenplay)).toEqual(['add_character']);
     expect(h.lastStreamOptions.clientTools).toBeUndefined();
     expect(h.createdTools[0]).toMatchObject({
@@ -155,7 +154,7 @@ describe('createMastraProvider.streamTurn', () => {
 
     const provider = createMastraProvider(config());
 
-    await expect(collect(provider.streamTurn({ system: 's', prompt: 'p', tools: {} }))).rejects.toThrow('model down');
+    await expect(collect(provider.streamTurn({ prompt: 'p', tools: {} }))).rejects.toThrow('model down');
     expect(h.getAgentCalls).toEqual(['screenwriter']);
   });
 });
@@ -166,7 +165,7 @@ describe('createMastraProvider.completeLogline', () => {
     h.generatedText = '  一句新的 logline  ';
 
     const provider = createMastraProvider(config());
-    const out = await provider.completeLogline({ system: 'SYS', prompt: 'PR' });
+    const out = await provider.completeLogline({ prompt: 'PR' });
 
     expect(out).toBe('一句新的 logline');
     expect(h.lastAgentConfig).toBeNull();
@@ -174,10 +173,10 @@ describe('createMastraProvider.completeLogline', () => {
     expect(h.lastAgentName).toBe('logline');
     expect(h.lastStreamMessages).toBe('PR');
     expect(h.lastStreamOptions).toMatchObject({
-      system: 'SYS',
       maxSteps: 1,
       toolChoice: 'none',
       modelSettings: { temperature: 0.5 },
     });
+    expect(h.lastStreamOptions).not.toHaveProperty('system');
   });
 });

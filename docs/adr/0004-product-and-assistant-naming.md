@@ -8,11 +8,11 @@
 
 - 术语基线在 [`CONTEXT.md`](../../CONTEXT.md) 的「名称」小节;本 ADR 是该决策的记录。
 - 助手名默认值集中两处:agent 侧 `packages/agent/src/prompt.ts` 的 `DEFAULT_ASSISTANT_NAME`,客户端 `apps/mobile/src/config.ts` 的 `DEFAULT_ASSISTANT_NAME`。
-- 自定义入口已贯穿:客户端可经 `/run` 的 `forwardedProps.assistantName` 传入,`run.ts` → `buildPrompt({ assistantName })` → `buildSystem(assistantName)` 一路透传到 system prompt;缺省回落「主管编剧」。
+- 自定义助手名已支持:客户端可经 `/run` 的 `forwardedProps.assistantName` 传入,`run.ts` → `buildPrompt({ assistantName })` 把它写进动态 prompt 的「当前助手显示名」段;未传时使用「主管编剧」。Mastra Agent 的静态 instructions 不含助手显示名。
 
 ## Consequences
 
-- 助手名进入 system prompt,会改变 prompt caching 的缓存前缀:**同一助手名下**前缀稳定、可命中;不同助手名各自一套缓存前缀。默认名不变时与改名前行为一致。
+- 助手名只进入每轮动态 prompt,不改变 Mastra Agent 的静态 instructions。更换助手名只改变「当前助手显示名」段和历史里助手发言的标注。
 - 持久化暂未做:本 ADR 只立「默认值 + 透传接口」,助手名按会话 / 用户存储是后续工作。在那之前,不传 `assistantName` 即用默认「主管编剧」。
 - 历史 ADR(0001–0003)中出现的「芯」属当时记录,**不回改**;命名以本 ADR 与 CONTEXT.md 为准。
 - 代号 Incipel 不动:`@incipel/*`、slug `incipel`、bundleId `com.incipel.app` 保持不变,改名不触碰它们。

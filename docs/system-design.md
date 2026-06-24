@@ -88,7 +88,7 @@
         │ TOOL_CALL_*                       │
 ┌───────┴───────────────────────────┐      │
 │  Agent 运行时 (compute plane)       │      │
-│  · 一轮:载入剧本状态 + 最近对话     │      │
+│  · 一轮:载入剧本状态 + 完整对话历史 │      │
 │    → 模型 tool use                  │      │
 │    → 流式回复 + 剧本增量(DELTA)    │      │
 │  · 模型抽象层(只切强 provider)     │      │
@@ -164,9 +164,9 @@ type Scene         = { id: string; slug: string; content: string };
 
 ```
 客户端 ──(用户消息 + sessionId + JWT)──▶ Agent
-Agent: 载入 documents.state + 最近 N 条 messages
+Agent: 载入 documents.state + 完整 messages
 Agent: 发 RUN_STARTED;若新连接先发 STATE_SNAPSHOT(当前剧本)
-Agent ──▶ 模型(system[cached] + 剧本[cached prefix] + 最近对话 + 新消息 + 工具定义)
+Agent ──▶ 模型(Mastra Agent instructions[cached] + 剧本[cached prefix] + 完整对话历史 + 新消息 + 工具定义)
 模型流式产出:
   · 文本 token        → Agent 转发 TEXT_MESSAGE_CONTENT(进气泡,打字机)
   · 工具调用          → Agent 应用到内存中的剧本 → 每处改动发一条 STATE_DELTA(进卡片)
@@ -266,13 +266,13 @@ messages
 
 ## 9. 上下文与成本策略
 
-**每轮不发完整 transcript。** 因为剧本本身就是故事状态的压缩长期记忆,每轮只发:
+每轮发完整对话历史(见 ADR-0010),同时把剧本状态作为结构化快照放进动态 prompt,不把剧本内容混在自由文本里重复展开。每轮发送:
 
-1. 系统提示(主管编剧的人格 + 输出/工具约束)—— 走 **prompt caching**,稳定不变;
-2. 当前剧本状态(序列化为可读文本,含各实体 id)—— 作为 cached prefix,变动小;
-3. 最近 6–10 轮对话 + 本轮新消息。
+1. Mastra Agent instructions(编剧助手的人格 + 输出/工具约束)——注册在 Agent 上,稳定不变;
+2. 动态 prompt 前缀:助手显示名 + 当前剧本状态(序列化为可读文本,含各实体 id)——剧本状态作为 cached prefix,变动小;
+3. 完整对话历史 + 本轮新消息。
 
-这样 token 量有上界,成本与延迟可控。原型记录过的「多轮后 prompt 越来越长、超时」问题,从这里被根除。
+长会话的 token 量由 compact 机制控制(见 issue #49),不再用固定的最近 N 轮截断。
 
 - **logline 骰子**:走独立的 `/logline` 端点,用更小更便宜的模型,并对单用户限流(rate limit)。
 - **监控**:每轮记录 token 用量、延迟、tool-call 成功率、所用 provider、错误;按会话累计成本。
@@ -308,7 +308,7 @@ messages
 
 ## 12. 规模与成本(估算与扩展)
 
-- **延迟**:TTFT 主要取决于模型;prompt caching 把系统提示与剧本前缀的处理成本降下来,首 token 更快。
+- **延迟**:TTFT 主要取决于模型;prompt caching 把静态 instructions 与剧本前缀的处理成本降下来,首 token 更快。
 - **并发**:AG-UI run 是 I/O 密集(大多在等模型),单个轻量主机可扛大量并发 SSE。
 - **计算层部署**:agent runtime 是 Mastra application + Hono server adapter(见 [ADR-0011](adr/0011-mastra-node-agent-runtime.md))。它适合长轮 SSE 和多步 tool use;部署目标可以是 Cloud Run / Fly / Railway 等 Node 主机。Supabase 只做数据层。
 - **跨设备同步**:v1 打开会话时重新拉取即可;需要实时再上 Supabase Realtime 推 `documents` 变更。

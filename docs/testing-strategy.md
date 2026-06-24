@@ -94,7 +94,7 @@
 
 ### 3.6 `prompt.ts` / `id.ts` / 模型适配器(单元,薄)
 
-- `serializeScreenplay`:各区块计数与 `[id]` 标注;`buildPrompt` 把最近对话截到 `RECENT_MESSAGE_LIMIT`、空段被过滤。
+- `serializeScreenplay`:各区块计数与 `[id]` 标注;`buildScreenwriterInstructions` 输出静态 Agent instructions;`buildPrompt` 只输出动态 prompt,包含助手显示名、完整对话历史、本轮用户消息,空段被过滤。
 - `id.ts`:前缀正确即可,一例足够。
 - `makeAiSdkProvider`:喂一个伪 `fullStream`(`text-delta`/`tool-call`/`error` 各类 part),断言翻译成的 `StreamChunk` 正确、`error` part 被抛出。适配器工厂只测「缺 key 抛错」。
 

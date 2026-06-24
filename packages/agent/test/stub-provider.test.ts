@@ -55,7 +55,7 @@ describe('createStubProvider — 一轮确定性创作', () => {
   });
 
   it('completeLogline 返回固定非空 logline(欢迎页骰子离线可用)', async () => {
-    const logline = await createStubProvider().completeLogline({ system: 's', prompt: 'p' });
+    const logline = await createStubProvider().completeLogline({ prompt: 'p' });
     expect(logline.trim().length).toBeGreaterThan(0);
   });
 

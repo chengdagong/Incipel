@@ -29,7 +29,7 @@ describe('model adapters — Mastra runtime', () => {
 
     const provider = await createModelProvider();
 
-    await expect(provider.completeLogline({ system: 's', prompt: 'p' })).resolves.toBe(
+    await expect(provider.completeLogline({ prompt: 'p' })).resolves.toBe(
       '一个深夜便利店店员,发现每位顾客都在重复同一天。',
     );
   });

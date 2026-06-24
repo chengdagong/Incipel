@@ -1,12 +1,14 @@
 // 选项输出 integration 测试:
-// 1. runTurnCore 传给 provider 的 system prompt 含有可点选项只走 propose_options 的约束。
-// 2. 人物 STATE_DELTA 先发,轮末再发 CUSTOM options;助手正文与保存结果都不重复写选项文本。
+// 1. 静态 instructions 含有可点选项只走 propose_options 的约束。
+// 2. runTurnCore 传给 provider 的动态 prompt 不重复携带静态 instructions。
+// 3. 人物 STATE_DELTA 先发,轮末再发 CUSTOM options;助手正文与保存结果都不重复写选项文本。
 
 import { describe, expect, it } from 'vitest';
 import { EventType, OPTIONS_EVENT_NAME } from '@incipel/shared';
 import { runTurnCore } from '../src/run';
 import { MemoryStore } from '../src/dev/memory-store';
 import type { CompleteLoglineInput, ModelProvider, StreamChunk, StreamTurnInput } from '../src/model/provider';
+import { buildScreenwriterInstructions } from '../src/prompt';
 
 type Ev = Record<string, any>;
 
@@ -49,7 +51,7 @@ function firstIndex(events: Ev[], predicate: (event: Ev) => boolean): number {
 }
 
 describe('agent options output integration', () => {
-  it('传给 provider 的 system prompt 要求可点选项只通过 propose_options 发出', async () => {
+  it('静态 instructions 要求可点选项只通过 propose_options 发出,动态 prompt 不重复携带这些规则', async () => {
     const store = new MemoryStore();
     await store.createSessionIfMissing({ threadId: 't', userId: 'u' });
     const seen: StreamTurnInput[] = [];
@@ -57,10 +59,14 @@ describe('agent options output integration', () => {
 
     await collect(runTurnCore(input(), { provider, store }));
 
+    const instructions = buildScreenwriterInstructions();
+    expect(instructions).toContain('可点选项只通过 propose_options 发出');
+    expect(instructions).toContain('不要把可点选项写进回复文本');
+    expect(instructions).toContain('propose_options(options):本次回复可点选项');
     expect(seen).toHaveLength(1);
-    expect(seen[0]!.system).toContain('可点选项只通过 propose_options 发出');
-    expect(seen[0]!.system).toContain('不要把可点选项写进回复文本');
-    expect(seen[0]!.system).toContain('propose_options(options):本次回复可点选项');
+    expect(seen[0]).not.toHaveProperty('system');
+    expect(seen[0]!.prompt).toContain('# 当前剧本');
+    expect(seen[0]!.prompt).not.toContain('可点选项只通过 propose_options 发出');
   });
 
   it('人物改动先作为 STATE_DELTA 发出,选项在轮末作为 CUSTOM options 发出', async () => {

@@ -6,13 +6,19 @@ import {
   type ModelRuntimeConfig,
   type ModelUseConfig,
 } from './model/config.ts';
+import { buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } from './prompt.ts';
 
 export type IncipelAgentName = 'screenwriter' | 'logline';
 
 export function createMastraAgents(config: ModelRuntimeConfig) {
   return {
-    screenwriter: createAgent('incipel-screenwriter', 'Incipel Screenwriter', config.turn),
-    logline: createAgent('incipel-logline', 'Incipel Logline', config.logline),
+    screenwriter: createAgent(
+      'incipel-screenwriter',
+      'Incipel Screenwriter',
+      config.turn,
+      buildScreenwriterInstructions(),
+    ),
+    logline: createAgent('incipel-logline', 'Incipel Logline', config.logline, LOGLINE_INSTRUCTIONS),
   };
 }
 
@@ -33,11 +39,11 @@ export function getMastraApp(config?: ModelRuntimeConfig): IncipelMastraApp {
   return mastraApp;
 }
 
-function createAgent(id: string, name: string, useConfig: ModelUseConfig): Agent {
+function createAgent(id: string, name: string, useConfig: ModelUseConfig, instructions: string): Agent {
   return new Agent({
     id,
     name,
-    instructions: '',
+    instructions,
     model: mastraModelId(useConfig.model),
   });
 }

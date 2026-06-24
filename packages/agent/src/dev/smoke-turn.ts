@@ -4,7 +4,7 @@
 // 需要 packages/agent/.env 里有 OPENROUTER_API_KEY;模型参数来自 packages/agent/model.config.json。
 // 缺失 key 时打印提示并以 0 退出(不算失败)——见任务说明:缺失不算失败。
 //
-// 它复用 run.ts 的 runTurnCore(注入 { provider, store }),与 /run 同一条核心循环:
+// 它复用 run.ts 的 runTurnCore(注入 { provider, store }),与 /run 使用同一套核心逻辑:
 //   buildPrompt → provider.streamTurn(带 buildToolSchemas)→ 收集文本 + 工具调用
 //   → apply → JsonPatch deltas → save_turn(内存)。
 //

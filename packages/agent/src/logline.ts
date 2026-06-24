@@ -20,7 +20,7 @@ export type LoglineResult = {
 export async function generateLogline(input: LoglineInput): Promise<LoglineResult> {
   void input;
   const provider = await createModelProvider();
-  const { system, prompt } = buildLoglinePrompt();
-  const logline = await provider.completeLogline({ system, prompt });
+  const { prompt } = buildLoglinePrompt();
+  const logline = await provider.completeLogline({ prompt });
   return { logline: logline.trim() };
 }

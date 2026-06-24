@@ -103,7 +103,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     return;
   }
 
-  const { system, prompt } = buildPrompt({
+  const { prompt } = buildPrompt({
     state,
     history: loaded.history,
     userMessage: input.userMessage,
@@ -145,7 +145,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     let attemptChanged = false;
 
     try {
-      yield* streamOnce(provider, { system, prompt, tools }, attemptState, {
+      yield* streamOnce(provider, { prompt, tools }, attemptState, {
         messageId,
         onText: (delta) => {
           attemptText += delta;

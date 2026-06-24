@@ -24,16 +24,14 @@ export type StreamChunk =
   // 一次工具调用参数齐备、已按 schema 解析。
   | { type: 'tool-call'; call: ToolCall };
 
-// 一轮的输入:稳定 system(走 prompt caching)、本轮拼好的 prompt、按状态生成的工具集。
+// 一轮的输入:静态 instructions 已注册在 Mastra Agent 上;这里只传本轮拼好的 prompt 与工具集。
 export type StreamTurnInput = {
-  system: string;
   prompt: string;
   // 工具名 -> Zod 参数 schema。来自 buildToolSchemas(idSetsOf(state))。
   tools: Record<string, z.ZodTypeAny>;
 };
 
 export type CompleteLoglineInput = {
-  system: string;
   prompt: string;
 };
 
