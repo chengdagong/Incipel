@@ -177,11 +177,14 @@ export function createApp(basePath = ''): Hono {
       accent?: string;
       title?: string;
       assistantName?: string;
+      genre?: string;
     };
     // 助手显示名:客户端传入则用之;为空 / 不传 / 非法时,由 prompt 层清洗并回落默认「主管编剧」。
     // 这是「用户自定义助手名」的服务端入口;日后可改为按会话/用户持久化读取。
     // 注意:这里是原始客户端值,清洗(防 prompt injection)在 prompt.ts 的 sanitizeAssistantName。
     const assistantName = typeof fp.assistantName === 'string' ? fp.assistantName : undefined;
+    // 题材:欢迎屏选定后经 forwardedProps 传入,仅首轮作定调提示注入(不进用户消息)。
+    const genre = typeof fp.genre === 'string' ? fp.genre : undefined;
 
     const store = getStore();
     // 据 threadId 建会话与空剧本(已存在则不动);这同时让本轮成为该会话的「新连接」。
@@ -210,6 +213,7 @@ export function createApp(basePath = ''): Hono {
           userMessage,
           newConnection: true,
           assistantName,
+          genre,
         },
         { store },
       )) {

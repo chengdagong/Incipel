@@ -40,6 +40,8 @@ export type RunInput = {
   newConnection: boolean;
   // 助手显示名;缺省「主管编剧」。为日后「用户自定义助手名」预留:由调用方按会话/用户传入。
   assistantName?: string;
+  // 欢迎屏选定的题材;仅首轮作定调提示注入(见 buildPrompt),不进用户消息。
+  genre?: string;
 };
 
 // 核心循环的依赖(seam)。缺省时各自走线上默认实现。
@@ -106,6 +108,7 @@ export async function* runTurnCore(input: RunInput, deps: RunDeps = {}): AsyncGe
     history: loaded.history,
     userMessage: input.userMessage,
     assistantName: input.assistantName,
+    genre: input.genre,
   });
   // 工具 schema 按当前状态生成:含 update_*/remove_* 的 id 枚举门控。
   const tools = buildToolSchemas(idSetsOf(state));

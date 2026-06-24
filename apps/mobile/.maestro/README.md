@@ -121,7 +121,7 @@ flows/
 |---|---|---|
 | `welcome-start` | 开始创作 | `app/(app)/index.tsx` |
 | `welcome-idea` | 灵感输入框(error-retry 打暗号用) | `app/(app)/index.tsx` |
-| `welcome-chip-<i>` | 建议方向 chip(0/1/2) | `app/(app)/index.tsx` |
+| `welcome-genre-<i>` | 题材单选 chip(0..n) | `app/(app)/index.tsx` |
 | `welcome-dice` | 🎲 随机灵感 | `app/(app)/index.tsx` |
 | `menu-button` | 汉堡菜单(唤出抽屉) | `src/components/Drawer.tsx` |
 | `drawer-new` / `drawer-new-float` | 新建创作(NavRow / 悬浮按钮) | `src/components/Drawer.tsx` |

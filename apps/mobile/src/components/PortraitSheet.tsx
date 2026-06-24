@@ -8,7 +8,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildPortraitPrompt, usePortrait, type PortraitStyle } from '../portrait';
 import { useT, type TKey } from '../i18n';
-import { defaultTheme } from '../theme';
+import { defaultTheme, palette } from '../theme';
 
 const STYLE_OPTIONS: { key: PortraitStyle; tkey: TKey }[] = [
   { key: 'cinematic', tkey: 'styleCinematic' },
@@ -17,22 +17,23 @@ const STYLE_OPTIONS: { key: PortraitStyle; tkey: TKey }[] = [
   { key: 'watercolor', tkey: 'styleWatercolor' },
 ];
 
+// 表面 / 描边照搬原型字面值(经 palette 统一);文字灰阶取 AA 档(sub / rewrite / close / chip / cancel)。
 const P = {
-  overlay: 'rgba(40,35,30,0.42)',
-  panel: '#fff',
-  handle: '#E2DDD4',
-  divider: '#F1ECE4',
-  title: '#2A2825',
-  sub: '#A39E94',
-  inputBorder: '#E2DDD4',
-  inputBg: '#FBFAF7',
-  inputText: '#3A352F',
-  chipOffBg: '#F2EDE5',
-  chipOffText: '#7C776E',
-  cancelBorder: '#E2DDD4',
-  cancelText: '#7C776E',
-  genBg: '#2A2825',
-  close: '#B3AEA4',
+  overlay: palette.sheetScrim, // rgba(40,35,30,.42)
+  panel: palette.cardBg, // #fff
+  handle: palette.border, // #E2DDD4
+  divider: palette.dividerSheet, // #F1ECE4
+  title: palette.textPrimary,
+  sub: palette.textSecondary, // 原型 #A39E94(不达 AA),取 AA
+  inputBorder: palette.border,
+  inputBg: palette.pageBg, // #FBFAF7
+  inputText: palette.textPrimaryAlt,
+  chipOffBg: palette.chipTrackBg, // #F2EDE5
+  chipOffText: palette.textSecondary,
+  cancelBorder: palette.border,
+  cancelText: palette.textSecondary,
+  genBg: palette.avatarBg, // #2A2825
+  close: palette.textSecondary,
 } as const;
 
 export function PortraitSheet() {
