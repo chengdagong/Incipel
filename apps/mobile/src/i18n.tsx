@@ -99,6 +99,8 @@ type ReadingStrings = {
   previewLabel: string;
   sampleAct: string;
   sampleBeat: string;
+  paraSpacing: string;
+  sampleBeat2: string;
 };
 export const READING_I18N: Record<Lang, ReadingStrings> = {
   zh: {
@@ -116,6 +118,8 @@ export const READING_I18N: Record<Lang, ReadingStrings> = {
     previewLabel: '预览',
     sampleAct: '第二幕:充值与共振',
     sampleBeat: '林岑第一次不是出于玩笑,而是出于真切的心疼而充值。',
+    paraSpacing: '段落间距',
+    sampleBeat2: '系统弹窗推送「连续关怀礼包」,埋下他被游戏机制捕获的伏笔。',
   },
   en: {
     section: 'Reading',
@@ -132,6 +136,8 @@ export const READING_I18N: Record<Lang, ReadingStrings> = {
     previewLabel: 'Preview',
     sampleAct: 'Act II: Top-Ups and Resonance',
     sampleBeat: 'For the first time, Lin Cen tops up not as a joke, but out of genuine compassion.',
+    paraSpacing: 'Paragraph spacing',
+    sampleBeat2: 'A system pop-up pushes a "continuous care pack," foreshadowing how the game ensnares him.',
   },
   ja: {
     section: '読みやすさ',
@@ -148,6 +154,8 @@ export const READING_I18N: Record<Lang, ReadingStrings> = {
     previewLabel: 'プレビュー',
     sampleAct: '第二幕:課金と共鳴',
     sampleBeat: 'リン・ツェンは初めて、冗談ではなく心からの思いやりで課金する。',
+    paraSpacing: '段落間隔',
+    sampleBeat2: 'システムのポップアップが「継続ケアパック」を勧め、ゲームに絡め取られる伏線を張る。',
   },
   zhHant: {
     section: '閱讀',
@@ -164,6 +172,8 @@ export const READING_I18N: Record<Lang, ReadingStrings> = {
     previewLabel: '預覽',
     sampleAct: '第二幕:儲值與共振',
     sampleBeat: '林岑第一次不是出於玩笑,而是出於真切的心疼而儲值。',
+    paraSpacing: '段落間距',
+    sampleBeat2: '系統彈窗推送「連續關懷禮包」,埋下他被遊戲機制捕獲的伏筆。',
   },
 };
 
