@@ -19,6 +19,7 @@ import { MenuButton } from '../../src/components/Drawer';
 import { useDrawer } from '../../src/drawer/DrawerProvider';
 import { useT } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
+import { welcomeStartParams } from '../../src/welcome/start-params';
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -73,7 +74,9 @@ export default function WelcomeScreen() {
   //(chat 屏挂载时用 useScreenplayAgent(threadId) 建连接并发出首轮,system-design §10)。
   // documents / sessions 行由 agent 端在首轮里按 threadId 建立(system-design §6.2);客户端不直接写库。
   function start() {
-    router.push({ pathname: '/chat', params: { idea: idea.trim(), threadId: newThreadId() } });
+    const params = welcomeStartParams(idea, newThreadId);
+    if (!params) return;
+    router.push({ pathname: '/chat', params });
   }
 
   return (
