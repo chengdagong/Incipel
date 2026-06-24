@@ -16,14 +16,14 @@ Mastra 提供 TypeScript agent abstraction、tool 注册、streaming chunk、模
 - `packages/agent/src/index.ts` 创建 Hono app,先直接注册 `/run`、`/logline` 和 `/health`,再交给 `@mastra/hono` 的 `MastraServer` 初始化,最后由 `@hono/node-server` 启动 HTTP 服务。
 - `packages/agent/src/routes.ts` 负责 Hono route handlers、Supabase JWT 校验、AG-UI SSE 编排和 SupabaseStore。公开 routes 直接挂在外层 Hono app 上,以便请求体上限在读取 JSON 前生效。`packages/agent/src/app.ts` 仅保留给 `app.request()` 测试使用的 Hono wrapper。
 - `packages/agent/src/model/mastra.ts` 不再即时创建 `Agent`;它从 Mastra application registry 获取已注册的 `screenwriter` / `logline` agents,再把 Incipel 的 prompt/tool contract 映射到 Mastra `Agent.stream()`、server-side `toolsets` 和 `createTool()`。
-- 移动端 `EXPO_PUBLIC_AGENT_URL` 指向 Mastra application agent server base URL,例如 `http://127.0.0.1:<agent-port>`。
+- 移动端 `EXPO_PUBLIC_AGENT_URL` 指向 Mastra application agent server base URL;日常 dev 默认为 `http://127.0.0.1:4111`,E2E release runner 构建时临时改成 worktree 相关测试端口。
 - Supabase 继续负责数据库、Auth、Storage,不再承载 agent runtime。
 - `supabase/functions/agent` 仅作为历史入口保留,不再部署新的 agent runtime。
 - Mastra 自身配置 `InMemoryStore` 仅用于 framework 内部状态;产品数据仍由 Incipel 的 Supabase Store 读写。
 
 ## 后果
 
-- 本地开发重新获得每 worktree 独立 agent server 端口,但仍共用一套 Supabase 栈。
+- 本地日常开发使用固定 agent server 端口 `4111`;E2E 使用 worktree 相关 agent server 端口,避免占用日常 dev agent。
 - `tools/incipel-dev` 同步 `apps/mobile/.env` 与 `supabase/.env`,并后台启动 `pnpm --filter @incipel/agent dev`。
 - Android 开发脚本需要同时 `adb reverse` Supabase API 端口和 agent server 端口。
 - 部署方式从 Supabase Function 部署改为 Node server 部署;具体目标主机可另行选择。

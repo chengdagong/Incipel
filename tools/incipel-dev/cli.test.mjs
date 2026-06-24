@@ -51,8 +51,12 @@ function normalizeRoot(root) {
   }
 }
 
-function agentPort(root) {
-  return 4111 + (parseInt(sha1(normalizeRoot(root)).slice(0, 4), 16) % 2000);
+function agentPort() {
+  return 4111;
+}
+
+function e2eAgentPort(root) {
+  return 6111 + (parseInt(sha1(normalizeRoot(root)).slice(0, 4), 16) % 2000);
 }
 
 function metadataPaths(root) {
@@ -400,6 +404,28 @@ test('env sync selects openrouter when only an OpenRouter key is configured', ()
     const res = run('node', [cli, 'env', 'sync', '--dry-run'], tmp);
     assert.equal(res.status, 0, res.stderr);
     assert.match(res.stdout, /set MODEL_PROVIDER=openrouter/);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('env sync writes the fixed dev agent port instead of a worktree-derived port', () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+
+    const res = run('node', [cli, 'env', 'sync'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+
+    const mobileEnv = readFileSync(path.join(tmp, 'apps', 'mobile', '.env'), 'utf8');
+    const agentEnv = readFileSync(path.join(tmp, 'supabase', '.env'), 'utf8');
+    assert.match(mobileEnv, /^EXPO_PUBLIC_AGENT_URL=http:\/\/127\.0\.0\.1:4111$/m);
+    assert.match(agentEnv, /^AGENT_PORT=4111$/m);
+    assert.notEqual(e2eAgentPort(tmp), 4111);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

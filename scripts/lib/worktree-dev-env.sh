@@ -4,13 +4,15 @@
 # 职责:确定「本 worktree」的开发隔离参数(Metro 端口 / E2E iOS simulator 名 / Android serial),
 # 持久化到本 worktree 根目录的 .worktree-dev.env(已被 .gitignore 忽略,每个 worktree 各持一份)。
 #   - EXPO_PORT          : Metro 端口,固定 8081(我们总是只跑一个 dev 环境,不再 per-worktree 错开)
-#   - AGENT_PORT         : agent server 端口,按 worktree 真实路径派生
+#   - DEV_AGENT_PORT     : 日常 dev agent server 端口,固定 4111(与 worktree 无关)
+#   - E2E_AGENT_PORT     : E2E runner 的 agent server 端口,按 worktree 真实路径派生
+#   - AGENT_PORT         : 兼容旧脚本的 dev agent server 端口,等于 DEV_AGENT_PORT
 #   - IOS_SIMULATOR_NAME : pnpm e2e:ios 使用的本 worktree 专属 iOS simulator 名;由分支名派生
 #   - ANDROID_SERIAL     : Android 目标 serial;留空交由 dev-android.sh 自动判定
 #
 # 写 apps/mobile/.env 与 supabase/.env、起共用栈、启动 Mastra Node agent server,统一交给
 # `node tools/incipel-dev/cli.mjs up`(dev:ios / dev:android 会在起 Metro 前调它);本文件不碰 .env。
-# agent 端口由 tools/incipel-dev 按 worktree 路径派生,并写入 apps/mobile/.env。
+# dev agent 端口由 tools/incipel-dev 固定为 4111,并写入 apps/mobile/.env。
 #
 # 兼容 macOS 自带的 bash 3.2,不使用 mapfile/readarray 等 bash 4 特性。
 
@@ -19,7 +21,9 @@ ENV_FILE="$REPO_ROOT/.worktree-dev.env"
 ROOT_REALPATH="$(cd "$REPO_ROOT" && pwd -P)"
 ROOT_HASH="$(printf '%s' "$ROOT_REALPATH" | shasum | awk '{print $1}')"
 AGENT_HASH_PREFIX="${ROOT_HASH:0:4}"
-AGENT_PORT=$((4111 + (16#$AGENT_HASH_PREFIX % 2000)))
+DEV_AGENT_PORT=4111
+E2E_AGENT_PORT=$((6111 + (16#$AGENT_HASH_PREFIX % 2000)))
+AGENT_PORT="$DEV_AGENT_PORT"
 
 set_env_var() {
   file="$1"
@@ -88,7 +92,7 @@ fi
 
 ANDROID_SERIAL="${ANDROID_SERIAL:-}"
 
-# 4) 写回:持久化本 worktree 选定的设备项(EXPO_PORT / AGENT_PORT 是派生值,不入文件)。
+# 4) 写回:持久化本 worktree 选定的设备项(端口是派生值,不入文件)。
 cat > "$ENV_FILE" <<EOF
 # 本 worktree 的开发隔离配置(由 scripts/lib/worktree-dev-env.sh 自动生成,可手改)。
 # 该文件已被 .gitignore 忽略,每个 worktree 各持一份。说明见 docs/worktree-dev.md。
@@ -97,4 +101,4 @@ IOS_SIMULATOR_NAME="$IOS_SIMULATOR_NAME"
 ANDROID_SERIAL="$ANDROID_SERIAL"
 EOF
 
-export REPO_ROOT ENV_FILE EXPO_PORT AGENT_PORT IOS_SIMULATOR_NAME ANDROID_SERIAL
+export REPO_ROOT ENV_FILE EXPO_PORT DEV_AGENT_PORT E2E_AGENT_PORT AGENT_PORT IOS_SIMULATOR_NAME ANDROID_SERIAL

@@ -21,7 +21,7 @@
 # EXPO_PUBLIC_DEV_NO_AUTH 是 bundle 期烘进二进制的,所以两组 bundle 不能同跑:frontend-only+stub-agent
 # 开它、supabase 关它并填真 anon key。切层要重新构建(本脚本默认每次构建;--no-build 仅在同一层复跑时用)。
 #
-# 端口 / 模拟器名由 scripts/lib/worktree-dev-env.sh 按 worktree 分配,互不冲突。
+# E2E agent 端口 / 模拟器名由 scripts/lib/worktree-dev-env.sh 按 worktree 分配,不占用日常 dev agent 端口。
 #
 # 前置(本脚本会尽量代办,缺时给出提示):
 #   - 已装 maestro(curl -fsSL "https://get.maestro.mobile.dev" | bash)与 JDK 17+
@@ -47,7 +47,7 @@ TIERS="${TIERS:-frontend-only,stub-agent}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/worktree-dev-env.sh
-. "$SCRIPT_DIR/lib/worktree-dev-env.sh"  # → REPO_ROOT / EXPO_PORT / AGENT_PORT / IOS_SIMULATOR_NAME；
+. "$SCRIPT_DIR/lib/worktree-dev-env.sh"  # → REPO_ROOT / EXPO_PORT / DEV_AGENT_PORT / E2E_AGENT_PORT / IOS_SIMULATOR_NAME；
                                          #   导出 set_env_var()
 
 MOBILE_DIR="$REPO_ROOT/apps/mobile"
@@ -78,6 +78,7 @@ case "$TIERS" in
   *)          WANT_DEV_NO_AUTH="1" ;;
 esac
 
+E2E_AGENT_ENV_PORT=""
 # supabase / real-ai 层的 agent 需要显式导出 env-file。Node entrypoint 不读取 dotenv,因此不能只依赖 cwd。
 if [ -z "$WANT_DEV_NO_AUTH" ] || tier_has real-ai; then
   [ -f "$AGENT_ENV" ] || {
@@ -85,16 +86,25 @@ if [ -z "$WANT_DEV_NO_AUTH" ] || tier_has real-ai; then
     echo "  共用栈请先运行 pnpm env:sync;隔离栈请先运行 pnpm e2e:stack up,并设置 INCIPEL_E2E_AGENT_ENV。"
     exit 1
   }
+  unset AGENT_PORT
   set -a
   # shellcheck disable=SC1090
   . "$AGENT_ENV"
   set +a
+  E2E_AGENT_ENV_PORT="${AGENT_PORT:-}"
 fi
 
 if tier_has real-ai && [ -z "${OPENROUTER_API_KEY:-}" ]; then
   echo "✗ real-ai 层需在 $AGENT_ENV 填 OPENROUTER_API_KEY。"
   exit 1
 fi
+
+E2E_EFFECTIVE_AGENT_PORT="$E2E_AGENT_PORT"
+if [ -n "${INCIPEL_E2E_AGENT_ENV:-}" ] && [ -n "$E2E_AGENT_ENV_PORT" ]; then
+  E2E_EFFECTIVE_AGENT_PORT="$E2E_AGENT_ENV_PORT"
+fi
+AGENT_PORT="$E2E_EFFECTIVE_AGENT_PORT"
+export AGENT_PORT
 
 # ── 工具链定位(非交互 shell 不读 ~/.zshrc,这里自行接好 PATH / DEVELOPER_DIR)──
 # node:Release 的 bundling 阶段(Xcode「Bundle React Native code and images」)会调 node。

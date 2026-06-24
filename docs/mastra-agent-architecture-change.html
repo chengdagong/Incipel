@@ -850,8 +850,8 @@
         <div class="section-head">
           <h2>6. 本地开发变化</h2>
           <p>
-            新方案的本地开发重点是：每个 worktree 有自己的 agent server port，
-            移动端通过 <code>EXPO_PUBLIC_AGENT_URL</code> 指向对应 server。
+            新方案的本地开发重点是：日常 dev agent server 使用固定端口 <code>4111</code>，
+            E2E runner 才使用 worktree 相关端口。移动端通过 <code>EXPO_PUBLIC_AGENT_URL</code> 指向对应 server。
           </p>
         </div>
 
@@ -864,7 +864,7 @@
             <p style="margin-top: 12px">
               <code>tools/incipel-dev</code> 会同步 <code>apps/mobile/.env</code> 和
               <code>supabase/.env</code>，然后启动 agent dev server。agent server 的健康检查地址为
-              <code>http://127.0.0.1:&lt;agent-port&gt;/health</code>。
+              <code>http://127.0.0.1:4111/health</code>。
             </p>
           </article>
 
@@ -897,7 +897,7 @@
             <tr>
               <td><code>AGENT_PORT</code></td>
               <td><code>supabase/.env</code></td>
-              <td>agent server 监听端口。由 worktree 路径计算，避免常见端口冲突。</td>
+              <td>日常 dev agent server 监听端口，固定为 <code>4111</code>；E2E runner 使用 worktree 相关测试端口。</td>
             </tr>
             <tr>
               <td><code>SUPABASE_URL</code></td>

@@ -3,8 +3,8 @@
 //
 // agent 唯一运行时是 Mastra Node server;Supabase 仍负责本地数据库、Auth、Storage。
 // 这个工具接手原来 dev-agent.sh / worktree-dev-env.sh 里 agent 相关的职责:写好各处环境变量、
-// 起共用 Supabase 栈并启动 agent server,以及为 E2E 生成「每 worktree 一套」的隔离栈(派生 project_id + 错开
-// 端口 + --workdir)。选 Node 而非 bash:生成 per-worktree config.toml 要改 TOML、做符号链接,
+// 起共用 Supabase 栈并启动固定端口的 dev agent server,以及为 E2E 生成「每 worktree 一套」的隔离栈
+// (派生 project_id + 错开端口 + --workdir)。选 Node 而非 bash:生成 per-worktree config.toml 要改 TOML、做符号链接,
 // bash 做这些易错。
 //
 // 零运行时依赖,纯 ESM。所有会改文件 / 起进程的动作都遵守 --dry-run:只打印不执行。
@@ -77,17 +77,23 @@ function repoRoot() {
   if (res.status !== 0) fail('不在 git 仓库内(git rev-parse --show-toplevel 失败)');
   return res.stdout.trim();
 }
-// 本 worktree 的稳定短 hash(派生 project_id 与端口偏移用)。
+const AGENT_FUNCTION = 'agent';
+const DEV_AGENT_PORT = 4111;
+const E2E_AGENT_PORT_BASE = 6111;
+
+// 本 worktree 的稳定短 hash(派生 project_id 与 E2E 端口偏移用)。
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
 }
-function agentPort(root) {
-  return 4111 + (parseInt(worktreeHash(root).slice(0, 4), 16) % 2000);
+function agentPort() {
+  return DEV_AGENT_PORT;
+}
+function e2eAgentPort(root) {
+  return E2E_AGENT_PORT_BASE + (parseInt(worktreeHash(root).slice(0, 4), 16) % 2000);
 }
 function sha1Text(text) {
   return createHash('sha1').update(text).digest('hex');
 }
-const AGENT_FUNCTION = 'agent';
 
 function agentPaths(root) {
   const token = worktreeHash(root);
@@ -979,7 +985,7 @@ function planIsolatedStack(root) {
   return { projectId, delta, apiPort, configText: text };
 }
 function isolatedAgentPort(root, plan) {
-  return agentPort(root) + 2000 + plan.delta;
+  return e2eAgentPort(root) + 2000 + plan.delta;
 }
 function replaceDirSymlink(src, dst) {
   if (!existsSync(src)) return false;
