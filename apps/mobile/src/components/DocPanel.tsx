@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { type Character, type CharacterAttr, type Screenplay } from '@incipel/shared';
 import { defaultTheme, palette, type Theme } from '../theme';
 import { DOC_I18N, useI18n, VOL_I18N } from '../i18n';
-import { badgeBox, charView } from '../charView';
+import { badgeBox, charView, splitBeat } from '../charView';
 import { PortraitThumb } from './PortraitThumb';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace' });
@@ -243,7 +243,11 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
                 {outline.map((a) => (
                   <View key={a.id} style={[styles.beatCard, { backgroundColor: palette.cardBg, borderColor: palette.borderCard }]}>
                     <Text style={[styles.beatAct, { color: palette.textPrimary }]}>{a.act}</Text>
-                    {!!a.beat && <Text style={[styles.beatText, { color: palette.textBody }]}>{a.beat}</Text>}
+                    {splitBeat(a.beat).map((para, j) => (
+                      <Text key={j} style={[styles.beatText, { color: palette.textBody }, j > 0 && styles.beatTextGap]}>
+                        {para}
+                      </Text>
+                    ))}
                   </View>
                 ))}
               </View>
@@ -561,7 +565,8 @@ const styles = StyleSheet.create({
   // 故事节拍
   beatCard: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 14 },
   beatAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 15, fontWeight: '600', marginBottom: 6 },
-  beatText: { fontSize: 13, lineHeight: 22 },
+  beatText: { fontSize: 13, lineHeight: 23 },
+  beatTextGap: { marginTop: 9 },
 
   // 剧本正文
   sceneMark: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 12, fontWeight: '600', letterSpacing: 3, textAlign: 'center', marginBottom: 12 },

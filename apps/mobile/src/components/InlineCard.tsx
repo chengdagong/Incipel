@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Act, Character, CharacterAttr, Scene, WorldSection } from '@incipel/shared';
 import { defaultTheme, palette, type Theme } from '../theme';
 import { useI18n, VOL_I18N } from '../i18n';
-import { badgeBox, charView } from '../charView';
+import { badgeBox, charView, splitBeat } from '../charView';
 import type { DocTarget } from './DocPanel';
 import { PortraitThumb } from './PortraitThumb';
 
@@ -62,11 +62,15 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
 
       {!!data.outline?.length && (
         <SectionCard label="secOutline" footer={openLabel(vol.beats)} onOpen={() => onOpenDoc?.({ view: 'beats' })} theme={theme}>
-          {data.outline.map((a) => (
-            <Text key={a.id} style={[styles.outlineItem, { color: palette.textSecondary }]}>
-              <Text style={{ color: palette.textPrimary, fontWeight: '700' }}>{a.act}</Text>
-              {a.beat ? ` · ${a.beat}` : ''}
-            </Text>
+          {data.outline.map((a, i) => (
+            <View key={a.id} style={i > 0 ? styles.outlineActGap : undefined}>
+              <Text style={[styles.outlineAct, { color: palette.textPrimary }]}>{a.act}</Text>
+              {splitBeat(a.beat).map((para, j) => (
+                <Text key={j} style={[styles.outlineBeat, { color: palette.textBody }, j > 0 && styles.outlineBeatGap]}>
+                  {para}
+                </Text>
+              ))}
+            </View>
           ))}
         </SectionCard>
       )}
@@ -197,7 +201,11 @@ const styles = StyleSheet.create({
   secLabel: { fontSize: 11, letterSpacing: 1, fontWeight: '600' },
   secLine: { flex: 1, height: 1, marginLeft: 7 },
   bodyPara: { fontSize: 13, lineHeight: 23, marginBottom: 8 },
-  outlineItem: { fontSize: 12.5, lineHeight: 20, marginBottom: 9 },
+  // 大纲:幕名独占一行(衬线小标题),节拍逐段排开;段间留白让多点草案读得开。
+  outlineAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22, marginBottom: 7 },
+  outlineActGap: { marginTop: 16 },
+  outlineBeat: { fontSize: 13, lineHeight: 23 },
+  outlineBeatGap: { marginTop: 9 },
   scene: { marginBottom: 14 },
   sceneSlug: { fontFamily: defaultTheme.fonts.mono, fontSize: 11, letterSpacing: 1, marginBottom: 7 },
   sceneContent: { fontFamily: defaultTheme.fonts.mono, fontSize: 12.5, lineHeight: 22 },
