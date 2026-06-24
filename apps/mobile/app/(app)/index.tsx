@@ -72,8 +72,12 @@ export default function WelcomeScreen() {
   function start() {
     const trimmed = idea.trim();
     if (!trimmed) return;
-    const firstMsg = selectedGenre ? `${trimmed}\n${genre.marker.replace('{x}', selectedGenre)}` : trimmed;
-    router.push({ pathname: '/chat', params: { idea: firstMsg, threadId: newThreadId() } });
+    // 题材不拼进消息正文(避免污染聊天显示、影响 AI 判语言);经 params → forwardedProps 传给
+    // agent 作首轮定调(对齐设置页「界面语言不影响 AI 回复语言」的承诺)。
+    router.push({
+      pathname: '/chat',
+      params: { idea: trimmed, threadId: newThreadId(), ...(selectedGenre ? { genre: selectedGenre } : {}) },
+    });
   }
 
   const canStart = !!idea.trim();

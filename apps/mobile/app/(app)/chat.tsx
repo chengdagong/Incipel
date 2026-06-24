@@ -75,7 +75,7 @@ function diffCard(prev: Screenplay, next: Screenplay): InlineCardData {
 }
 
 export default function ChatScreen() {
-  const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string }>();
+  const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string; genre?: string }>();
   const router = useRouter();
   const { palette } = defaultTheme;
   const { t, lang } = useI18n();
@@ -86,8 +86,10 @@ export default function ChatScreen() {
   // 带 sessionId(从历史 / 作品 / 抽屉打开已有会话)时恢复历史消息与剧本;
   // 新建创作(仅带 idea + 全新 threadId)无需恢复。
   const reopening = !!params.sessionId;
+  // 欢迎屏带来的题材(仅新建创作时有);转发给 agent 作首轮定调,不进用户消息。
+  const genre = typeof params.genre === 'string' ? params.genre : undefined;
   const { messages, screenplay, streamingText, options, isRunning, thinking, error, hydratedBaseline, hydrating, sendMessage, retry } =
-    useScreenplayAgent(threadId, { hydrate: reopening });
+    useScreenplayAgent(threadId, { hydrate: reopening, genre });
 
   // 「作品」入口可带 view=doc 直接进文档视图。
   const [docOpen, setDocOpen] = useState(params.view === 'doc');

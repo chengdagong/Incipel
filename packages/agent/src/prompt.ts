@@ -143,6 +143,9 @@ export type BuildPromptInput = {
   userMessage: string;
   // 助手显示名;缺省「主管编剧」。为日后「用户自定义助手名」预留:调用方可按会话/用户传入。
   assistantName?: string;
+  // 用户在欢迎屏选的题材(如「科幻」)。仅首轮注入一行定调提示;不进用户消息,故不影响判
+  // 语言(设置页承诺「界面语言不影响 AI 回复语言」)。
+  genre?: string;
 };
 
 export type BuiltPrompt = {
@@ -158,9 +161,15 @@ export type BuiltPrompt = {
  */
 export function buildPrompt(input: BuildPromptInput): BuiltPrompt {
   const assistantName = sanitizeAssistantName(input.assistantName);
+  // 题材偏好只在首轮(还没有历史)注入,作低调的定调提示——单列成段,不混进用户消息正文。
+  const genreHint =
+    input.genre && input.history.length === 0
+      ? `# 用户选定题材\n${input.genre}\n（界面注入的题材偏好,仅用于定调;不代表用户语言,回复语言仍只跟随用户自己写的正文。）`
+      : '';
   const parts = [
     serializeScreenplay(input.state),
     serializeHistory(input.history, assistantName),
+    genreHint,
     `# 本轮用户消息\n${input.userMessage}`,
   ].filter((p) => p.length > 0);
 

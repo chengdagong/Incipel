@@ -225,7 +225,15 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
         )}
 
         {view === 'charDetail' && selChar && (
-          <CharDetail c={selChar} accent={accent} bioLabel={doc.bioLabel} t={t} onFocusAttr={onFocusAttr} />
+          <CharDetail
+            key={selChar.id}
+            c={selChar}
+            accent={accent}
+            accentSoft={theme.accentSoft}
+            bioLabel={doc.bioLabel}
+            t={t}
+            onFocusAttr={onFocusAttr}
+          />
         )}
 
         {view === 'beats' && (
@@ -332,18 +340,23 @@ function Contents({
 function CharDetail({
   c,
   accent,
+  accentSoft,
   bioLabel,
   t,
   onFocusAttr,
 }: {
   c: Character;
   accent: string;
+  accentSoft: string;
   bioLabel: string;
   t: ReturnType<typeof useI18n>['t'];
   onFocusAttr?: (c: Character, a: CharacterAttr) => void;
 }) {
   const { identity, ageGender, bio, tags } = charView(c);
   const badge = badgeBox(identity, accent);
+  // 点标签 chip → 展开该属性的值(对齐原型 selTag/selActive);再点同一枚收起。
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const activeTag = tags.find((tg) => tg.id === activeId) ?? null;
   return (
     <View style={styles.detailWrap}>
       <View style={[styles.detailCard, { backgroundColor: palette.cardBg, borderColor: palette.borderCard }]}>
@@ -373,16 +386,42 @@ function CharDetail({
           )}
           {tags.length > 0 && (
             <View style={[styles.tags, !!bio && { marginTop: 18 }]}>
-              {tags.map((tg) => (
-                <Pressable
-                  key={tg.id}
-                  onPress={onFocusAttr ? () => onFocusAttr(c, tg) : undefined}
-                  style={[styles.tag, { borderColor: palette.borderChip, backgroundColor: palette.cardBg }]}
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.tagText, { color: palette.textSecondary }]}>{tg.label}</Text>
+              {tags.map((tg) => {
+                const on = tg.id === activeId;
+                return (
+                  <Pressable
+                    key={tg.id}
+                    onPress={() => setActiveId((prev) => (prev === tg.id ? null : tg.id))}
+                    style={[
+                      styles.tag,
+                      on
+                        ? { borderColor: accent, backgroundColor: accentSoft }
+                        : { borderColor: palette.borderChip, backgroundColor: palette.cardBg },
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.tagText, { color: on ? accent : palette.textSecondary, fontWeight: on ? '600' : '500' }]}>
+                      {tg.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+          {/* 选中标签 → 展开值面板(对齐原型);面板内「聊聊这条」走聚焦标签流程(#12)。 */}
+          {activeTag && (
+            <View style={[styles.attrPanel, { backgroundColor: palette.noteBg, borderColor: palette.borderControl }]}>
+              <Text style={[styles.attrPanelLabel, { color: accent }]}>{activeTag.label}</Text>
+              {activeTag.value.trim() ? (
+                <Text style={[styles.attrPanelValue, { color: palette.textPrimaryAlt }]}>{activeTag.value}</Text>
+              ) : (
+                <Text style={[styles.attrPanelEmpty, { color: palette.placeholder }]}>{t('attrEmpty')}</Text>
+              )}
+              {onFocusAttr && (
+                <Pressable onPress={() => onFocusAttr(c, activeTag)} accessibilityRole="button" style={styles.attrDiscuss} hitSlop={6}>
+                  <Text style={[styles.attrDiscussText, { color: accent }]}>{t('discussAttr')}</Text>
                 </Pressable>
-              ))}
+              )}
             </View>
           )}
         </View>
@@ -511,6 +550,13 @@ const styles = StyleSheet.create({
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7 },
   tagText: { fontSize: 12.5, fontWeight: '500' },
+  // 选中标签的值面板(对齐原型 selActive)
+  attrPanel: { marginTop: 14, borderWidth: 1, borderRadius: 12, paddingHorizontal: 15, paddingVertical: 13 },
+  attrPanelLabel: { fontSize: 12, fontWeight: '600', marginBottom: 6 },
+  attrPanelValue: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14, lineHeight: 25 },
+  attrPanelEmpty: { fontSize: 13 },
+  attrDiscuss: { marginTop: 10, alignSelf: 'flex-start' },
+  attrDiscussText: { fontSize: 12.5, fontWeight: '600' },
 
   // 故事节拍
   beatCard: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 14 },

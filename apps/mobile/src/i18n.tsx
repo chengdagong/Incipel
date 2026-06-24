@@ -22,28 +22,22 @@ export type Lang = (typeof LANGS)[number]['code'];
 
 // 题材选择(欢迎页)。取自原型 T.genreTitle / T.genres。
 // 单列于 DICT 之外:t() 只返回字符串,而 genres 是数组;欢迎页按当前 lang 直接读这里。
-// marker:选了题材后折进首条消息的标记({x} 为题材名)。按 lang 本地化,避免给
-// 非中文界面注入中文、污染聊天显示与模型判语言(对齐「（聚焦：…）」也随用户语言的约定)。
-export const GENRE_I18N: Record<Lang, { title: string; list: string[]; marker: string }> = {
+export const GENRE_I18N: Record<Lang, { title: string; list: string[] }> = {
   zh: {
     title: '想写哪种类型？',
     list: ['科幻', '赛博朋克', '犯罪', '爱情', '悬疑', '奇幻', '恐怖', '喜剧', '武侠', '年代'],
-    marker: '（类型：{x}）',
   },
   en: {
     title: 'What genre?',
     list: ['Sci-Fi', 'Cyberpunk', 'Crime', 'Romance', 'Mystery', 'Fantasy', 'Horror', 'Comedy', 'Thriller', 'Period'],
-    marker: '(Genre: {x})',
   },
   ja: {
     title: 'どんなジャンル？',
     list: ['SF', 'サイバーパンク', '犯罪', '恋愛', 'ミステリー', 'ファンタジー', 'ホラー', 'コメディ', 'スリラー', '時代劇'],
-    marker: '（ジャンル：{x}）',
   },
   zhHant: {
     title: '想寫哪種類型？',
     list: ['科幻', '賽博龐克', '犯罪', '愛情', '懸疑', '奇幻', '恐怖', '喜劇', '武侠', '年代'],
-    marker: '（類型：{x}）',
   },
 };
 
@@ -200,6 +194,8 @@ const DICT = {
     swipeHint: "← 左右滑动 →",
     charsEmpty: "▢ 还没聊到人物",
     chatAboutChar: "聊聊 TA →",
+    discussAttr: "聊聊这条 →",
+    attrEmpty: "这个标签还没写。",
     unnamedChar: "未命名角色",
     outlineEmpty: "▢ 还没搭大纲",
     scenesEmpty: "▢ 还没写到具体场景",
@@ -331,6 +327,8 @@ const DICT = {
     swipeHint: "← swipe →",
     charsEmpty: "▢ No characters yet",
     chatAboutChar: "Chat about them →",
+    discussAttr: "Chat about this →",
+    attrEmpty: "Not written yet.",
     unnamedChar: "Unnamed character",
     outlineEmpty: "▢ No outline yet",
     scenesEmpty: "▢ No scenes written yet",
@@ -462,6 +460,8 @@ const DICT = {
     swipeHint: "← スワイプ →",
     charsEmpty: "▢ 登場人物はまだいません",
     chatAboutChar: "この人物について話す →",
+    discussAttr: "これについて話す →",
+    attrEmpty: "まだ書かれていません。",
     unnamedChar: "名称未設定のキャラクター",
     outlineEmpty: "▢ アウトラインはまだありません",
     scenesEmpty: "▢ シーンはまだ書いていません",
@@ -593,6 +593,8 @@ const DICT = {
     swipeHint: "← 左右滑動 →",
     charsEmpty: "▢ 還沒聊到人物",
     chatAboutChar: "聊聊 TA →",
+    discussAttr: "聊聊這條 →",
+    attrEmpty: "這個標籤還沒寫。",
     unnamedChar: "未命名角色",
     outlineEmpty: "▢ 還沒搭大綱",
     scenesEmpty: "▢ 還沒寫到具體場景",
