@@ -96,7 +96,8 @@
 
 - `serializeScreenplay`:各区块计数与 `[id]` 标注;`buildScreenwriterInstructions` 输出静态 Agent instructions;`buildPrompt` 只输出动态 prompt,包含助手显示名、完整对话历史、本轮用户消息,空段被过滤。
 - `id.ts`:前缀正确即可,一例足够。
-- `makeAiSdkProvider`:喂一个伪 `fullStream`(`text-delta`/`tool-call`/`error` 各类 part),断言翻译成的 `StreamChunk` 正确、`error` part 被抛出。适配器工厂只测「缺 key 抛错」。
+- `makeAiSdkProvider`:喂一个伪 `fullStream`(`text-delta`/`tool-call`/`error` 各类 part),断言翻译成的 `StreamChunk` 正确、`error` part 被抛出;Mastra skill 内部工具调用不应被转成 Incipel 剧本工具调用。适配器工厂只测「缺 key 抛错」。
+- `mastra-app.ts`:断言 `screenwriter` 的 Mastra `skills` 配置包含 `screenwriting-master`,并用真实 Mastra skill API 覆盖 `listSkills()` / `getSkill()`;`logline` 不应加载该 skill。
 
 ### 3.7 数据库 — RLS / 授权 / RPC(pgTAP,按不变量而非行覆盖)
 
@@ -108,7 +109,7 @@
 - `save_turn` 授权:`EXECUTE` 已从 `PUBLIC` 收回、仅授予 `service_role`——以 `authenticated` 身份经 RPC 调用应被拒。
 - 级联删除:删 `sessions` 行,子表连带清除。
 - 幂等(经评审新增,见 [KI-2](./known-issues.md#ki-2-save_turn-无幂等键重发同一轮重复写入数据库--medium)):同一 `runId` 重发同一轮**不应**产生重复的 messages 与 `document_versions`。当前实现无幂等键,此测试会失败,暴露与 §11「重发本轮不产生不一致数据」的偏差。
-- 并发(经评审新增,见 [KI-3](./known-issues.md#ki-3-同会话并发-save_turn-竞争-turn_index--medium)):对同一 session 并发两次 `save_turn`(均 `changed=true`)。当前实现下一方撞 `document_versions` 唯一约束、整轮回滚(用以固化「原子回滚、没有部分写入」并暴露「败方整轮丢失」);修复后断言两轮都成功、`turn_index` 连续。
+- 并发(经评审新增,见 [KI-3](./known-issues.md#ki-3-同会话并发-save_turn-竞争-turn_index--medium)):对同一 session 并发两次 `save_turn`(均 `changed=true`)。当前实现下一方撞 `document_versions` 唯一约束、整轮回滚(用以把「原子回滚、没有部分写入」写进测试,并暴露「败方整轮丢失」);修复后断言两轮都成功、`turn_index` 连续。
 
 ### 3.8 会话创建路径(`store.ts`,集成)
 

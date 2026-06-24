@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { ModelRuntimeConfig } from '../src/model/config';
 
 const h = vi.hoisted(() => ({
@@ -85,5 +87,21 @@ describe('createMastraAgents', () => {
       instructions: LOGLINE_INSTRUCTIONS,
     });
     expect(logline.instructions).toContain('只输出这句 logline 本身');
+  });
+
+  it('只给 screenwriter agent 挂载山音编剧 skill,不影响 logline agent', async () => {
+    const { createMastraAgents, SCREENWRITING_MASTER_SKILL_PATH } = await import('../src/mastra-app');
+
+    createMastraAgents(config());
+
+    const screenwriter = h.agentConfigs.find((agent) => agent.id === 'incipel-screenwriter')!;
+    expect(screenwriter.skills).toEqual([SCREENWRITING_MASTER_SKILL_PATH]);
+    expect(SCREENWRITING_MASTER_SKILL_PATH).toMatch(/packages\/agent\/skills\/screenwriting-master$/);
+    await expect(readFile(join(SCREENWRITING_MASTER_SKILL_PATH, 'SKILL.md'), 'utf8')).resolves.toContain(
+      'Designed by @山音',
+    );
+
+    const logline = h.agentConfigs.find((agent) => agent.id === 'incipel-logline')!;
+    expect(logline.skills).toBeUndefined();
   });
 });
