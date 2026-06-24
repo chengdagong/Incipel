@@ -24,6 +24,8 @@ import { DOC_I18N, useI18n, VOL_I18N } from '../i18n';
 import { badgeBox, charView, splitBeat } from '../charView';
 import { PortraitThumb } from './PortraitThumb';
 import { ReaderText } from './ReaderText';
+import { useReadingPrefs } from '../readingPrefs';
+import { scaleGap } from '../readingScale';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace' });
 const DOTTED = '#D6CFC3'; // 目录点线引导色
@@ -102,6 +104,7 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
   }, [open, target, screenplay.characters]);
 
   const { meta, world, characters, outline, scenes } = screenplay;
+  const { paraScale } = useReadingPrefs();
   const title = meta.title?.trim() || t('untitled');
   const inVolume = view !== 'contents';
   const selChar = characters[Math.min(selIdx, Math.max(0, characters.length - 1))];
@@ -245,7 +248,7 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
                   <View key={a.id} style={[styles.beatCard, { backgroundColor: palette.cardBg, borderColor: palette.borderCard }]}>
                     <ReaderText style={[styles.beatAct, { color: palette.textPrimary }]}>{a.act}</ReaderText>
                     {splitBeat(a.beat).map((para, j) => (
-                      <ReaderText key={j} style={[styles.beatText, { color: palette.textBody }, j > 0 && styles.beatTextGap]}>
+                      <ReaderText key={j} style={[styles.beatText, { color: palette.textBody }, j > 0 && { marginTop: scaleGap(9, paraScale) }]}>
                         {para}
                       </ReaderText>
                     ))}
@@ -437,8 +440,9 @@ function CharDetail({
 
 // 剧本正文:按场排版(场标 + slug + 动作/对白块)。Scene 无幕字段,故不渲染幕标题。
 function ScriptView({ scenes, accent }: { scenes: Screenplay['scenes']; accent: string }) {
+  const { paraScale } = useReadingPrefs();
   return (
-    <View style={{ gap: 30, marginTop: 18 }}>
+    <View style={{ gap: scaleGap(30, paraScale), marginTop: 18 }}>
       {scenes.map((s, i) => {
         const blocks = parseScript(s.content);
         return (
@@ -447,13 +451,13 @@ function ScriptView({ scenes, accent }: { scenes: Screenplay['scenes']; accent: 
             <ReaderText style={[styles.scriptSlug, { color: palette.textSecondary }]}>{s.slug}</ReaderText>
             {blocks.map((b, j) =>
               b.isCue ? (
-                <View key={j} style={styles.cueBlock}>
+                <View key={j} style={{ marginBottom: scaleGap(12, paraScale) }}>
                   <ReaderText style={[styles.cueName, { color: palette.textPrimary }]}>{b.cue}</ReaderText>
                   {b.hasParen && <ReaderText style={[styles.cueParen, { color: palette.textSecondary }]}>（{b.paren}）</ReaderText>}
                   <ReaderText style={[styles.cueText, { color: palette.textPrimaryAlt }]}>{b.text}</ReaderText>
                 </View>
               ) : (
-                <ReaderText key={j} style={[styles.action, { color: palette.textPrimaryAlt }]}>
+                <ReaderText key={j} style={[styles.action, { color: palette.textPrimaryAlt }, { marginBottom: scaleGap(12, paraScale) }]}>
                   {b.text}
                 </ReaderText>
               ),
@@ -567,13 +571,11 @@ const styles = StyleSheet.create({
   beatCard: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 14 },
   beatAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 15, fontWeight: '600', marginBottom: 6 },
   beatText: { fontSize: 13, lineHeight: 23 },
-  beatTextGap: { marginTop: 9 },
 
   // 剧本正文
   sceneMark: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 12, fontWeight: '600', letterSpacing: 3, textAlign: 'center', marginBottom: 12 },
   scriptSlug: { fontFamily: MONO, fontSize: 11.5, letterSpacing: 1, fontWeight: '600', marginBottom: 14 },
-  action: { fontSize: 13, lineHeight: 24, marginBottom: 12 },
-  cueBlock: { marginBottom: 12 },
+  action: { fontSize: 13, lineHeight: 24 },
   cueName: { fontSize: 12, letterSpacing: 2, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
   cueParen: { fontSize: 11, textAlign: 'center', marginBottom: 4 },
   cueText: { fontSize: 13, lineHeight: 23, textAlign: 'center', paddingHorizontal: 30 },
