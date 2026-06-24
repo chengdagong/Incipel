@@ -1,0 +1,45 @@
+# 把 website/ 下的静态法务页面(服务条款 / 隐私政策)发布到 GitHub Pages。
+# 登录页 apps/mobile/app/login.tsx 的 TERMS_URL / PRIVACY_URL 指向这里发布出的地址:
+#   https://chengdagong.github.io/Incipel/legal/terms/
+#   https://chengdagong.github.io/Incipel/legal/privacy/
+#
+# 首次启用:在 GitHub 仓库 Settings → Pages → Build and deployment → Source 选「GitHub Actions」。
+# 启用后,改动 website/ 推到 main 即自动发布;也可在 Actions 页手动触发(workflow_dispatch)。
+# 日后若要绑定自有域名 incipel.app,在 website/ 下加 CNAME 文件并在 Pages 设置里配置即可,
+# 那时再把 login.tsx 的两个常量改成自有域名地址。
+name: Deploy legal pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-legal-pages.yml'
+  workflow_dispatch:
+
+# GitHub Pages 部署所需的最小权限。
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个 Pages 部署进行;不取消进行中的部署,避免发布到一半被打断。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          # 上传 website/ 整个目录作为站点根:legal/terms/、legal/privacy/ 等据此成为子路径。
+          path: website
+      - id: deployment
+        uses: actions/deploy-pages@v4

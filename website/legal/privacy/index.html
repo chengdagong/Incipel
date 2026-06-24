@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="index,follow">
+<title>隐私政策 · 织幕</title>
+<meta name="description" content="织幕移动 App 的隐私政策:我们如何收集、使用、存储与共享与你有关的信息。">
+<style>
+  :root{
+    --bg:#F4F1EA; --text:#2A2825; --body:#54504A; --muted:#645F58;
+    --border:#E2DDD4; --accent:#A8552E;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--body);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:16px; line-height:1.75;
+  }
+  .wrap{max-width:720px; margin:0 auto; padding:0 20px}
+  .site-header{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:16px; padding:20px 0; border-bottom:1px solid var(--border); flex-wrap:wrap;
+  }
+  .brand{
+    font-family:"Noto Serif SC","Source Han Serif SC","Songti SC",serif;
+    font-size:22px; font-weight:700; color:var(--text); text-decoration:none;
+  }
+  .site-nav a{color:var(--muted); text-decoration:none; font-size:14px; margin-left:18px}
+  .site-nav a:hover{color:var(--accent)}
+  .site-nav a.active{color:var(--accent); font-weight:600}
+  main{padding:8px 0 48px}
+  h1{
+    font-family:"Noto Serif SC","Source Han Serif SC","Songti SC",serif;
+    color:var(--text); font-size:30px; line-height:1.3; margin:30px 0 6px;
+  }
+  .lede{color:var(--muted); font-size:14px; margin:0 0 26px}
+  article h2{color:var(--text); font-size:20px; margin:34px 0 10px; font-weight:700}
+  article h3{color:var(--text); font-size:16px; margin:20px 0 6px; font-weight:600}
+  article p{margin:10px 0}
+  article ul{margin:10px 0; padding-left:22px}
+  article li{margin:6px 0}
+  article strong{color:var(--text)}
+  a{color:var(--accent)}
+  footer{border-top:1px solid var(--border); padding:22px 0 40px; color:var(--muted); font-size:13px}
+  footer a{color:var(--muted)}
+  @media (max-width:480px){ h1{font-size:25px} body{font-size:15.5px} .site-nav a{margin-left:0; margin-right:16px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site-header">
+    <a class="brand" href="../../">织幕</a>
+    <nav class="site-nav">
+      <a href="../terms/">服务条款</a>
+      <a class="active" href="./" aria-current="page">隐私政策</a>
+    </nav>
+  </header>
+
+  <main>
+    <h1>隐私政策</h1>
+    <p class="lede">本政策说明织幕如何收集、使用、存储与共享与你有关的信息。</p>
+    <article>
+<h2>引言与适用范围</h2>
+<p>「织幕」是一款以 AI 为核心的移动端编剧助手。你可以与 AI 主管编剧对话,一步步把故事和剧本创作出来。本政策由「织幕团队」提供,说明我们在你使用「织幕」移动 App 时,会如何收集、使用、存储和共享与你有关的信息。</p>
+<p>本政策仅适用于「织幕」移动 App。请在使用本 App 前阅读本政策;如果你不同意本政策的内容,请不要使用本 App。</p>
+
+<h2>我们收集哪些信息</h2>
+
+<h3>账号与身份信息</h3>
+<p>「织幕」通过 Supabase Auth 提供三种进入方式,我们在每种方式下收集的信息不同:</p>
+<ul>
+<li><strong>匿名使用(「先随便逛逛」)</strong>:我们不收集任何个人身份信息,仅生成一个匿名账号标识。你的创作内容仍保存在服务器端(见下文「数据存储与安全」),但用于访问这个匿名账号的登录凭证只存在你的设备本地、且没有可供找回的邮箱或密码;因此在你绑定正式账号前,这些内容无法跨设备同步,更换设备或卸载重装 App 后可能无法找回。</li>
+<li><strong>通过 Apple 登录(仅 iOS)</strong>:我们会从 Apple 获得你的邮箱地址(可能是 Apple 提供的私密转发邮箱)以及第三方账号标识,用于建立你的账号。Apple 在你首次登录时可能向你索取姓名,但其登录令牌本身不含姓名,我们也不保存你的姓名。</li>
+<li><strong>通过 Google 登录(iOS / Android)</strong>:我们会从 Google 获得你的邮箱地址、第三方账号标识,以及 Google 基本资料(profile)中的姓名、头像等信息,用于建立你的账号。</li>
+</ul>
+<p>上述身份信息保存在 Supabase 的认证系统中。</p>
+
+<h3>你创作的内容</h3>
+<p>当你使用「织幕」创作时,我们会在服务器端存储与你的创作相关的以下内容:</p>
+<ul>
+<li><strong>会话信息</strong>:会话标题、强调色、是否收藏,以及相关时间戳。</li>
+<li><strong>剧本正文</strong>:你创作的剧本内容。</li>
+<li><strong>剧本的历史版本</strong>:为后续的撤销 / 回退功能保留。</li>
+<li><strong>对话消息</strong>:你输入的文本,以及 AI 助手的回复。</li>
+</ul>
+<p>以上数据均与你的用户标识绑定。</p>
+
+<h3>设备本地存储</h3>
+<p>以下信息保存在你的设备本地:</p>
+<ul>
+<li><strong>登录凭证</strong>:用于维持登录状态的会话凭证(包含 access token、refresh token 等),由 Supabase 客户端保存在设备本地并自动续期。</li>
+<li><strong>界面语言偏好</strong>:你选择的界面语言。</li>
+</ul>
+
+<h3>我们不收集的信息</h3>
+<p>为避免误解,我们明确说明以下做法:</p>
+<ul>
+<li>我们不接入任何第三方分析、埋点或统计 SDK,不投放广告,也不使用广告标识符。</li>
+<li>我们不收集位置信息、通讯录、相册、麦克风等设备敏感信息;除登录所需外,我们不向你申请这些权限。</li>
+<li>我们不进行用户画像式的跨站或跨 App 追踪。</li>
+</ul>
+
+<h2>我们如何使用这些信息</h2>
+<p>我们使用收集到的信息,目的限于:</p>
+<ul>
+<li><strong>提供创作功能</strong>:保存并展示你的会话与剧本正文,使你能够继续创作;并保留剧本的历史版本,为后续的撤销 / 回退功能预留。</li>
+<li><strong>跨设备同步</strong>:在你绑定账号后,使你的创作内容能够在不同设备之间同步。</li>
+<li><strong>维持登录状态</strong>:通过设备本地保存的会话凭证,使你无需每次重新登录。</li>
+<li><strong>生成 AI 回应</strong>:把你当前会话的对话历史与剧本上下文交给 AI 模型,用于生成对话回复与剧本编辑结果。</li>
+<li><strong>记住界面偏好</strong>:按你选择的界面语言展示界面。</li>
+</ul>
+
+<h2>AI 处理与第三方模型</h2>
+<p>为生成回应,「织幕」会把你当前会话的对话历史与剧本上下文发送给 OpenRouter(模型网关服务,openrouter.ai),由它转发给底层大语言模型供应商(当前为 OpenAI 的 GPT 系列模型)进行处理。</p>
+<p>这意味着你输入的内容会离开本 App,交由上述第三方模型服务处理。此项处理仅用于生成对话与剧本编辑结果,不用于其他目的。</p>
+
+<h2>信息的共享与第三方服务</h2>
+<p>为提供本 App 的功能,我们会借助以下第三方服务(子处理方),并仅在实现相应功能所必需的范围内共享信息:</p>
+<ul>
+<li><strong>Supabase</strong>:提供数据库、用户认证以及后端函数托管。你的账号与身份信息、会话信息、剧本正文及历史版本、对话消息保存在 Supabase。</li>
+<li><strong>OpenRouter 及其转发到的底层模型供应商(当前为 OpenAI)</strong>:用于 AI 内容生成。你当前会话的对话历史与剧本上下文会发送给该服务,用于生成回应。</li>
+<li><strong>Apple</strong>:用于「通过 Apple 登录」(Sign in with Apple)。</li>
+<li><strong>Google</strong>:用于「通过 Google 登录」。</li>
+</ul>
+<p>我们不出售你的个人信息。</p>
+
+<h2>数据存储与安全</h2>
+<p>你的账号与身份信息保存在 Supabase 的认证系统中;你的会话信息、剧本正文及历史版本、对话消息保存在 Supabase 托管的 Postgres 数据库中。</p>
+<p>我们采取以下措施保护你的数据:</p>
+<ul>
+<li><strong>行级隔离</strong>:数据库启用行级安全策略(RLS),按用户标识隔离数据,使每个用户只能访问属于自己的数据。</li>
+<li><strong>传输加密</strong>:App 与服务器之间的网络传输使用加密(HTTPS/TLS)。</li>
+<li><strong>密钥隔离</strong>:客户端只持有公开的 anon key,不持有任何服务端密钥或模型密钥。</li>
+<li><strong>本地凭证</strong>:用于维持登录的会话凭证(access token 与 refresh token)保存在你的设备本地。</li>
+</ul>
+<p>请注意,没有任何系统能够保证绝对安全。我们会采取上述合理措施保护你的信息,但无法保证信息在传输或存储过程中绝对不会被未经授权地访问。</p>
+
+<h2>数据留存与删除</h2>
+<p>我们没有固定的留存天数。你的数据会保留至你将其删除,或你的账号被删除为止。</p>
+<ul>
+<li><strong>删除会话</strong>:你可以在 App 内删除自己的会话。删除会话时,系统会经数据库外键级联清除该会话下的剧本正文、历史版本与对话消息。</li>
+<li><strong>匿名数据</strong>:匿名账号的创作内容保存在服务器端,但用于访问它的登录凭证只存在你的设备本地、且无邮箱或密码可供找回;在你绑定正式账号前,这些内容无法跨设备同步,更换设备或卸载重装 App 后可能无法找回。</li>
+</ul>
+
+<h2>你的权利与选择</h2>
+<p>你可以通过以下方式管理自己的信息与使用方式:</p>
+<ul>
+<li><strong>匿名使用</strong>:你可以选择「先随便逛逛」,在不提供个人身份信息的情况下使用本 App。</li>
+<li><strong>删除会话</strong>:你可以在 App 内删除自己的会话,并连同其下的剧本正文、历史版本与对话消息一并清除。</li>
+<li><strong>绑定账号以跨设备同步</strong>:你可以在设置中绑定 Google 账号,把匿名账号升级为正式账号,从而在不同设备之间同步你的创作内容。</li>
+<li><strong>切换界面语言</strong>:你可以在 App 内切换界面语言。</li>
+</ul>
+
+<h2>儿童隐私</h2>
+<p>本 App 不面向儿童,我们不有意收集儿童的个人信息。如果你认为儿童在未经适当同意的情况下向我们提供了个人信息,请通过本政策末尾的联系方式与我们联系,我们会采取适当措施处理。</p>
+
+<h2>政策的变更</h2>
+<p>我们可能会不时更新本政策。当本政策发生变更时,我们会在 App 内更新本政策文本,并相应更新下方的生效日期。请你不时查阅本政策,以了解最新内容。</p>
+
+<h2>联系我们</h2>
+<p>如果你对本政策或我们的隐私做法有任何疑问,请通过以下方式与我们联系:chengdagong@gmail.com。</p>
+
+<h2>生效日期</h2>
+<p>本政策的生效日期为:2026 年 6 月 24 日。</p>
+<p>本政策适用中华人民共和国法律。因本政策或本服务产生的或与之相关的任何争议,双方应首先友好协商解决;协商不成的,任何一方均可提交上海市有管辖权的人民法院诉讼解决。</p>
+    </article>
+  </main>
+
+  <footer>
+    <p>© 织幕团队 · <a href="../terms/">服务条款</a> · <a href="../../">返回首页</a></p>
+  </footer>
+</div>
+</body>
+</html>
