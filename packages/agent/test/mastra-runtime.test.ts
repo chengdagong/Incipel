@@ -157,6 +157,44 @@ describe('createMastraProvider.streamTurn', () => {
     await expect(collect(provider.streamTurn({ prompt: 'p', tools: {} }))).rejects.toThrow('model down');
     expect(h.getAgentCalls).toEqual(['screenwriter']);
   });
+
+  it('只把本轮剧本工具调用转成 StreamChunk,忽略 Mastra skill 内部工具调用', async () => {
+    const { createMastraProvider } = await import('../src/model/mastra');
+    h.streamChunks = [
+      {
+        type: 'tool-call-input-streaming-start',
+        payload: { toolCallId: 'skill-1', toolName: 'load_skill' },
+      },
+      {
+        type: 'tool-call',
+        payload: { toolCallId: 'skill-1', toolName: 'load_skill', args: { skillName: 'screenwriting-master' } },
+      },
+      {
+        type: 'tool-call-input-streaming-start',
+        payload: { toolCallId: 'story-1', toolName: 'add_character' },
+      },
+      {
+        type: 'tool-call',
+        payload: { toolCallId: 'story-1', toolName: 'add_character', args: { name: '林深' } },
+      },
+    ];
+
+    const provider = createMastraProvider(config());
+    const chunks = await collect(
+      provider.streamTurn({
+        prompt: 'p',
+        tools: { add_character: z.object({ name: z.string() }) },
+      }),
+    );
+
+    expect(chunks).toEqual([
+      { type: 'tool-call-start', toolCallId: 'story-1', toolName: 'add_character' },
+      {
+        type: 'tool-call',
+        call: { toolCallId: 'story-1', toolName: 'add_character', args: { name: '林深' } },
+      },
+    ]);
+  });
 });
 
 describe('createMastraProvider.completeLogline', () => {

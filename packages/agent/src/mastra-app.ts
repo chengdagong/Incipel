@@ -1,6 +1,7 @@
 import { Agent } from '@mastra/core/agent';
 import { Mastra } from '@mastra/core/mastra';
 import { InMemoryStore } from '@mastra/core/storage';
+import { fileURLToPath } from 'node:url';
 import {
   getModelConfig,
   type ModelRuntimeConfig,
@@ -10,6 +11,10 @@ import { buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } from './prompt.ts
 
 export type IncipelAgentName = 'screenwriter' | 'logline';
 
+export const SCREENWRITING_MASTER_SKILL_PATH = fileURLToPath(
+  new URL('../skills/screenwriting-master', import.meta.url),
+);
+
 export function createMastraAgents(config: ModelRuntimeConfig) {
   return {
     screenwriter: createAgent(
@@ -17,6 +22,7 @@ export function createMastraAgents(config: ModelRuntimeConfig) {
       'Incipel Screenwriter',
       config.turn,
       buildScreenwriterInstructions(),
+      [SCREENWRITING_MASTER_SKILL_PATH],
     ),
     logline: createAgent('incipel-logline', 'Incipel Logline', config.logline, LOGLINE_INSTRUCTIONS),
   };
@@ -39,11 +45,18 @@ export function getMastraApp(config?: ModelRuntimeConfig): IncipelMastraApp {
   return mastraApp;
 }
 
-function createAgent(id: string, name: string, useConfig: ModelUseConfig, instructions: string): Agent {
+function createAgent(
+  id: string,
+  name: string,
+  useConfig: ModelUseConfig,
+  instructions: string,
+  skills?: string[],
+): Agent {
   return new Agent({
     id,
     name,
     instructions,
+    skills,
     model: mastraModelId(useConfig.model),
   });
 }

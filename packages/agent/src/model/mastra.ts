@@ -47,6 +47,7 @@ export function createMastraProvider(
   return {
     async *streamTurn(input: StreamTurnInput): AsyncIterable<StreamChunk> {
       const agent = registry.getAgent('screenwriter');
+      const screenplayToolNames = new Set(Object.keys(input.tools));
       const stream = await agent.stream(input.prompt, {
         maxSteps: MAX_TURN_STEPS,
         toolsets: { screenplay: toMastraTools(input.tools) },
@@ -56,7 +57,7 @@ export function createMastraProvider(
       });
 
       for await (const chunk of stream.fullStream as AsyncIterable<MastraChunk>) {
-        const translated = translateChunk(chunk);
+        const translated = translateChunk(chunk, screenplayToolNames);
         if (translated === null) continue;
         yield translated;
       }
@@ -104,7 +105,7 @@ type MastraChunk = {
   };
 };
 
-function translateChunk(chunk: MastraChunk): StreamChunk | null {
+function translateChunk(chunk: MastraChunk, allowedToolNames?: Set<string>): StreamChunk | null {
   switch (chunk.type) {
     case 'text-delta': {
       const text = chunk.payload?.text;
@@ -114,12 +115,14 @@ function translateChunk(chunk: MastraChunk): StreamChunk | null {
       const toolCallId = chunk.payload?.toolCallId;
       const toolName = chunk.payload?.toolName;
       if (typeof toolCallId !== 'string' || typeof toolName !== 'string') return null;
+      if (allowedToolNames && !allowedToolNames.has(toolName)) return null;
       return { type: 'tool-call-start', toolCallId, toolName };
     }
     case 'tool-call': {
       const toolCallId = chunk.payload?.toolCallId;
       const toolName = chunk.payload?.toolName;
       if (typeof toolCallId !== 'string' || typeof toolName !== 'string') return null;
+      if (allowedToolNames && !allowedToolNames.has(toolName)) return null;
       return {
         type: 'tool-call',
         call: {

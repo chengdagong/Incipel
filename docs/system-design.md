@@ -269,8 +269,9 @@ messages
 每轮发完整对话历史(见 ADR-0010),同时把剧本状态作为结构化快照放进动态 prompt,不把剧本内容混在自由文本里重复展开。每轮发送:
 
 1. Mastra Agent instructions(编剧助手的人格 + 输出/工具约束)——注册在 Agent 上,稳定不变;
-2. 动态 prompt 前缀:助手显示名 + 当前剧本状态(序列化为可读文本,含各实体 id)——剧本状态作为 cached prefix,变动小;
-3. 完整对话历史 + 本轮新消息。
+2. Mastra agent-level skill:`screenwriter` 可按需加载 `screenwriting-master` 的 `SKILL.md` 和 `references/`;`logline` 不加载这个 skill;
+3. 动态 prompt 前缀:助手显示名 + 当前剧本状态(序列化为可读文本,含各实体 id)——剧本状态作为 cached prefix,变动小;
+4. 完整对话历史 + 本轮新消息。
 
 长会话的 token 量由 compact 机制控制(见 issue #49),不再用固定的最近 N 轮截断。
 
