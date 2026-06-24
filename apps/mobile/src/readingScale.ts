@@ -37,6 +37,7 @@ export function scaleReaderStyle(style: ScalableText, fontScale: number, lineSca
   return out;
 }
 
+// 与 LineLevel 取值相同,但故意分开命名:段落间距与行距是两个独立维度,可各自取档。
 export type ParaLevel = 'compact' | 'standard' | 'loose';
 
 export const PARA_SCALES: Record<ParaLevel, number> = {

@@ -1,5 +1,5 @@
-// 阅读区字号 / 行距偏好。照搬 i18n 的 provider 写法:启动读 AsyncStorage、改动写回。
-// 仅作用于剧本内容(经 ReaderText);键 scn_read_font_v1 / scn_read_line_v1,默认标准档。
+// 阅读区字号 / 行距 / 段落间距偏好。照搬 i18n 的 provider 写法:启动读 AsyncStorage、改动写回。
+// 仅作用于剧本内容;键 scn_read_font_v1 / scn_read_line_v1 / scn_read_para_v1,默认标准档。
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
