@@ -46,6 +46,30 @@ describe('serializeScreenplay', () => {
     expect(text).toContain('标题: (未定)');
     expect(text).toContain('logline: (未定)');
   });
+
+  it('多行节拍:续行缩进两空格,不顶格', () => {
+    const state: Screenplay = {
+      ...sample(),
+      outline: [{ id: 'act_a', act: '第一幕', beat: '第一段。\n\n第二段。' }],
+    };
+    const text = serializeScreenplay(state);
+    expect(text).toContain('- [act_a] 第一幕: 第一段。');
+    expect(text).toContain('\n  第二段。'); // 续行缩进两空格
+    expect(text).not.toContain('\n第二段。'); // 不顶到第 0 列
+  });
+
+  it('多行人物背景:续行缩进六空格', () => {
+    const state: Screenplay = {
+      ...sample(),
+      characters: [
+        { id: 'char_a', name: '林深', role: '医生', attrs: [{ id: 'cattr_a', label: '背景', value: '出身废土。\n\n后来学医。' }] },
+      ],
+    };
+    const text = serializeScreenplay(state);
+    expect(text).toContain('    - [cattr_a] 背景: 出身废土。');
+    expect(text).toContain('\n      后来学医。'); // 续行缩进六空格,落在属性列表项之下
+    expect(text).not.toContain('\n后来学医。');
+  });
 });
 
 describe('buildPrompt', () => {
@@ -99,6 +123,13 @@ describe('buildScreenwriterInstructions', () => {
     expect(instructions).toContain('不要把可点选项写进回复文本');
     expect(instructions).toContain('客户端会把这些选项显示在本轮内联卡片之后');
     expect(instructions).toContain('propose_options(options):本次回复可点选项');
+  });
+
+  it('静态 instructions 要求长正文分自然段,并排除分场对白', () => {
+    const instructions = buildScreenwriterInstructions();
+    expect(instructions).toContain('分自然段');
+    expect(instructions).toContain('段与段之间空一行');
+    expect(instructions).toContain('分场对白不在此列');
   });
 });
 
