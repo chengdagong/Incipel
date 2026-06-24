@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '../src/auth';
 import { useAppFonts } from '../src/useAppFonts';
 import { defaultTheme } from '../src/theme';
 import { I18nProvider } from '../src/i18n';
+import { ReadingPrefsProvider } from '../src/readingPrefs';
 
 export default function RootLayout() {
   // 会话状态在 AuthProvider 内维护;启动只读、不自动建会话(ADR-0005)。
@@ -30,7 +31,11 @@ function RootNavigator() {
 
   // I18nProvider 包住一切(含抽屉),任意屏用 useT() 取界面文案(见 issue #13);
   // 它只切界面文案,不影响 AI 回复语言(见 ADR-0004 / i18n.tsx 的 langDesc)。
-  return <I18nProvider>{ready ? <AppShell /> : <Preparing />}</I18nProvider>;
+  return (
+    <I18nProvider>
+      <ReadingPrefsProvider>{ready ? <AppShell /> : <Preparing />}</ReadingPrefsProvider>
+    </I18nProvider>
+  );
 }
 
 function Preparing() {
