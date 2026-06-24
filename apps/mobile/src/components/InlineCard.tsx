@@ -3,12 +3,15 @@
 // 世界观 / 大纲 / 分场各为带「打开…」页脚的卡片。点标签 chip 生成聚焦标签(#12);点页脚打开文档。
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ReaderText } from './ReaderText';
 import type { Act, Character, CharacterAttr, Scene, WorldSection } from '@incipel/shared';
 import { defaultTheme, palette, type Theme } from '../theme';
 import { useI18n, VOL_I18N } from '../i18n';
-import { badgeBox, charView } from '../charView';
+import { badgeBox, charView, splitBeat } from '../charView';
 import type { DocTarget } from './DocPanel';
 import { PortraitThumb } from './PortraitThumb';
+import { useReadingPrefs } from '../readingPrefs';
+import { scaleGap } from '../readingScale';
 
 // 本轮卡片只承载「新增/改动的实体切片」,各区可空。
 export type InlineCardData = {
@@ -31,6 +34,7 @@ type Props = {
 
 export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr }: Props) {
   const { lang } = useI18n();
+  const { paraScale } = useReadingPrefs();
   const vol = VOL_I18N[lang];
   const openLabel = (x: string) => vol.openTmpl.replace('{x}', x);
   const hasAny =
@@ -42,9 +46,9 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
       {!!data.world?.length && (
         <SectionCard label="secWorld" footer={openLabel(vol.world)} onOpen={() => onOpenDoc?.({ view: 'world' })} theme={theme}>
           {data.world.map((w) => (
-            <Text key={w.id} style={[styles.bodyPara, { color: palette.textBody }]}>
+            <ReaderText key={w.id} style={[styles.bodyPara, { color: palette.textBody }, { marginBottom: scaleGap(8, paraScale) }]}>
               {w.title ? `${w.title} — ${w.text}` : w.text}
-            </Text>
+            </ReaderText>
           ))}
         </SectionCard>
       )}
@@ -62,11 +66,15 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
 
       {!!data.outline?.length && (
         <SectionCard label="secOutline" footer={openLabel(vol.beats)} onOpen={() => onOpenDoc?.({ view: 'beats' })} theme={theme}>
-          {data.outline.map((a) => (
-            <Text key={a.id} style={[styles.outlineItem, { color: palette.textSecondary }]}>
-              <Text style={{ color: palette.textPrimary, fontWeight: '700' }}>{a.act}</Text>
-              {a.beat ? ` · ${a.beat}` : ''}
-            </Text>
+          {data.outline.map((a, i) => (
+            <View key={a.id} style={i > 0 ? { marginTop: scaleGap(16, paraScale) } : undefined}>
+              <ReaderText style={[styles.outlineAct, { color: palette.textPrimary }]}>{a.act}</ReaderText>
+              {splitBeat(a.beat).map((para, j) => (
+                <ReaderText key={j} style={[styles.outlineBeat, { color: palette.textBody }, j > 0 && { marginTop: scaleGap(9, paraScale) }]}>
+                  {para}
+                </ReaderText>
+              ))}
+            </View>
           ))}
         </SectionCard>
       )}
@@ -74,9 +82,9 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
       {!!data.scenes?.length && (
         <SectionCard label="secScenes" footer={openLabel(vol.script)} onOpen={() => onOpenDoc?.({ view: 'script' })} theme={theme}>
           {data.scenes.map((s) => (
-            <View key={s.id} style={styles.scene}>
-              <Text style={[styles.sceneSlug, { color: palette.textSecondary }]}>{s.slug}</Text>
-              <Text style={[styles.sceneContent, { color: palette.textBody }]}>{s.content}</Text>
+            <View key={s.id} style={{ marginBottom: scaleGap(14, paraScale) }}>
+              <ReaderText style={[styles.sceneSlug, { color: palette.textSecondary }]}>{s.slug}</ReaderText>
+              <ReaderText style={[styles.sceneContent, { color: palette.textBody }]}>{s.content}</ReaderText>
             </View>
           ))}
         </SectionCard>
@@ -145,15 +153,15 @@ function CharacterCard({
           ) : (
             <Text style={[styles.noIdentity, { color: palette.placeholder }]}>{t('secChars')}</Text>
           )}
-          <Text style={[styles.charName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</Text>
-          {!!c.role && <Text style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</Text>}
-          {!!ageGender && <Text style={[styles.charAge, { color: palette.textSecondary }]}>{ageGender}</Text>}
+          <ReaderText style={[styles.charName, { color: palette.textPrimary }]}>{c.name || t('unnamedChar')}</ReaderText>
+          {!!c.role && <ReaderText style={[styles.charRole, { color: palette.textSecondary }]}>{c.role}</ReaderText>}
+          {!!ageGender && <ReaderText style={[styles.charAge, { color: palette.textSecondary }]}>{ageGender}</ReaderText>}
         </View>
         <PortraitThumb character={c} variant="card" />
       </View>
 
       <View style={styles.charBody}>
-        {!!bio && <Text style={[styles.bio, { color: palette.textPrimaryAlt }]}>{bio}</Text>}
+        {!!bio && <ReaderText style={[styles.bio, { color: palette.textPrimaryAlt }]}>{bio}</ReaderText>}
         {tags.length > 0 && (
           <View style={[styles.tags, !!bio && { marginTop: 12 }]}>
             {tags.map((tg) => (
@@ -163,7 +171,7 @@ function CharacterCard({
                 style={[styles.tag, { borderColor: palette.borderChip, backgroundColor: palette.cardBg }]}
                 accessibilityRole="button"
               >
-                <Text style={[styles.tagText, { color: palette.textSecondary }]}>{tg.label}</Text>
+                <ReaderText style={[styles.tagText, { color: palette.textSecondary }]}>{tg.label}</ReaderText>
               </Pressable>
             ))}
           </View>
@@ -196,9 +204,10 @@ const styles = StyleSheet.create({
   secLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   secLabel: { fontSize: 11, letterSpacing: 1, fontWeight: '600' },
   secLine: { flex: 1, height: 1, marginLeft: 7 },
-  bodyPara: { fontSize: 13, lineHeight: 23, marginBottom: 8 },
-  outlineItem: { fontSize: 12.5, lineHeight: 20, marginBottom: 9 },
-  scene: { marginBottom: 14 },
+  bodyPara: { fontSize: 13, lineHeight: 23 },
+  // 大纲:幕名独占一行(衬线小标题),节拍逐段排开;段间留白让多点草案读得开。
+  outlineAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22, marginBottom: 7 },
+  outlineBeat: { fontSize: 13, lineHeight: 23 },
   sceneSlug: { fontFamily: defaultTheme.fonts.mono, fontSize: 11, letterSpacing: 1, marginBottom: 7 },
   sceneContent: { fontFamily: defaultTheme.fonts.mono, fontSize: 12.5, lineHeight: 22 },
 

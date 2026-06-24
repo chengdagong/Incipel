@@ -15,9 +15,12 @@ import {
   googleAuthMessageKey,
   linkGoogleIdentity,
 } from '../../src/google-auth';
-import { LANGS, useI18n } from '../../src/i18n';
+import { LANGS, READING_I18N, useI18n } from '../../src/i18n';
 import { signOut } from '../../src/supabase';
 import { defaultTheme, palette } from '../../src/theme';
+import { useReadingPrefs } from '../../src/readingPrefs';
+import { ReaderText } from '../../src/components/ReaderText';
+import { scaleGap, type FontLevel, type LineLevel, type ParaLevel } from '../../src/readingScale';
 
 // 设置页各处用色统一引自通用 palette(过去这里是逐项对原型取色的字面色表,已归并)。
 // back / 副标题 / 标签 / 行值原先是 #9A958C / #A39E94 等浅灰(对比 ~2.x:1),现走 palette.textSecondary;
@@ -46,7 +49,25 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t, lang, setLang } = useI18n();
-  const { accent } = defaultTheme;
+  const { accent, accentSoft, accentSoftBorder } = defaultTheme;
+  const reading = READING_I18N[lang];
+  const { fontLevel, lineLevel, paraLevel, setFontLevel, setLineLevel, setParaLevel, paraScale } = useReadingPrefs();
+  const fontOptions: { value: FontLevel; label: string }[] = [
+    { value: 'small', label: reading.fontSmall },
+    { value: 'standard', label: reading.fontStandard },
+    { value: 'large', label: reading.fontLarge },
+    { value: 'xlarge', label: reading.fontXLarge },
+  ];
+  const lineOptions: { value: LineLevel; label: string }[] = [
+    { value: 'compact', label: reading.lineCompact },
+    { value: 'standard', label: reading.lineStandard },
+    { value: 'loose', label: reading.lineLoose },
+  ];
+  const paraOptions: { value: ParaLevel; label: string }[] = [
+    { value: 'compact', label: reading.lineCompact },
+    { value: 'standard', label: reading.lineStandard },
+    { value: 'loose', label: reading.lineLoose },
+  ];
   const { session } = useAuth();
 
   const [langMenuOpen, setLangMenuOpen] = useState(false);
@@ -226,6 +247,55 @@ export default function SettingsScreen() {
         </View>
         <Text style={styles.langDesc}>{t('langDesc')}</Text>
 
+        {/* 阅读:剧本内容字号 / 行距(仅作用于文档与内联卡片) */}
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>{reading.section}</Text>
+        <View style={styles.card}>
+          <View style={styles.readingRow}>
+            <Text style={styles.readingLabel}>{reading.fontSize}</Text>
+            <Segmented
+              options={fontOptions}
+              value={fontLevel}
+              onChange={setFontLevel}
+              accent={accent}
+              accentSoft={accentSoft}
+              accentSoftBorder={accentSoftBorder}
+            />
+          </View>
+          <View style={styles.readingDivider} />
+          <View style={styles.readingRow}>
+            <Text style={styles.readingLabel}>{reading.lineSpacing}</Text>
+            <Segmented
+              options={lineOptions}
+              value={lineLevel}
+              onChange={setLineLevel}
+              accent={accent}
+              accentSoft={accentSoft}
+              accentSoftBorder={accentSoftBorder}
+            />
+          </View>
+          <View style={styles.readingDivider} />
+          <View style={styles.readingRow}>
+            <Text style={styles.readingLabel}>{reading.paraSpacing}</Text>
+            <Segmented
+              options={paraOptions}
+              value={paraLevel}
+              onChange={setParaLevel}
+              accent={accent}
+              accentSoft={accentSoft}
+              accentSoftBorder={accentSoftBorder}
+            />
+          </View>
+        </View>
+        <Text style={styles.langDesc}>{reading.desc}</Text>
+        <View style={styles.previewCard}>
+          <Text style={[styles.previewEyebrow, { color: accent }]}>{reading.previewLabel}</Text>
+          <ReaderText style={[styles.previewAct, { color: palette.textPrimary }]}>{reading.sampleAct}</ReaderText>
+          <ReaderText style={[styles.previewBeat, { color: palette.textBody }]}>{reading.sampleBeat}</ReaderText>
+          <ReaderText style={[styles.previewBeat, { color: palette.textBody }, { marginTop: scaleGap(9, paraScale) }]}>
+            {reading.sampleBeat2}
+          </ReaderText>
+        </View>
+
         {/* 登出(仅已登录态)。二次确认后清会话,(app) 门控自动回登录页。 */}
         {isSignedIn && (
           <Pressable
@@ -242,6 +312,50 @@ export default function SettingsScreen() {
           </Pressable>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+// 分档按钮:一排等宽药丸,选中=暖色浅底 + 主色字(沿用语言项的选中观感)。
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  accent,
+  accentSoft,
+  accentSoftBorder,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  accent: string;
+  accentSoft: string;
+  accentSoftBorder: string;
+}) {
+  return (
+    <View style={styles.segRow}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            style={[
+              styles.segPill,
+              on
+                ? { backgroundColor: accentSoft, borderColor: accentSoftBorder }
+                : { backgroundColor: '#fff', borderColor: palette.borderChip },
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: on }}
+            testID={`reading-seg-${o.value}`}
+          >
+            <Text style={[styles.segText, { color: on ? accent : palette.textSecondary, fontWeight: on ? '600' : '500' }]}>
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -325,6 +439,25 @@ const styles = StyleSheet.create({
   check: { fontSize: 14, fontWeight: '700' },
 
   langDesc: { fontSize: 12.5, color: S.sub, lineHeight: 20, paddingTop: 11, paddingHorizontal: 8 },
+
+  readingRow: { paddingVertical: 14, paddingHorizontal: 16 },
+  readingLabel: { fontSize: 15, color: S.rowText, marginBottom: 10 },
+  readingDivider: { height: 1, backgroundColor: S.dropDivider },
+  segRow: { flexDirection: 'row', gap: 6 },
+  segPill: { flex: 1, paddingVertical: 8, borderWidth: 1, borderRadius: 10, alignItems: 'center' },
+  segText: { fontSize: 13 },
+  previewCard: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: S.cardBorder,
+    borderRadius: 14,
+    backgroundColor: palette.cardAlt,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+  },
+  previewEyebrow: { fontSize: 11, letterSpacing: 1, fontWeight: '600', marginBottom: 9 },
+  previewAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22, marginBottom: 7 },
+  previewBeat: { fontSize: 13, lineHeight: 23 },
 
   signOut: {
     marginTop: 24,

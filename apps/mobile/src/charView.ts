@@ -37,6 +37,12 @@ export function charView(c: Character): CharView {
   };
 }
 
+// 一幕的节拍正文按换行拆成段落:逐行去空白、丢弃空行。内联卡片与文档分场视图共用,
+// 让「1)…2)…3)…」式的多点草案逐段分开排,而不是挤成一整块。无换行即单段,空串为无段。
+export function splitBeat(beat: string): string[] {
+  return beat.split('\n').map((line) => line.trim()).filter(Boolean);
+}
+
 // 身份徽标配色:主角(主色底白字)/ 群像(浅灰)/ 配角(浅陶土,默认)。
 export function badgeBox(identity: string, accent: string): { box: object; color: string } {
   if (identity === '主角') return { box: { backgroundColor: accent }, color: '#fff' };
