@@ -14,6 +14,10 @@ tags:
       id: "welcome-has-idea"
     timeout: 90000
 - assertNotVisible: ".*没能生成.*"
+- extendedWaitUntil:
+    visible:
+      id: "welcome-start"
+    timeout: 10000
 - tapOn:
     id: "welcome-start"
 # 已进入对话屏,首轮开始。

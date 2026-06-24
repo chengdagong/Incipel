@@ -1,0 +1,6 @@
+# 复用片段:输入文本后点击 iOS 键盘的 Done 键,完成当前 TextInput 的提交动作。
+# 说明:Maestro 在键盘打开时直接点业务按钮会命中键盘;欢迎页的 Done 会触发 onSubmitEditing 并开始创作。
+appId: com.incipel.app
+---
+- tapOn:
+    id: "Done"

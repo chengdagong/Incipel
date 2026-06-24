@@ -119,6 +119,15 @@ flows/
 (出现「林夏」、切完出现「Interface language」、抽屉出现「深夜来电」)。app 尚早、文案在动、又多语言,
 拿文案当点击目标注定常断。断言内容默认按简体中文(`zh`)文案;切到英文后断言英文串。
 
+### 输入框与键盘
+
+Maestro 在 iOS 键盘打开时会按屏幕坐标点击,目标控件即使仍在视图树里,实际点击也可能命中键盘按键。
+因此 flow 执行 `inputText` 后,若下一步要点击业务控件,必须先 `runFlow` 复用
+`subflows/finish-keyboard-input.yaml`(点击键盘 Done 键),再等待提交后的目标界面或目标 testID。不要在各
+flow 里写坐标点击,也不要假设 `keyboardShouldPersistTaps` 可以让 Maestro 穿过键盘点到底层按钮。当前
+`hideKeyboard` 在 RN TextInput 上不稳定,不要用于这类路径。欢迎页的 Done 会触发 `onSubmitEditing`,
+直接开始创作,所以该路径不用再点击 `welcome-start`。
+
 各点击目标的 testID(都在对应组件上):
 
 | testID | 控件 | 组件 |

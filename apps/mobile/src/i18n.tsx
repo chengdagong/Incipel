@@ -50,14 +50,6 @@ export const TERMS_I18N: Record<Lang, { pre: string; terms: string; mid: string;
   zhHant: { pre: '繼續即表示同意', terms: '服務條款', mid: '與', privacy: '隱私政策', post: '' },
 };
 
-// 对话屏头部的「阶段」副标题。取自原型 T.stagePrefix / stageIdea…;同样独立于 DICT。
-export const STAGE_I18N: Record<Lang, { prefix: string; idea: string; world: string; chars: string; outline: string; scenes: string }> = {
-  zh: { prefix: '阶段 · ', idea: '灵感', world: '世界观', chars: '人物', outline: '大纲', scenes: '分场 · 对白' },
-  en: { prefix: 'Stage · ', idea: 'Idea', world: 'World', chars: 'Characters', outline: 'Outline', scenes: 'Scenes · Dialogue' },
-  ja: { prefix: 'ステージ · ', idea: 'ひらめき', world: '世界観', chars: '登場人物', outline: 'アウトライン', scenes: 'シーン · セリフ' },
-  zhHant: { prefix: '階段 · ', idea: '靈感', world: '世界觀', chars: '人物', outline: '大綱', scenes: '分場 · 對白' },
-};
-
 // 输入栏「思考」模式 pill 的档位文案。取自原型 T.thinkFast/Balanced/Deep;独立于 DICT。
 // 注:当前仅作本地 UI 档位(快速 / 平衡 / 深入),尚未接进 agent 生成参数。
 export const THINK_I18N: Record<Lang, { fast: string; balanced: string; deep: string }> = {

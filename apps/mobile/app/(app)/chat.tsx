@@ -21,7 +21,7 @@ import { PortraitProvider } from '../../src/portrait';
 import { InlineCard, type InlineCardData } from '../../src/components/InlineCard';
 import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } from '../../src/focus';
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
-import { STAGE_I18N, useI18n, useT } from '../../src/i18n';
+import { useT } from '../../src/i18n';
 import { defaultTheme } from '../../src/theme';
 
 // 助手正文行内 **加粗** 渲染(对齐原型 parseInline:**…** → 加粗、主色)。
@@ -82,7 +82,7 @@ export default function ChatScreen() {
   const params = useLocalSearchParams<{ idea?: string; sessionId?: string; threadId?: string; view?: string; genre?: string }>();
   const router = useRouter();
   const { palette } = defaultTheme;
-  const { t, lang } = useI18n();
+  const t = useT();
 
   // threadId = 会话 id:续写时来自路由(sessionId / threadId),否则现生成一个新的。
   const [threadId] = useState<string>(() => params.sessionId ?? params.threadId ?? newThreadId());
@@ -117,19 +117,6 @@ export default function ChatScreen() {
     screenplay.outline.length > 0 ||
     screenplay.scenes.length > 0;
   const chatStateTestID = isRunning || thinking || hydrating ? 'chat-running' : error ? 'chat-error' : hasGeneratedState ? 'chat-generated' : 'chat-empty';
-  // 头部「阶段」副标题:按剧本进度推断(分场 > 大纲 > 人物 > 世界观 > 灵感)。
-  const stage = STAGE_I18N[lang];
-  const stageKey = screenplay.scenes.length
-    ? 'scenes'
-    : screenplay.outline.length
-      ? 'outline'
-      : screenplay.characters.length
-        ? 'chars'
-           : screenplay.world.length
-             ? 'world'
-             : 'idea';
-  const stageLabel = stage.prefix + stage[stageKey];
-
   // 首轮:挂载时把欢迎页带来的 idea 作为第一条用户消息发出(只发一次)。
   const sentIdea = useRef(false);
   useEffect(() => {
@@ -222,7 +209,6 @@ export default function ChatScreen() {
     <View style={[styles.screen, { backgroundColor: palette.pageBg }]} testID={chatStateTestID}>
       <Header
         title={title}
-        stageLabel={stageLabel}
         docOpen={docOpen}
         onBack={() => router.back()}
         onToggleDoc={() => {
@@ -320,13 +306,11 @@ export default function ChatScreen() {
 
 function Header({
   title,
-  stageLabel,
   docOpen,
   onBack,
   onToggleDoc,
 }: {
   title: string;
-  stageLabel: string;
   docOpen: boolean;
   onBack: () => void;
   onToggleDoc: () => void;
@@ -344,9 +328,6 @@ function Header({
         <View style={styles.headerCenter} pointerEvents="none">
           <Text style={[styles.headerTitle, { color: palette.textSecondary }]} numberOfLines={1}>
             {title}
-          </Text>
-          <Text style={[styles.headerStage, { color: palette.placeholder }]} numberOfLines={1}>
-            {stageLabel}
           </Text>
         </View>
 
@@ -533,7 +514,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { fontSize: 14, fontWeight: '500', maxWidth: 200 },
-  headerStage: { fontSize: 11, marginTop: 1 },
   docChip: {
     flexDirection: 'row',
     alignItems: 'center',

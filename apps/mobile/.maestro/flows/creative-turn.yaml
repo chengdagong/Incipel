@@ -9,8 +9,7 @@ tags:
 - tapOn:
     id: "welcome-idea"
 - inputText: "一个测试灵感"
-- tapOn:
-    id: "welcome-start"
+- runFlow: ../subflows/finish-keyboard-input.yaml
 # 助手流式回复(助手名「主管编剧」=内容断言)
 - extendedWaitUntil:
     visible: "主管编剧"

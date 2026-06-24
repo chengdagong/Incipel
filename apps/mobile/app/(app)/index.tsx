@@ -6,6 +6,9 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -35,6 +38,7 @@ export default function WelcomeScreen() {
   const [ideaFocused, setIdeaFocused] = useState(false);
   const [rolling, setRolling] = useState(false);
   const [rollError, setRollError] = useState<string | null>(null);
+  const scroll = useRef<ScrollView | null>(null);
   // 骰子旋转(每次点一圈,对应原型 diceSpin)。
   const spin = useRef(new Animated.Value(0)).current;
   const spinDeg = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
@@ -69,10 +73,18 @@ export default function WelcomeScreen() {
     }
   }
 
+  function focusIdea() {
+    setIdeaFocused(true);
+    setTimeout(() => {
+      scroll.current?.scrollToEnd({ animated: true });
+    }, 250);
+  }
+
   // 「开始创作」:生成 threadId 并跳到对话屏,带上灵感(选了题材则按原型折进首条消息)作为首轮。
   function start() {
     const params = welcomeStartParams(idea, newThreadId);
     if (!params) return;
+    Keyboard.dismiss();
     // 题材不拼进消息正文(避免污染聊天显示、影响 AI 判语言);经 params → forwardedProps 传给
     // agent 作首轮定调(保持设置页「界面语言不影响 AI 回复语言」的承诺)。
     router.push({
@@ -93,98 +105,104 @@ export default function WelcomeScreen() {
         <MenuButton variant="circle" onPress={drawer.open} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 26 }]}
-        keyboardShouldPersistTaps="always"
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Text style={[styles.eyebrow, { color: palette.placeholder }]}>{t('eyebrow')}</Text>
-        <Text style={[styles.headline, { color: palette.textPrimary }]}>{t('welcomeTitle')}</Text>
-        <Text style={[styles.sub, { color: palette.textSecondary }]}>{t('welcomeSub')}</Text>
-
-        <View
-          style={[
-            styles.inputBox,
-            { backgroundColor: palette.cardBg, borderColor: ideaFocused ? accent : palette.border },
-          ]}
+        <ScrollView
+          ref={scroll}
+          contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 26 }]}
+          keyboardShouldPersistTaps="always"
         >
-          <TextInput
-            style={[styles.input, { color: palette.textPrimaryAlt }]}
-            value={idea}
-            onChangeText={setIdea}
-            onFocus={() => setIdeaFocused(true)}
-            onBlur={() => setIdeaFocused(false)}
-            placeholder={t('ideaPlaceholder')}
-            placeholderTextColor={palette.placeholder}
-            testID="welcome-idea"
-            multiline
-            returnKeyType="done"
-            blurOnSubmit
-            onSubmitEditing={start}
-          />
-          <Pressable
+          <Text style={[styles.eyebrow, { color: palette.placeholder }]}>{t('eyebrow')}</Text>
+          <Text style={[styles.headline, { color: palette.textPrimary }]}>{t('welcomeTitle')}</Text>
+          <Text style={[styles.sub, { color: palette.textSecondary }]}>{t('welcomeSub')}</Text>
+
+          <View
             style={[
-              styles.dice,
-              {
-                borderColor: rolling ? accent : palette.borderControl,
-                backgroundColor: rolling ? '#FAF6F0' : palette.cardBg,
-              },
+              styles.inputBox,
+              { backgroundColor: palette.cardBg, borderColor: ideaFocused ? accent : palette.border },
             ]}
-            onPress={rollLogline}
-            disabled={rolling}
-            accessibilityRole="button"
-            accessibilityLabel={t('diceTitle')}
-            testID="welcome-dice"
-            hitSlop={8}
           >
-            {rolling ? (
-              <ActivityIndicator size="small" color={accent} />
-            ) : (
-              <Animated.Text style={[styles.diceLabel, { transform: [{ rotate: spinDeg }] }]}>🎲</Animated.Text>
-            )}
-          </Pressable>
-        </View>
+            <TextInput
+              style={[styles.input, { color: palette.textPrimaryAlt }]}
+              value={idea}
+              onChangeText={setIdea}
+              onFocus={focusIdea}
+              onBlur={() => setIdeaFocused(false)}
+              placeholder={t('ideaPlaceholder')}
+              placeholderTextColor={palette.placeholder}
+              testID="welcome-idea"
+              multiline
+              returnKeyType="done"
+              blurOnSubmit
+              onSubmitEditing={start}
+            />
+            <Pressable
+              style={[
+                styles.dice,
+                {
+                  borderColor: rolling ? accent : palette.borderControl,
+                  backgroundColor: rolling ? '#FAF6F0' : palette.cardBg,
+                },
+              ]}
+              onPress={rollLogline}
+              disabled={rolling}
+              accessibilityRole="button"
+              accessibilityLabel={t('diceTitle')}
+              testID="welcome-dice"
+              hitSlop={8}
+            >
+              {rolling ? (
+                <ActivityIndicator size="small" color={accent} />
+              ) : (
+                <Animated.Text style={[styles.diceLabel, { transform: [{ rotate: spinDeg }] }]}>🎲</Animated.Text>
+              )}
+            </Pressable>
+          </View>
 
-        {!!rollError && <Text style={[styles.rollError, { color: palette.danger }]}>{rollError}</Text>}
+          {!!rollError && <Text style={[styles.rollError, { color: palette.danger }]}>{rollError}</Text>}
 
-        <Text style={[styles.genreTitle, { color: palette.placeholder }]}>{genre.title}</Text>
-        <View style={styles.chips}>
-          {genre.list.map((g, i) => {
-            const on = selectedGenre === g;
-            return (
-              <Pressable
-                key={g}
-                testID={`welcome-genre-${i}`}
-                style={[
-                  styles.chip,
-                  on
-                    ? { borderColor: accent, backgroundColor: accentSoft }
-                    : { borderColor: palette.borderChip, backgroundColor: palette.cardBg },
-                ]}
-                onPress={() => setSelectedGenre((prev) => (prev === g ? '' : g))}
-              >
-                <Text
+          <Text style={[styles.genreTitle, { color: palette.placeholder }]}>{genre.title}</Text>
+          <View style={styles.chips}>
+            {genre.list.map((g, i) => {
+              const on = selectedGenre === g;
+              return (
+                <Pressable
+                  key={g}
+                  testID={`welcome-genre-${i}`}
                   style={[
-                    styles.chipLabel,
-                    { color: on ? accent : palette.textSecondary, fontWeight: on ? '600' : '500' },
+                    styles.chip,
+                    on
+                      ? { borderColor: accent, backgroundColor: accentSoft }
+                      : { borderColor: palette.borderChip, backgroundColor: palette.cardBg },
                   ]}
+                  onPress={() => setSelectedGenre((prev) => (prev === g ? '' : g))}
                 >
-                  {g}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[
+                      styles.chipLabel,
+                      { color: on ? accent : palette.textSecondary, fontWeight: on ? '600' : '500' },
+                    ]}
+                  >
+                    {g}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-        <Pressable
-          style={[styles.startBtn, { backgroundColor: accent, opacity: canStart ? 1 : 0.4 }]}
-          onPress={start}
-          disabled={!canStart}
-          accessibilityRole="button"
-          testID="welcome-start"
-        >
-          <Text style={styles.startLabel}>{t('startBtn')}</Text>
-        </Pressable>
-      </ScrollView>
+          <Pressable
+            style={[styles.startBtn, { backgroundColor: accent, opacity: canStart ? 1 : 0.4 }]}
+            onPress={start}
+            disabled={!canStart}
+            accessibilityRole="button"
+            testID="welcome-start"
+          >
+            <Text style={styles.startLabel}>{t('startBtn')}</Text>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -192,6 +210,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   topBar: { paddingHorizontal: 28, paddingBottom: 4, flexDirection: 'row', alignItems: 'center' },
+  keyboardAvoiding: { flex: 1 },
   // 内容贴底:flexGrow 撑满 + flex-end 把内容压到下半屏(对齐原型 margin-bottom:auto)。
   container: { flexGrow: 1, paddingHorizontal: 28, justifyContent: 'flex-end' },
   eyebrow: { fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 16 },
