@@ -23,7 +23,7 @@ import { chipFromAttr, chipFromCharacter, composeFocusMessage, type FocusChip } 
 import { DEFAULT_ASSISTANT_NAME } from '../../src/config';
 import { useT } from '../../src/i18n';
 import { supabase } from '../../src/supabase';
-import { canEditSessionTitle, normalizeSessionTitle } from '../../src/session-title';
+import { canEditSessionTitle, canStartSessionRun, normalizeSessionTitle } from '../../src/session-title';
 import { defaultTheme } from '../../src/theme';
 
 // 助手正文行内 **加粗** 渲染(对齐原型 parseInline:**…** → 加粗、主色)。
@@ -112,7 +112,9 @@ export default function ChatScreen() {
 
   const rawTitle = screenplay.meta.title?.trim() || '';
   const title = rawTitle || t('untitled');
+  const [titleEditing, setTitleEditing] = useState(false);
   const titleEditingDisabled = !canEditSessionTitle({ isRunning, hydrating });
+  const runStartDisabled = !canStartSessionRun({ isRunning, hydrating, titleEditing });
   const saveTitle = useCallback(
     async (input: string) => {
       const nextTitle = normalizeSessionTitle(input);
@@ -200,6 +202,7 @@ export default function ChatScreen() {
 
   // Composer 发送:把聚焦 chip 拼进消息(空正文 + 有 chip 时用默认话术),发出后清空 chip。
   function sendComposed(text: string) {
+    if (runStartDisabled) return;
     const msg = composeFocusMessage(text, chips);
     if (!msg) return;
     setChips([]);
@@ -207,6 +210,7 @@ export default function ChatScreen() {
   }
   // 快捷选项 / 直接发送:不带聚焦上下文,但发送即清空残留 chip(对应原型 pushUserAndReply)。
   function sendPlain(text: string) {
+    if (runStartDisabled) return;
     setChips([]);
     void sendMessage(text);
   }
@@ -234,6 +238,7 @@ export default function ChatScreen() {
         titleEditingDisabled={titleEditingDisabled}
         docOpen={docOpen}
         onBack={() => router.back()}
+        onEditingChange={setTitleEditing}
         onSaveTitle={saveTitle}
         onToggleDoc={() => {
           setDocTarget(null);
@@ -254,6 +259,7 @@ export default function ChatScreen() {
               text={messageText(m)}
               card={isLastAssistant && !showStateOnlyAssistant ? card : undefined}
               options={isLastAssistant && !showStateOnlyAssistant ? options : undefined}
+              optionsDisabled={runStartDisabled}
               onSend={sendPlain}
               onOpenDoc={openDoc}
               onFocusAttr={focusAttr}
@@ -277,6 +283,7 @@ export default function ChatScreen() {
             text=""
             card={card}
             options={options}
+            optionsDisabled={runStartDisabled}
             onSend={sendPlain}
             onOpenDoc={openDoc}
             onFocusAttr={focusAttr}
@@ -290,14 +297,18 @@ export default function ChatScreen() {
             {/* 重试沿用同一 runId(经 hook 的 retry()),命中服务端幂等键,不重复写入数据库(见 KI-2)。
                 务必走 retry 而非重新 sendMessage——后者会生成新 runId、绕开幂等。 */}
             <Pressable
-              onPress={() => void retry()}
-              disabled={isRunning}
+              onPress={() => {
+                if (runStartDisabled) return;
+                void retry();
+              }}
+              disabled={runStartDisabled}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="重试本轮"
+              accessibilityState={{ disabled: runStartDisabled }}
               testID="error-retry"
             >
-              <Text style={[styles.retry, { color: palette.danger }]}>重试</Text>
+              <Text style={[styles.retry, { color: palette.danger, opacity: runStartDisabled ? 0.45 : 1 }]}>重试</Text>
             </Pressable>
           </View>
         )}
@@ -305,7 +316,7 @@ export default function ChatScreen() {
 
       <Composer
         ref={composerRef}
-        busy={isRunning || hydrating}
+        busy={runStartDisabled}
         onSend={sendComposed}
         chips={chips}
         onRemoveChip={removeChip}
@@ -334,6 +345,7 @@ function Header({
   titleEditingDisabled,
   docOpen,
   onBack,
+  onEditingChange,
   onSaveTitle,
   onToggleDoc,
 }: {
@@ -342,6 +354,7 @@ function Header({
   titleEditingDisabled: boolean;
   docOpen: boolean;
   onBack: () => void;
+  onEditingChange: (editing: boolean) => void;
   onSaveTitle: (title: string) => Promise<void>;
   onToggleDoc: () => void;
 }) {
@@ -352,6 +365,13 @@ function Header({
   const [draft, setDraft] = useState(rawTitle);
   const [saving, setSaving] = useState(false);
   const committingRef = useRef(false);
+  const updateEditing = useCallback(
+    (next: boolean) => {
+      setEditing(next);
+      onEditingChange(next);
+    },
+    [onEditingChange],
+  );
 
   useEffect(() => {
     if (!editing) setDraft(rawTitle);
@@ -360,9 +380,9 @@ function Header({
   useEffect(() => {
     if (titleEditingDisabled && editing) {
       setDraft(rawTitle);
-      setEditing(false);
+      updateEditing(false);
     }
-  }, [editing, rawTitle, titleEditingDisabled]);
+  }, [editing, rawTitle, titleEditingDisabled, updateEditing]);
 
   const commitTitle = useCallback(async () => {
     if (committingRef.current || saving || titleEditingDisabled) return;
@@ -371,7 +391,7 @@ function Header({
     const current = normalizeSessionTitle(rawTitle);
     if (next === current) {
       setDraft(rawTitle);
-      setEditing(false);
+      updateEditing(false);
       committingRef.current = false;
       return;
     }
@@ -379,17 +399,17 @@ function Header({
     try {
       await onSaveTitle(next);
       setDraft(next);
-      setEditing(false);
+      updateEditing(false);
     } catch (e) {
       console.warn('[chat] 标题保存失败:', e instanceof Error ? e.message : String(e));
       setDraft(rawTitle);
-      setEditing(false);
+      updateEditing(false);
       Alert.alert(t('renameTitleFailed'));
     } finally {
       setSaving(false);
       committingRef.current = false;
     }
-  }, [draft, onSaveTitle, rawTitle, saving, t, titleEditingDisabled]);
+  }, [draft, onSaveTitle, rawTitle, saving, t, titleEditingDisabled, updateEditing]);
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 6, borderColor: palette.divider }]}>
@@ -420,7 +440,7 @@ function Header({
             onPress={() => {
               if (titleEditingDisabled) return;
               setDraft(rawTitle);
-              setEditing(true);
+              updateEditing(true);
             }}
             accessibilityRole="button"
             accessibilityLabel={t('renameTitle')}
@@ -458,6 +478,7 @@ function MessageBubble({
   streaming,
   card,
   options,
+  optionsDisabled,
   onSend,
   onOpenDoc,
   onFocusAttr,
@@ -468,12 +489,14 @@ function MessageBubble({
   streaming?: boolean;
   card?: InlineCardData;
   options?: string[];
+  optionsDisabled?: boolean;
   onSend: (text: string) => void;
   onOpenDoc: (target: DocTarget) => void;
   onFocusAttr?: (c: Character, a: CharacterAttr) => void;
   onFocusCharacter?: (c: Character) => void;
 }) {
   const { palette } = defaultTheme;
+  const optionDisabled = !!optionsDisabled;
 
   // 用户消息:右对齐暖灰气泡,深色文字。
   if (role === 'user') {
@@ -524,13 +547,19 @@ function MessageBubble({
               style={({ pressed }) => [
                 styles.optionCard,
                 {
-                  backgroundColor: pressed ? palette.controlBgHover : palette.cardBg,
-                  borderColor: pressed ? defaultTheme.accentSoftBorder : palette.borderCard,
+                  backgroundColor: pressed && !optionDisabled ? palette.controlBgHover : palette.cardBg,
+                  borderColor: pressed && !optionDisabled ? defaultTheme.accentSoftBorder : palette.borderCard,
+                  opacity: optionDisabled ? 0.45 : 1,
                 },
               ]}
-              onPress={() => onSend(opt)}
+              onPress={() => {
+                if (optionDisabled) return;
+                onSend(opt);
+              }}
+              disabled={optionDisabled}
               accessibilityRole="button"
               accessibilityLabel={`选择:${opt}`}
+              accessibilityState={{ disabled: optionDisabled }}
               testID={`chat-option-card-${index}`}
             >
               <View

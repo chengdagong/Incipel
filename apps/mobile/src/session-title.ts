@@ -24,3 +24,15 @@ export function sessionTitleForDisplay(sessionTitle: string | null | undefined, 
 export function canEditSessionTitle({ isRunning, hydrating }: { isRunning: boolean; hydrating: boolean }): boolean {
   return !isRunning && !hydrating;
 }
+
+export function canStartSessionRun({
+  isRunning,
+  hydrating,
+  titleEditing,
+}: {
+  isRunning: boolean;
+  hydrating: boolean;
+  titleEditing: boolean;
+}): boolean {
+  return !isRunning && !hydrating && !titleEditing;
+}
