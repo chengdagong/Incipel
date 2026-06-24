@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEV_IOS="$ROOT/scripts/dev-ios.sh"
+DEV_ANDROID="$ROOT/scripts/dev-android.sh"
 E2E_IOS="$ROOT/scripts/e2e-ios.sh"
 WORKTREE_ENV="$ROOT/scripts/lib/worktree-dev-env.sh"
 
@@ -23,6 +24,18 @@ target_line="$(line_number 'IOS_SIMULATOR_NAME="incipel-development"' "$DEV_IOS"
 [ -n "$source_line" ] || fail "dev-ios.sh 没有读取 worktree 开发配置。"
 [ -n "$target_line" ] || fail "dev-ios.sh 没有把 development simulator 固定为 incipel-development。"
 [ "$target_line" -gt "$source_line" ] || fail "dev-ios.sh 必须在读取 worktree 配置后覆盖 iOS simulator 名称。"
+
+for script in "$DEV_IOS" "$DEV_ANDROID"; do
+  if ! grep -Fq 'tools/incipel-dev/cli.mjs" env sync' "$script"; then
+    fail "$(basename "$script") 应只准备共用 Supabase 栈和 env,不应启动或检查 agent。"
+  fi
+  if grep -Fq 'tools/incipel-dev/cli.mjs" up' "$script"; then
+    fail "$(basename "$script") 不应调用 up,因为 up 会启动或检查 agent。"
+  fi
+  if grep -Fq 'INCIPEL_SKIP_AGENT' "$script"; then
+    fail "$(basename "$script") 不应再用 INCIPEL_SKIP_AGENT 分支管理 agent。"
+  fi
+done
 
 if grep -Fq 'incipel-development' "$E2E_IOS"; then
   fail "e2e-ios.sh 不应改用共享 development simulator。"

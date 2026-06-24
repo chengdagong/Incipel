@@ -25,8 +25,9 @@ Mastra 提供 TypeScript agent abstraction、tool 注册、streaming chunk、模
 ## 后果
 
 - 本地日常开发使用固定 agent server 端口 `4111`;E2E 使用 worktree 相关 agent server 端口,避免占用日常 dev agent。
-- `tools/incipel-dev` 同步 `apps/mobile/.env` 与 `supabase/.env`,并后台启动 `pnpm --filter @incipel/agent dev`。
-- Android 开发脚本需要同时 `adb reverse` Supabase API 端口和 agent server 端口。
+- `tools/incipel-dev env sync` 同步 `apps/mobile/.env` 与 `supabase/.env`;移动端开发脚本只调用它,不检查也不启动 agent server。
+- 需要 agent server 时,使用 `pnpm dev:agent` 前台启动;需要后台 agent server 时,手动使用 `pnpm dx up`。
+- Android 开发脚本需要同时 `adb reverse` Supabase API 端口和 `apps/mobile/.env` 中的 agent server 端口;这只是端口转发,不代表 agent server 已运行。
 - 部署方式从 Supabase Function 部署改为 Node server 部署;具体目标主机可另行选择。
 - AG-UI 事件、authentication、Supabase 数据模型继续由 Incipel 代码控制,避免把产品协议绑定到某个 agent framework。
 

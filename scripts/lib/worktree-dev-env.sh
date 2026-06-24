@@ -10,8 +10,9 @@
 #   - IOS_SIMULATOR_NAME : pnpm e2e:ios 使用的本 worktree 专属 iOS simulator 名;由分支名派生
 #   - ANDROID_SERIAL     : Android 目标 serial;留空交由 dev-android.sh 自动判定
 #
-# 写 apps/mobile/.env 与 supabase/.env、起共用栈、启动 Mastra Node agent server,统一交给
-# `node tools/incipel-dev/cli.mjs up`(dev:ios / dev:android 会在起 Metro 前调它);本文件不碰 .env。
+# 写 apps/mobile/.env 与 supabase/.env、起共用栈,统一交给
+# `node tools/incipel-dev/cli.mjs env sync`(dev:ios / dev:android 会在起 Metro 前调它);本文件不碰 .env。
+# agent server 需要单独运行 `pnpm dev:agent` 或手动 `pnpm dx up`;移动端脚本不启动也不检查它。
 # dev agent 端口由 tools/incipel-dev 固定为 4111,并写入 apps/mobile/.env。
 #
 # 兼容 macOS 自带的 bash 3.2,不使用 mapfile/readarray 等 bash 4 特性。

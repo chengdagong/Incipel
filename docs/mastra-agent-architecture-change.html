@@ -783,7 +783,7 @@
           </div>
           <div class="file-row">
             <strong>tools/incipel-dev/cli.mjs</strong>
-            <span>本地开发 orchestration。为每个 worktree 计算稳定 agent port，写入 env，并后台启动 <code>pnpm --filter @incipel/agent dev</code>。</span>
+            <span>本地开发命令。<code>env sync</code> 写入 env 并确保共用 Supabase 栈在运行；<code>up</code> 可手动后台启动 agent server。</span>
           </div>
           <div class="file-row">
             <strong>scripts/dev-android.sh · scripts/dev-ios.sh</strong>
@@ -859,23 +859,24 @@
           <article class="panel pad">
             <h3>常规开发</h3>
             <div class="code-block" role="img" aria-label="常规开发命令">
-              <code>pnpm dx up</code>
+              <code>pnpm dev:ios -- --devbuild</code>
             </div>
             <p style="margin-top: 12px">
-              <code>tools/incipel-dev</code> 会同步 <code>apps/mobile/.env</code> 和
-              <code>supabase/.env</code>，然后启动 agent dev server。agent server 的健康检查地址为
-              <code>http://127.0.0.1:4111/health</code>。
+              移动端开发脚本会通过 <code>tools/incipel-dev env sync</code> 同步
+              <code>apps/mobile/.env</code> 和 <code>supabase/.env</code>，并确保共用 Supabase 栈在运行；
+              它不会检查或启动 agent server。
             </p>
           </article>
 
           <article class="panel pad">
             <h3>单独启动 agent</h3>
             <div class="code-block" role="img" aria-label="单独启动 agent 命令">
-              <code>pnpm --filter @incipel/agent dev</code>
+              <code>pnpm dev:agent</code>
             </div>
             <p style="margin-top: 12px">
-              server 从环境变量读取 <code>SUPABASE_URL</code>、<code>SUPABASE_SERVICE_ROLE_KEY</code>、
-              <code>MODEL_PROVIDER</code>、<code>OPENROUTER_API_KEY</code> 和 <code>AGENT_PORT</code>。
+              agent server 从环境变量读取 <code>SUPABASE_URL</code>、<code>SUPABASE_SERVICE_ROLE_KEY</code>、
+              <code>MODEL_PROVIDER</code>、<code>OPENROUTER_API_KEY</code> 和 <code>AGENT_PORT</code>；
+              健康检查地址为 <code>http://127.0.0.1:4111/health</code>。
             </p>
           </article>
         </div>

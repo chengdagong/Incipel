@@ -97,7 +97,7 @@ fi
 
 echo "▸ worktree     : $REPO_ROOT"
 echo "▸ Metro 端口   : $EXPO_PORT"
-echo "▸ Agent        : Mastra Node server(本脚本会自动起共用 Supabase 栈并后台启动 agent)"
+echo "▸ Supabase     : 共用本地 Supabase 栈(本脚本不会启动或检查 agent)"
 echo "▸ Android 设备 : $ANDROID_SERIAL"
 
 if [ "$DEVBUILD" -eq 1 ] && ! adb -s "$ANDROID_SERIAL" shell pm path "$ANDROID_APP_ID" >/dev/null 2>&1; then
@@ -107,17 +107,14 @@ if [ "$DEVBUILD" -eq 1 ] && ! adb -s "$ANDROID_SERIAL" shell pm path "$ANDROID_A
   echo "✓ development build 已安装到 $ANDROID_SERIAL"
 fi
 
-# 起共用 Supabase 栈 + 后台启动 agent server(已在跑则自动跳过)。
-# 设 INCIPEL_SKIP_AGENT=1 可跳过(例如你在另一个终端用 `pnpm dev:agent` 前台跑 agent)。
-if [ "${INCIPEL_SKIP_AGENT:-0}" != "1" ]; then
-  node "$REPO_ROOT/tools/incipel-dev/cli.mjs" up
-fi
+# 起共用 Supabase 栈 + 同步 apps/mobile/.env / supabase/.env;不启动或检查 agent。
+node "$REPO_ROOT/tools/incipel-dev/cli.mjs" env sync
 
 # 把本 worktree 的端口转发进「这台」设备(带 -s,避免打错)。Android 模拟器的 localhost 是
 # 模拟器自身,这几条 reverse 让设备上的 localhost:<port> 直达宿主机,从而与 iOS 行为一致:
 #   - Metro:加载 bundle
 #   - Supabase:共用本地栈的 API 端口
-#   - Agent:当前 worktree 的 Mastra Node server 端口
+#   - Agent:apps/mobile/.env 中的 agent server 端口;这里仅做端口转发,不检查 agent 是否运行
 adb -s "$ANDROID_SERIAL" reverse tcp:"$EXPO_PORT" tcp:"$EXPO_PORT"
 SUPA_PORT="$(awk '/^\[api\]/{f=1} f&&/^port[[:space:]]*=/{gsub(/[^0-9]/,""); print; exit}' "$REPO_ROOT/supabase/config.toml" 2>/dev/null || true)"
 if [ -n "${SUPA_PORT:-}" ]; then
