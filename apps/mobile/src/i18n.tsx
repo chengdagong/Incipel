@@ -177,6 +177,16 @@ export const READING_I18N: Record<Lang, ReadingStrings> = {
   },
 };
 
+// 设置类别页文案。设置由「类别索引 → 详情页」组成,详情页标题多复用既有键
+// (通用 generalSection / 阅读 READING_I18N.section / 开发 agentEndpointSection),
+// 仅「账号」一类无既有标签,故在此独立登记(与 GENRE_I18N / READING_I18N 同,不进生成块 DICT)。
+export const SETTINGS_I18N: Record<Lang, { account: string }> = {
+  zh: { account: '账号' },
+  en: { account: 'Account' },
+  ja: { account: 'アカウント' },
+  zhHant: { account: '帳號' },
+};
+
 const LANG_STORAGE_KEY = 'scn_lang_v1';
 
 // 四语言文案表(由原型 T 生成,勿手改本块;改文案改原型或此生成块)。
