@@ -815,6 +815,68 @@ test('agent stop does not signal an unrelated process even when metadata points 
   }
 });
 
+test('agent stop does not signal agent-looking processes from another cwd', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const other = mkdtempSync(path.join(tmpdir(), 'incipel-dev-other-'));
+  const dockerLog = path.join(tmp, 'docker.log');
+  let otherServe;
+  let otherWatcher;
+
+  try {
+    writeAgentFixture(tmp, 54521);
+    writeFakeDocker(tmp);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+    otherServe = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'supabase', 'functions', 'serve', 'agent'], {
+      cwd: other,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    otherWatcher = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', cli, 'agent', 'watch'], {
+      cwd: other,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    await waitFor(() => isProcessAlive(otherServe.pid) && isProcessAlive(otherWatcher.pid));
+
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: otherServe.pid, logPath: '/tmp/serve.log' }, null, 2),
+    );
+    writeFileSync(
+      metadataPaths(root).watcherMeta,
+      JSON.stringify(
+        {
+          repoRoot: root,
+          functionName: 'agent',
+          pid: otherWatcher.pid,
+          logPath: '/tmp/watcher.log',
+          watchedPathsHash: matchingServeMetadata(root).watchedPathsHash,
+        },
+        null,
+        2,
+      ),
+    );
+
+    const res = run('node', [cli, 'agent', 'stop'], tmp, {
+      env: {
+        ...process.env,
+        PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}`,
+        INC_TEST_DOCKER_LOG: dockerLog,
+      },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    assert.equal(isProcessAlive(otherServe.pid), true);
+    assert.equal(isProcessAlive(otherWatcher.pid), true);
+    assert.equal(existsSync(dockerLog), false);
+  } finally {
+    await stopChild(otherServe);
+    await stopChild(otherWatcher);
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    rmSync(tmp, { recursive: true, force: true });
+    rmSync(other, { recursive: true, force: true });
+  }
+});
+
 test('up stops the old watcher before replacing stale watcher metadata', async () => {
   const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
   const health = await startHealthServer();
@@ -840,6 +902,7 @@ test('up stops the old watcher before replacing stale watcher metadata', async (
     writeFileSync(metadataPaths(root).watcherMeta, JSON.stringify(staleWatcherMeta, null, 2));
 
     fakeServe = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'supabase', 'functions', 'serve', 'agent'], {
+      cwd: tmp,
       stdio: ['ignore', 'ignore', 'ignore'],
     });
     await waitFor(() => isProcessAlive(fakeServe.pid));
@@ -860,6 +923,66 @@ test('up stops the old watcher before replacing stale watcher metadata', async (
     cleanupMetadata(root);
     health.child.kill();
     rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('up does not stop stale watcher metadata when pid belongs to another cwd', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const other = mkdtempSync(path.join(tmpdir(), 'incipel-dev-other-'));
+  const health = await startHealthServer();
+  const port = health.port;
+  let otherWatcher;
+  let fakeServe;
+
+  try {
+    writeAgentFixture(tmp, port);
+    mustRun('git', ['init'], tmp);
+    const root = mustRun('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim();
+
+    otherWatcher = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', cli, 'agent', 'watch'], {
+      cwd: other,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    fakeServe = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'supabase', 'functions', 'serve', 'agent'], {
+      cwd: tmp,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    await waitFor(() => isProcessAlive(otherWatcher.pid) && isProcessAlive(fakeServe.pid));
+
+    writeFileSync(
+      metadataPaths(root).watcherMeta,
+      JSON.stringify(
+        {
+          repoRoot: root,
+          functionName: 'agent',
+          pid: otherWatcher.pid,
+          logPath: '/tmp/watcher.log',
+          watchedPathsHash: 'stale-watched-paths',
+        },
+        null,
+        2,
+      ),
+    );
+    writeFileSync(
+      metadataPaths(root).serveMeta,
+      JSON.stringify({ ...matchingServeMetadata(root), pid: fakeServe.pid }, null, 2),
+    );
+
+    const res = run('node', [cli, 'up'], tmp, {
+      env: { ...process.env, PATH: `${path.join(tmp, 'bin')}:${process.env.PATH}` },
+    });
+    assert.equal(res.status, 0, res.stderr);
+    await sleep(500);
+    assert.equal(otherWatcher.signalCode, null);
+    assert.equal(isProcessAlive(otherWatcher.pid), true);
+  } finally {
+    await stopChild(otherWatcher);
+    await stopChild(fakeServe);
+    const root = run('git', ['rev-parse', '--show-toplevel'], tmp).stdout.trim() || tmp;
+    cleanupMetadata(root);
+    health.child.kill();
+    rmSync(tmp, { recursive: true, force: true });
+    rmSync(other, { recursive: true, force: true });
   }
 });
 
