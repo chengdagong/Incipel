@@ -12,9 +12,9 @@
 //   node tools/incipel-dev/cli.mjs <command> [--dry-run]
 //
 //   dev              起共用栈(若未起)+ 同步 env + 启动 agent server(前台,带热重载日志)
-//   up               起共用栈(若未起)+ 同步 env + 后台启动 agent server(不阻塞;dev:ios/android 会调它)
+//   up               起共用栈(若未起)+ 同步 env + 后台启动 agent server(不阻塞;手动后台 agent 时用)
 //   env [sync]       起共用栈(若未起)+ 同步 env:写 apps/mobile/.env 的 EXPO_PUBLIC_*、
-//                    确保 supabase/.env 有本地 JWT 校验配置
+//                    确保 supabase/.env 有本地 JWT 校验配置(dev:ios/android 会调它)
 //   agent stop       停止当前 worktree 的后台 agent watcher / server(不停止数据库 / auth / storage)
 //   agent stop --all 停止本机所有 worktree 的 Incipel agent watcher / server(含元数据已丢失的孤儿)
 //   e2e up           生成隔离 workdir + supabase start --workdir,打印该栈的 URL
@@ -1031,7 +1031,7 @@ function dev(root) {
 }
 
 // ── up:确保「共用栈 + agent server」就绪(server 走后台,不阻塞)──────────────────
-// 供 dev:ios / dev:android 在起 Metro 前调用,使一条 `pnpm dev:ios` 就把后端也带起来。
+// 供需要后台 agent 的手动流程调用。dev:ios / dev:android 只调用 env sync,不再检查 agent。
 async function up(root) {
   log('▸ 确保共用 Supabase 栈在运行');
   ensureStack(root);
