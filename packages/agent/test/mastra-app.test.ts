@@ -136,6 +136,7 @@ describe('createMastraAgents', () => {
       expect.objectContaining({
         add_character: expect.anything(),
         update_character: expect.anything(),
+        request_mckee_story_critique: expect.anything(),
         read_studio_screenplay: expect.anything(),
         reset_studio_screenplay: expect.anything(),
       }),
