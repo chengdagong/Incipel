@@ -19,4 +19,4 @@
 
 - Mastra registry 注册 `mckee-story-critic`，且不挂载 screenplay tools。
 - `screenwriter` 与 `studio-screenwriter` 的 instructions 明确要求先请求评论再返回。
-- 运行时给 `screenwriter` 暴露评论工具；`logline` 不暴露。
+- 运行时给 `screenwriter` 与 `studio-screenwriter` 暴露评论工具；`logline` 不暴露。
