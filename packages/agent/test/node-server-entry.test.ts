@@ -123,6 +123,26 @@ describe('Node agent server entry', () => {
     expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('content-type');
   });
 
+  it('Mastra Studio API preflight 保留 Mastra headers 和管理方法', async () => {
+    await import('../src/index');
+
+    const res = await h.serverConfig.app.request('/api/agents/test', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:3001',
+        'Access-Control-Request-Method': 'PATCH',
+        'Access-Control-Request-Headers': 'content-type, x-mastra-client-type, x-mastra-dev-playground',
+      },
+    });
+
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:3001');
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(res.headers.get('access-control-allow-methods')).toContain('PATCH');
+    expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('x-mastra-client-type');
+    expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('x-mastra-dev-playground');
+  });
+
   it('Studio 探测 agent server 根路径时也能通过跨源检查', async () => {
     await import('../src/index');
 

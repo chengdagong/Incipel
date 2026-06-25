@@ -590,6 +590,26 @@ function envSync(root) {
   return { agentEnvChanged };
 }
 
+function missingMobileDeps(root) {
+  const mobileDir = join(root, 'apps', 'mobile');
+  const pkgFile = join(mobileDir, 'package.json');
+  if (!existsSync(pkgFile)) return [];
+  const pkg = JSON.parse(readFileSync(pkgFile, 'utf8'));
+  const deps = {
+    ...(pkg.dependencies || {}),
+    ...(pkg.devDependencies || {}),
+  };
+  return Object.keys(deps).filter((name) => !existsSync(join(mobileDir, 'node_modules', name)));
+}
+
+function ensureMobileDeps(root) {
+  const missing = missingMobileDeps(root);
+  if (missing.length === 0) return;
+  log(`▸ apps/mobile 缺依赖(${missing.slice(0, 5).join(', ')}),先 pnpm install(pnpm store 命中通常几秒)…`);
+  const installed = run('pnpm', ['install'], { cwd: root });
+  if (installed.code !== 0 && !DRY) fail('pnpm install 失败');
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1190,6 +1210,7 @@ async function web(root) {
   ensureStack(root);
   log('▸ 同步 env');
   envSync(root);
+  ensureMobileDeps(root);
   log('▸ 启动 Expo Web(前台)');
   await runWeb(root);
 }
