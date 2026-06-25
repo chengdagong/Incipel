@@ -140,6 +140,13 @@ describe('buildScreenwriterInstructions', () => {
     expect(instructions).toContain('段与段之间空一行');
     expect(instructions).toContain('分场对白不在此列');
   });
+
+  it('静态 instructions 要求用户明确要求直接写时不要改成提问或阶段确认', () => {
+    const instructions = buildScreenwriterInstructions();
+    expect(instructions).toContain('用户明确要求直接写、不要提问或一次写完');
+    expect(instructions).toContain('视为用户已经授权你做必要的创作选择');
+    expect(instructions).toContain('不要改成提问、阶段确认或工作流说明');
+  });
 });
 
 describe('buildMckeeStoryCriticInstructions', () => {

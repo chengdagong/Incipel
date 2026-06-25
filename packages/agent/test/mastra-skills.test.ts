@@ -28,6 +28,8 @@ describe('Mastra screenwriter skills', () => {
 
     const skill = await agents.screenwriter.getSkill('screenwriting-master');
     expect(skill?.instructions).toContain('Designed by @山音');
+    expect(skill?.instructions).toContain('用户明确要求直接写、不要提问或一次写完');
+    expect(skill?.instructions).toContain('不要套用分步暂停规则');
     expect(skill?.references).toEqual(
       expect.arrayContaining([
         'core-methodology.md',
