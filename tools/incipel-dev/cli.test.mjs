@@ -84,6 +84,13 @@ async function portAvailable(port) {
   });
 }
 
+async function listen(server, port) {
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen({ host: '127.0.0.1', port }, resolve);
+  });
+}
+
 async function findAvailablePortPair() {
   const start = 20000 + (process.pid % 20000);
   for (let offset = 0; offset < 1000; offset += 1) {
@@ -367,6 +374,58 @@ function hasLsof() {
   const res = spawnSync('lsof', ['-v'], { stdio: 'ignore' });
   return res.status === 0;
 }
+
+test('metro port returns an available port without writing long-lived state', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+
+    const res = run('node', [cli, 'metro', 'port'], tmp, {
+      env: {
+        ...process.env,
+        INCIPEL_METRO_PORT_BASE: '19081',
+        INCIPEL_METRO_PORT_RANGE: '20',
+        INCIPEL_METRO_PORT_HASH: '0',
+      },
+    });
+
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(res.stdout.trim(), /^\d+$/);
+    assert.equal(await portAvailable(Number(res.stdout.trim())), true);
+    assert.equal(existsSync(path.join(tmp, '.worktree-metro.json')), false);
+    assert.equal(existsSync(path.join(tmp, '.metro-session.json')), false);
+  } finally {
+    cleanupMetadata(tmp);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('metro port skips an occupied candidate port', async () => {
+  const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));
+  const blocker = createServer();
+  try {
+    writeAgentFixture(tmp, 54521);
+    mustRun('git', ['init'], tmp);
+    await listen(blocker, 19082);
+
+    const res = run('node', [cli, 'metro', 'port'], tmp, {
+      env: {
+        ...process.env,
+        INCIPEL_METRO_PORT_BASE: '19082',
+        INCIPEL_METRO_PORT_RANGE: '3',
+        INCIPEL_METRO_PORT_HASH: '0',
+      },
+    });
+
+    assert.equal(res.status, 0, res.stderr);
+    assert.equal(res.stdout.trim(), '19083');
+  } finally {
+    blocker.close();
+    cleanupMetadata(tmp);
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
 
 test('env sync copies Google env from the primary worktree when a child worktree already has env files', () => {
   const tmp = mkdtempSync(path.join(tmpdir(), 'incipel-dev-test-'));

@@ -6,6 +6,8 @@ DEV_IOS="$ROOT/scripts/dev-ios.sh"
 DEV_ANDROID="$ROOT/scripts/dev-android.sh"
 E2E_IOS="$ROOT/scripts/e2e-ios.sh"
 WORKTREE_ENV="$ROOT/scripts/lib/worktree-dev-env.sh"
+PACKAGE_JSON="$ROOT/package.json"
+INC_DEV="$ROOT/tools/incipel-dev/cli.mjs"
 
 fail() {
   echo "✗ $1" >&2
@@ -17,6 +19,33 @@ line_number() {
   file="$2"
   grep -nF "$pattern" "$file" | head -1 | cut -d: -f1 || true
 }
+
+require_contains() {
+  file="$1"
+  pattern="$2"
+  message="$3"
+  grep -Fq "$pattern" "$file" || fail "$message"
+}
+
+require_not_contains() {
+  file="$1"
+  pattern="$2"
+  message="$3"
+  if grep -Fq "$pattern" "$file"; then
+    fail "$message"
+  fi
+}
+
+require_contains "$PACKAGE_JSON" '"dev:web": "node tools/incipel-dev/cli.mjs web"' "根 package.json 应提供 pnpm dev:web。"
+require_not_contains "$WORKTREE_ENV" 'EXPO_PORT=8081' "worktree-dev-env.sh 不应再固定 Metro 端口 8081。"
+require_contains "$DEV_IOS" 'METRO_PORT="$(node "$REPO_ROOT/tools/incipel-dev/cli.mjs" metro port)"' "dev-ios.sh 应为本次命令选择 Metro 端口。"
+require_contains "$DEV_ANDROID" 'METRO_PORT="$(node "$REPO_ROOT/tools/incipel-dev/cli.mjs" metro port)"' "dev-android.sh 应为本次命令选择 Metro 端口。"
+require_contains "$DEV_ANDROID" 'adb -s "$ANDROID_SERIAL" reverse tcp:"$METRO_PORT" tcp:"$METRO_PORT"' "dev-android.sh 应把所选 Metro 端口转发到目标设备。"
+require_not_contains "$E2E_IOS" 'expo start' "e2e-ios.sh 不应启动 Metro。"
+require_contains "$INC_DEV" "'--web'," "dev:web 应以 Expo Web 模式启动。"
+require_contains "$INC_DEV" "'--localhost'," "dev:web 应限制在 localhost。"
+require_contains "$INC_DEV" "'--port', String(metroPort)" "dev:web 应使用所选 Metro 端口。"
+require_contains "$INC_DEV" "waitForMetroStatus(metroPort)" "dev:web 应等待 Metro /status 可访问后再打印 URL。"
 
 source_line="$(line_number '. "$SCRIPT_DIR/lib/worktree-dev-env.sh"' "$DEV_IOS")"
 target_line="$(line_number 'IOS_SIMULATOR_NAME="incipel-development"' "$DEV_IOS")"

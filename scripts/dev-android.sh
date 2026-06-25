@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在「本 worktree 选定」的 Android 设备/模拟器上,用固定 Metro 端口启动开发。
+# 在「本 worktree 选定」的 Android 设备/模拟器上,用本次选择的 Metro 端口启动开发。
 #
 #   bash scripts/dev-android.sh --go          # Expo Go
 #   bash scripts/dev-android.sh --devbuild    # development build
@@ -96,7 +96,6 @@ if [ -z "${ANDROID_SERIAL:-}" ]; then
 fi
 
 echo "▸ worktree     : $REPO_ROOT"
-echo "▸ Metro 端口   : $EXPO_PORT"
 echo "▸ Supabase     : 共用本地 Supabase 栈(本脚本不会启动或检查 agent)"
 echo "▸ Android 设备 : $ANDROID_SERIAL"
 
@@ -109,13 +108,15 @@ fi
 
 # 起共用 Supabase 栈 + 同步 apps/mobile/.env / supabase/.env;不启动或检查 agent。
 node "$REPO_ROOT/tools/incipel-dev/cli.mjs" env sync
+METRO_PORT="$(node "$REPO_ROOT/tools/incipel-dev/cli.mjs" metro port)"
+echo "▸ Metro 端口   : $METRO_PORT"
 
 # 把本 worktree 的端口转发进「这台」设备(带 -s,避免打错)。Android 模拟器的 localhost 是
 # 模拟器自身,这几条 reverse 让设备上的 localhost:<port> 直达宿主机,从而与 iOS 行为一致:
 #   - Metro:加载 bundle
 #   - Supabase:共用本地栈的 API 端口
 #   - Agent:apps/mobile/.env 中的 agent server 端口;这里仅做端口转发,不检查 agent 是否运行
-adb -s "$ANDROID_SERIAL" reverse tcp:"$EXPO_PORT" tcp:"$EXPO_PORT"
+adb -s "$ANDROID_SERIAL" reverse tcp:"$METRO_PORT" tcp:"$METRO_PORT"
 SUPA_PORT="$(awk '/^\[api\]/{f=1} f&&/^port[[:space:]]*=/{gsub(/[^0-9]/,""); print; exit}' "$REPO_ROOT/supabase/config.toml" 2>/dev/null || true)"
 if [ -n "${SUPA_PORT:-}" ]; then
   adb -s "$ANDROID_SERIAL" reverse tcp:"$SUPA_PORT" tcp:"$SUPA_PORT" >/dev/null 2>&1 || true
@@ -128,10 +129,10 @@ fi
 cd "$REPO_ROOT/apps/mobile"
 
 (
-  url="exp://127.0.0.1:$EXPO_PORT"
-  [ "$DEVBUILD" -eq 1 ] && url="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$EXPO_PORT"
+  url="exp://127.0.0.1:$METRO_PORT"
+  [ "$DEVBUILD" -eq 1 ] && url="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$METRO_PORT"
   for _ in $(seq 1 90); do
-    if curl -sf "http://127.0.0.1:$EXPO_PORT/status" >/dev/null 2>&1; then
+    if curl -sf "http://127.0.0.1:$METRO_PORT/status" >/dev/null 2>&1; then
       if [ "$DEVBUILD" -eq 0 ] && ! adb -s "$ANDROID_SERIAL" shell pm path "$EXPO_GO_PKG" >/dev/null 2>&1; then
         echo ""
         echo "ℹ 该设备尚未安装 Expo Go。首次请在下方 Metro 菜单按 a 安装(多设备时按 shift+a 选设备),"
@@ -150,7 +151,7 @@ cd "$REPO_ROOT/apps/mobile"
 ) &
 
 if [ "$DEVBUILD" -eq 1 ]; then
-  exec npx expo start --port "$EXPO_PORT" --dev-client
+  exec npx expo start --port "$METRO_PORT" --dev-client
 else
-  exec npx expo start --port "$EXPO_PORT" --go
+  exec npx expo start --port "$METRO_PORT" --go
 fi
