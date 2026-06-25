@@ -40,6 +40,8 @@ vi.mock('../src/routes.ts', () => ({
   registerAgentHonoRoutes: (app: any) => {
     h.agentRoutesApp = app;
     h.agentRoutesCalls += 1;
+    app.post('/run', (c: any) => c.json({ ok: true, route: 'run' }));
+    app.post('/logline', (c: any) => c.json({ ok: true, route: 'logline' }));
   },
 }));
 
@@ -118,7 +120,27 @@ describe('Node agent server entry', () => {
     expect(res.status).toBe(204);
     expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:3001');
     expect(res.headers.get('access-control-allow-credentials')).toBe('true');
-    expect(res.headers.get('access-control-allow-headers')).toContain('content-type');
+    expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('content-type');
+  });
+
+  it('Mastra Studio API preflight 保留 Mastra headers 和管理方法', async () => {
+    await import('../src/index');
+
+    const res = await h.serverConfig.app.request('/api/agents/test', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:3001',
+        'Access-Control-Request-Method': 'PATCH',
+        'Access-Control-Request-Headers': 'content-type, x-mastra-client-type, x-mastra-dev-playground',
+      },
+    });
+
+    expect(res.status).toBe(204);
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:3001');
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(res.headers.get('access-control-allow-methods')).toContain('PATCH');
+    expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('x-mastra-client-type');
+    expect(res.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('x-mastra-dev-playground');
   });
 
   it('Studio 探测 agent server 根路径时也能通过跨源检查', async () => {
@@ -133,6 +155,74 @@ describe('Node agent server entry', () => {
     expect(res.status).toBe(404);
     expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:3001');
     expect(res.headers.get('access-control-allow-credentials')).toBe('true');
+  });
+
+  it('/run 允许浏览器 preflight 和 POST 跨源访问', async () => {
+    await import('../src/index');
+
+    const preflight = await h.serverConfig.app.request('/run', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://127.0.0.1:19081',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type, authorization',
+      },
+    });
+
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:19081');
+    expect(preflight.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(preflight.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(preflight.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('content-type');
+    expect(preflight.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('authorization');
+
+    const post = await h.serverConfig.app.request('/run', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://127.0.0.1:19081',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer test',
+      },
+      body: '{}',
+    });
+
+    expect(post.status).toBe(200);
+    expect(post.headers.get('access-control-allow-origin')).toBe('http://127.0.0.1:19081');
+    expect(post.headers.get('access-control-allow-credentials')).toBe('true');
+  });
+
+  it('/logline 允许浏览器 preflight 和 POST 跨源访问', async () => {
+    await import('../src/index');
+
+    const preflight = await h.serverConfig.app.request('/logline', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:19082',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type, authorization',
+      },
+    });
+
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('http://localhost:19082');
+    expect(preflight.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(preflight.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(preflight.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('content-type');
+    expect(preflight.headers.get('access-control-allow-headers')?.toLowerCase()).toContain('authorization');
+
+    const post = await h.serverConfig.app.request('/logline', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:19082',
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer test',
+      },
+      body: '{}',
+    });
+
+    expect(post.status).toBe(200);
+    expect(post.headers.get('access-control-allow-origin')).toBe('http://localhost:19082');
+    expect(post.headers.get('access-control-allow-credentials')).toBe('true');
   });
 
   it('端口不是正整数时直接报错', async () => {

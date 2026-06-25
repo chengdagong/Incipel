@@ -22,13 +22,14 @@ EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=<Google Web client id>
 EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID=<Google iOS client id>
 ```
 
-只放公开的 anon key、agent URL 与 Google client id,**绝不放模型密钥或 Google client secret**(模型只在 agent 端调用,Google client secret 只属于 Supabase provider 配置)。`pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` 会自动把 `EXPO_PUBLIC_AGENT_URL` 写好,从 `supabase/config.toml` 的 `auth.external.google.client_id` 第一项写入 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`,并在主工作区 `apps/mobile/.env` 已填写时复制 `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`。这些客户端脚本只确保共用 Supabase 栈在运行并写好 env,不检查或启动 agent server。iOS 模拟器与 `localhost` 直通;Android 模拟器经 `dev-android.sh` 的 `adb reverse` 也走 `localhost`;真机则把 `127.0.0.1` 换成本机局域网 IP。
+只放公开的 anon key、agent URL 与 Google client id,**绝不放模型密钥或 Google client secret**(模型只在 agent 端调用,Google client secret 只属于 Supabase provider 配置)。`pnpm dev:web` / `pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` 会自动把 `EXPO_PUBLIC_AGENT_URL` 写好,从 `supabase/config.toml` 的 `auth.external.google.client_id` 第一项写入 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`,并在主工作区 `apps/mobile/.env` 已填写时复制 `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`。这些客户端脚本只确保共用 Supabase 栈在运行并写好 env,不检查或启动 agent server。每次启动 Metro 时都会选择本次空闲端口,端口不写入 `.env` 或 `.worktree-dev.env`。iOS 模拟器与 `localhost` 直通;Android 模拟器经 `dev-android.sh` 的 `adb reverse` 也走 `localhost`;真机则把 `127.0.0.1` 换成本机局域网 IP。
 
 ## 启动
 
-推荐用 worktree 感知脚本启动客户端,并明确选择运行环境。客户端脚本只启动共用 Supabase 栈、写好 env、打开目标设备并启动 Metro;需要 AI 生成时,另开终端启动 agent。
+推荐用 worktree 感知脚本启动客户端,并明确选择运行环境。`pnpm dev:web` 是 Claude 做移动 UI 开发的默认入口。客户端脚本只启动共用 Supabase 栈、写好 env、打开目标设备并启动 Metro;需要 AI 生成时,另开终端启动 agent。
 
 ```bash
+pnpm dev:web
 pnpm dev:ios -- --go
 pnpm dev:ios -- --devbuild
 pnpm dev:android -- --go
@@ -54,7 +55,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer pnpm --filter @incipel/
 
 ## 本地开发登录路径
 
-日常开发默认走 Supabase anonymous auth:登录页显示后点击「先随便逛逛」,客户端调用 `signInAnonymously()` 取得 session,agent 用该 JWT 校验身份并把会话数据保存到本地 Supabase 数据库。`pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` / `pnpm dev:agent` / `pnpm dx up` 会经 `tools/incipel-dev` 写好 `apps/mobile/.env` 的本地 URL、anon key 与 agent URL。
+日常开发默认走 Supabase anonymous auth:登录页显示后点击「先随便逛逛」,客户端调用 `signInAnonymously()` 取得 session,agent 用该 JWT 校验身份并把会话数据保存到本地 Supabase 数据库。`pnpm dev:web` / `pnpm dev:ios -- --go` / `pnpm dev:ios -- --devbuild` / `pnpm dev:android -- --go` / `pnpm dev:android -- --devbuild` / `pnpm dev:agent` / `pnpm dx up` 会经 `tools/incipel-dev` 写好 `apps/mobile/.env` 的本地 URL、anon key 与 agent URL。
 
 只试 UI 且不需要保存时,才手动启用跳过身份校验的调试模式。**注意:`pnpm dev:*` / `dx up` / `env:sync` 会从 `supabase/.env` 删掉 `STORE` / `DEV_NO_AUTH` 以强制 anonymous auth(见 ADR-0009),所以别把它们写进 `supabase/.env`**;改用一个**自备** env-file、手动启动 agent server(绕开 dev 脚本):
 
@@ -69,7 +70,7 @@ AGENT_PORT=4111
 
 客户端侧再在 `apps/mobile/.env` 设 `EXPO_PUBLIC_DEV_NO_AUTH=1`:登录页是入口(见 [ADR-0005](../../docs/adr/0005-auth-entry-in-v1.md)),不设它则没有 Supabase 会话,无法进入创作页。**这些 DEV 开关仅用于本地调试,prod 绝不开。**
 
-## 这套依赖在 RN/Expo 下踩过的坑(都已修进本包,改动时勿回退)
+## 这套依赖在 RN/Expo 下已处理的问题
 
 | 现象 | 修法 |
 |---|---|

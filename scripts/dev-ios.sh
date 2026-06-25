@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 在所有 worktree 共用的 iOS development simulator 上,用固定 Metro 端口启动开发。
+# 在所有 worktree 共用的 iOS development simulator 上,用本次选择的 Metro 端口启动开发。
 #
 #   bash scripts/dev-ios.sh --go          # Expo Go
 #   bash scripts/dev-ios.sh --devbuild    # development build
@@ -128,7 +128,6 @@ build_and_install_ios_devbuild() {
 }
 
 echo "▸ worktree     : $REPO_ROOT"
-echo "▸ Metro 端口   : $EXPO_PORT"
 echo "▸ Supabase     : 共用本地 Supabase 栈(本脚本不会启动或检查 agent)"
 echo "▸ iOS 模拟器   : $IOS_SIMULATOR_NAME"
 
@@ -166,15 +165,17 @@ fi
 
 # 起共用 Supabase 栈 + 同步 apps/mobile/.env / supabase/.env;不启动或检查 agent。
 node "$REPO_ROOT/tools/incipel-dev/cli.mjs" env sync
+METRO_PORT="$(node "$REPO_ROOT/tools/incipel-dev/cli.mjs" metro port)"
+echo "▸ Metro 端口   : $METRO_PORT"
 
 cd "$REPO_ROOT/apps/mobile"
 
 # 后台等待 Metro 就绪,再把这台模拟器定向到本 worktree 的端口
 (
-  url="exp://127.0.0.1:$EXPO_PORT"
-  [ "$DEVBUILD" -eq 1 ] && url="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$EXPO_PORT"
+  url="exp://127.0.0.1:$METRO_PORT"
+  [ "$DEVBUILD" -eq 1 ] && url="$APP_SCHEME://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A$METRO_PORT"
   for _ in $(seq 1 90); do
-    if curl -sf "http://127.0.0.1:$EXPO_PORT/status" >/dev/null 2>&1; then
+    if curl -sf "http://127.0.0.1:$METRO_PORT/status" >/dev/null 2>&1; then
       if [ "$DEVBUILD" -eq 0 ] && ! xcrun simctl get_app_container "$UDID" "$EXPO_GO_BUNDLE_ID" >/dev/null 2>&1; then
         echo ""
         echo "ℹ 该模拟器尚未安装 Expo Go。首次请在下方 Metro 菜单按 shift+i 选 \"$IOS_SIMULATOR_NAME\" 安装,"
@@ -193,7 +194,7 @@ cd "$REPO_ROOT/apps/mobile"
 ) &
 
 if [ "$DEVBUILD" -eq 1 ]; then
-  exec npx expo start --port "$EXPO_PORT" --dev-client
+  exec npx expo start --port "$METRO_PORT" --dev-client
 else
-  exec npx expo start --port "$EXPO_PORT" --go
+  exec npx expo start --port "$METRO_PORT" --go
 fi

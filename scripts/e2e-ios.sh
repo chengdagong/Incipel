@@ -47,7 +47,7 @@ TIERS="${TIERS:-frontend-only,stub-agent}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/worktree-dev-env.sh
-. "$SCRIPT_DIR/lib/worktree-dev-env.sh"  # → REPO_ROOT / EXPO_PORT / DEV_AGENT_PORT / E2E_AGENT_PORT / IOS_SIMULATOR_NAME；
+. "$SCRIPT_DIR/lib/worktree-dev-env.sh"  # → REPO_ROOT / DEV_AGENT_PORT / E2E_AGENT_PORT / IOS_SIMULATOR_NAME；
                                          #   导出 set_env_var()
 
 MOBILE_DIR="$REPO_ROOT/apps/mobile"

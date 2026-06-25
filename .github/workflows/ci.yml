@@ -22,6 +22,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
+      - run: bash scripts/dev-ios-target.test.sh
+      - run: node --test tools/incipel-dev/cli.test.mjs
       - run: pnpm -r test
 
   db-pgtap:

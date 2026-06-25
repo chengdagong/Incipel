@@ -15,10 +15,11 @@ if (!Number.isInteger(port) || port <= 0) {
 }
 
 const app = new Hono();
-registerAgentHonoRoutes(app);
 app.use(
   '*',
   cors({
+    allowHeaders: ['Content-Type', 'Authorization', 'x-mastra-client-type', 'x-mastra-dev-playground'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
     origin: (origin) => {
       if (!origin) return origin;
@@ -34,6 +35,7 @@ app.use(
     },
   }),
 );
+registerAgentHonoRoutes(app);
 const mastra = getMastraApp();
 const server = new MastraServer({ app, mastra });
 await server.init();

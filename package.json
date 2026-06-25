@@ -7,9 +7,10 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
-    "test": "bash scripts/dev-ios-target.test.sh && pnpm -r test",
+    "test": "bash scripts/dev-ios-target.test.sh && node --test tools/incipel-dev/cli.test.mjs && pnpm -r test",
     "test:db": "supabase db reset && supabase test db",
     "mobile:start": "pnpm --filter @incipel/mobile start",
+    "dev:web": "node tools/incipel-dev/cli.mjs web",
     "dev:ios": "bash scripts/dev-ios.sh",
     "dev:android": "bash scripts/dev-android.sh",
     "dx": "node tools/incipel-dev/cli.mjs",

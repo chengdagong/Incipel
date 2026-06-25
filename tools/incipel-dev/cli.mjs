@@ -12,9 +12,11 @@
 //   node tools/incipel-dev/cli.mjs <command> [--dry-run]
 //
 //   dev              起共用栈(若未起)+ 同步 env + 启动 agent server(前台,带热重载日志)
+//   web              起共用栈(若未起)+ 同步 env + 选择本次 Metro 端口 + 启动 Expo Web(前台)
 //   up               起共用栈(若未起)+ 同步 env + 后台启动 agent server(不阻塞;手动后台 agent 时用)
 //   env [sync]       起共用栈(若未起)+ 同步 env:写 apps/mobile/.env 的 EXPO_PUBLIC_*、
 //                    确保 supabase/.env 有本地 JWT 校验配置(dev:ios/android 会调它)
+//   metro port       为本次 Metro session 选择一个当前空闲端口,只打印端口数字
 //   agent stop       停止当前 worktree 的后台 agent watcher / server(不停止数据库 / auth / storage)
 //   agent stop --all 停止本机所有 worktree 的 Incipel agent watcher / server(含元数据已丢失的孤儿)
 //   e2e up           生成隔离 workdir + supabase start --workdir,打印该栈的 URL
@@ -84,6 +86,8 @@ function repoRoot() {
 const AGENT_FUNCTION = 'agent';
 const DEV_AGENT_PORT = 4111;
 const E2E_AGENT_PORT_BASE = 6111;
+const METRO_PORT_BASE = 8081;
+const METRO_PORT_RANGE = 1000;
 
 function worktreeDevEnvFile(root) {
   return join(root, '.worktree-dev.env');
@@ -97,6 +101,9 @@ function positiveInteger(value) {
 // 本 worktree 的稳定短 hash(派生 project_id 与 E2E 端口偏移用)。
 function worktreeHash(root) {
   return createHash('sha1').update(root).digest('hex').slice(0, 8);
+}
+function hashNumber(text) {
+  return parseInt(sha1Text(text).slice(0, 8), 16);
 }
 // 日常 dev agent 端口默认是 DEV_AGENT_PORT(见 ADR-0011);INCIPEL_DEV_AGENT_PORT 是显式覆盖项,
 // 主要给测试用。DEV_AGENT_PORT 可由 .worktree-dev.env 保存 dev:agent 已确认的 fallback 端口。
@@ -129,6 +136,34 @@ async function portAvailable(port) {
       server.close(() => resolve(true));
     });
   });
+}
+function envPositiveInteger(key, fallback) {
+  const raw = process.env[key];
+  if (raw == null || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) fail(`${key} 必须是正整数,当前值: ${raw}`);
+  return value;
+}
+function envNonNegativeInteger(key, fallback) {
+  const raw = process.env[key];
+  if (raw == null || raw === '') return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0) fail(`${key} 必须是非负整数,当前值: ${raw}`);
+  return value;
+}
+async function selectMetroPort(root) {
+  const realRoot = normalizePath(root);
+  const base = envPositiveInteger('INCIPEL_METRO_PORT_BASE', METRO_PORT_BASE);
+  const range = envPositiveInteger('INCIPEL_METRO_PORT_RANGE', METRO_PORT_RANGE);
+  const hash = envNonNegativeInteger('INCIPEL_METRO_PORT_HASH', hashNumber(realRoot));
+  const end = base + range - 1;
+  if (end > 65535) fail(`Metro 端口范围超过 65535:${base}-${end}`);
+
+  for (let offset = 0; offset < range; offset += 1) {
+    const port = base + ((hash + offset) % range);
+    if (await portAvailable(port)) return port;
+  }
+  fail(`未找到可用的 Metro 端口(已检查 ${base}..${end})`);
 }
 async function nextAvailablePort(start) {
   for (let port = start; port < start + 100; port += 1) {
@@ -553,6 +588,26 @@ function envSync(root) {
   log(`  EXPO_PUBLIC_SUPABASE_URL = ${apiUrl}`);
   log(`  EXPO_PUBLIC_AGENT_URL = ${agentUrl}`);
   return { agentEnvChanged };
+}
+
+function missingMobileDeps(root) {
+  const mobileDir = join(root, 'apps', 'mobile');
+  const pkgFile = join(mobileDir, 'package.json');
+  if (!existsSync(pkgFile)) return [];
+  const pkg = JSON.parse(readFileSync(pkgFile, 'utf8'));
+  const deps = {
+    ...(pkg.dependencies || {}),
+    ...(pkg.devDependencies || {}),
+  };
+  return Object.keys(deps).filter((name) => !existsSync(join(mobileDir, 'node_modules', name)));
+}
+
+function ensureMobileDeps(root) {
+  const missing = missingMobileDeps(root);
+  if (missing.length === 0) return;
+  log(`▸ apps/mobile 缺依赖(${missing.slice(0, 5).join(', ')}),先 pnpm install(pnpm store 命中通常几秒)…`);
+  const installed = run('pnpm', ['install'], { cwd: root });
+  if (installed.code !== 0 && !DRY) fail('pnpm install 失败');
 }
 
 function sleep(ms) {
@@ -1095,6 +1150,71 @@ async function watchAgent(root) {
   }
 }
 
+async function waitForMetroStatus(metroPort) {
+  for (let i = 0; i < 90; i += 1) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 1000);
+    try {
+      const res = await fetch(`http://127.0.0.1:${metroPort}/status`, { signal: ac.signal });
+      if (res.ok) return;
+    } catch {
+      // Metro is still starting.
+    } finally {
+      clearTimeout(timer);
+    }
+    await sleep(1000);
+  }
+  fail(`Metro 未在 http://127.0.0.1:${metroPort}/status 响应`);
+}
+
+async function runWeb(root) {
+  const metroPort = await selectMetroPort(root);
+  const mobileDir = join(root, 'apps', 'mobile');
+  const args = ['expo', 'start', '--web', '--localhost', '--port', String(metroPort)];
+  log(`▸ Metro 端口   : ${metroPort}`);
+  log(`▸ Expo Web     : http://127.0.0.1:${metroPort}`);
+
+  if (DRY) {
+    log(`  [dry-run] BROWSER=none EXPO_NO_TELEMETRY=1 npx ${args.join(' ')}`);
+    return;
+  }
+
+  const child = spawn('npx', args, {
+    cwd: mobileDir,
+    env: { ...process.env, BROWSER: 'none', EXPO_NO_TELEMETRY: '1' },
+    stdio: 'inherit',
+  });
+
+  const exitPromise = new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code, signal) => resolve({ code, signal }));
+  });
+
+  const earlyExit = await Promise.race([
+    waitForMetroStatus(metroPort).then(() => null),
+    exitPromise,
+  ]);
+  if (earlyExit) {
+    const detail = earlyExit.signal ? `signal ${earlyExit.signal}` : `exit ${earlyExit.code ?? '?'}`;
+    fail(`Expo Web 在 Metro /status 可访问前退出(${detail})`);
+  }
+
+  log(`✓ Metro ready: http://127.0.0.1:${metroPort}`);
+  const result = await exitPromise;
+  if (result.signal) process.exit(0);
+  if (result.code && result.code !== 0) process.exit(result.code);
+}
+
+async function web(root) {
+  log('▸ 确保共用 Supabase 栈在运行');
+  ensureStack(root);
+  log('▸ 同步 env');
+  envSync(root);
+  ensureMobileDeps(root);
+  log('▸ 启动 Expo Web(前台)');
+  await runWeb(root);
+}
+
 // ── dev:起共用栈(若未起)+ env sync + 前台 agent server(带热重载日志)──────────
 async function dev(root) {
   log('▸ 检查 agent 端口');
@@ -1264,6 +1384,9 @@ switch (cmd) {
   case 'dev':
     await dev(root);
     break;
+  case 'web':
+    await web(root);
+    break;
   case 'up':
     await up(root);
     break;
@@ -1279,6 +1402,10 @@ switch (cmd) {
     else if (sub === 'down') e2eDown(root);
     else fail('用法: e2e up | e2e down');
     break;
+  case 'metro':
+    if (sub === 'port') log(String(await selectMetroPort(root)));
+    else fail('用法: metro port');
+    break;
   case 'agent':
     if (sub === 'stop') await (ALL ? stopAllAgents(root) : stopAgent(root));
     else if (sub === 'watch') await watchAgent(root);
@@ -1289,5 +1416,5 @@ switch (cmd) {
     help();
     break;
   default:
-    fail(`未知命令: ${cmd}(可用: dev | up | env sync | agent stop | e2e up|down | help)`);
+    fail(`未知命令: ${cmd}(可用: dev | web | up | env sync | metro port | agent stop | e2e up|down | help)`);
 }
