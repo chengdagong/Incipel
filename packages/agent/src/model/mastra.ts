@@ -4,6 +4,8 @@ import {
   type ModelRuntimeConfig,
   type ModelUseConfig,
 } from './config.ts';
+import { createTool } from '@mastra/core/tools';
+import { z } from 'zod';
 import type {
   CompleteLoglineInput,
   ModelProvider,
@@ -12,9 +14,11 @@ import type {
 } from './provider.ts';
 import { env } from '../env.ts';
 import { getMastraApp, type IncipelAgentName } from '../mastra-app.ts';
+import { buildMckeeStoryCriticPrompt } from '../prompt.ts';
 import { createNoopScreenplayMastraTools } from '../screenplay-mastra-tools.ts';
 
 const MAX_TURN_STEPS = 8;
+const MCKEE_CRITIQUE_TOOL_NAME = 'request_mckee_story_critique';
 
 type MastraAgentLike = {
   stream(
@@ -48,7 +52,15 @@ export function createMastraProvider(
       const screenplayToolNames = new Set(Object.keys(input.tools));
       const stream = await agent.stream(input.prompt, {
         maxSteps: MAX_TURN_STEPS,
-        toolsets: { screenplay: createNoopScreenplayMastraTools(input.tools) },
+        toolsets: {
+          screenplay: createNoopScreenplayMastraTools(input.tools),
+          review: createMckeeCriticReviewTools({
+            registry,
+            sourcePrompt: input.prompt,
+            useConfig: config.turn,
+            provider: config.provider,
+          }),
+        },
         toolChoice: 'auto',
         modelSettings: modelSettings(config.turn),
         providerOptions: providerOptionsForUse(config.provider, config.turn),
@@ -71,6 +83,48 @@ export function createMastraProvider(
       });
       return (await stream.text).trim();
     },
+  };
+}
+
+function createMckeeCriticReviewTools(input: {
+  registry: MastraAgentRegistry;
+  sourcePrompt: string;
+  useConfig: ModelUseConfig;
+  provider: ModelRuntimeConfig['provider'];
+}) {
+  return {
+    [MCKEE_CRITIQUE_TOOL_NAME]: createTool({
+      id: MCKEE_CRITIQUE_TOOL_NAME,
+      description: 'Ask the McKee story critic Agent to review an outline or beat draft.',
+      inputSchema: z.object({
+        userGoal: z.string(),
+        draft: z.string(),
+        target: z.enum(['outline', 'beats', 'structure', 'scene', 'other']),
+      }),
+      execute: async (args?: unknown) => {
+        const parsed = z
+          .object({
+            userGoal: z.string(),
+            draft: z.string(),
+            target: z.enum(['outline', 'beats', 'structure', 'scene', 'other']),
+          })
+          .parse(args);
+        const critic = input.registry.getAgent('mckee-story-critic');
+        const { prompt } = buildMckeeStoryCriticPrompt({
+          sourcePrompt: input.sourcePrompt,
+          userGoal: parsed.userGoal,
+          draft: parsed.draft,
+          target: parsed.target,
+        });
+        const stream = await critic.stream(prompt, {
+          maxSteps: 1,
+          toolChoice: 'none',
+          modelSettings: modelSettings(input.useConfig),
+          providerOptions: providerOptionsForUse(input.provider, input.useConfig),
+        });
+        return { review: (await stream.text).trim() };
+      },
+    }),
   };
 }
 

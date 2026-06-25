@@ -6,6 +6,7 @@ import {
   serializeScreenplay,
   buildPrompt,
   buildLoglinePrompt,
+  buildMckeeStoryCriticInstructions,
   buildScreenwriterInstructions,
   sanitizeGenre,
   type PromptMessage,
@@ -125,11 +126,38 @@ describe('buildScreenwriterInstructions', () => {
     expect(instructions).toContain('propose_options(options):本次回复可点选项');
   });
 
+  it('静态 instructions 要求故事大纲和节拍建议先请求麦基式评论,再修订后返回', () => {
+    const instructions = buildScreenwriterInstructions();
+    expect(instructions).toContain('request_mckee_story_critique');
+    expect(instructions).toContain('故事大纲、幕设计、场景节拍或结构修改建议');
+    expect(instructions).toContain('必须先把建议草稿交给 request_mckee_story_critique');
+    expect(instructions).toContain('根据评论修订后,再把最终建议返回给用户');
+  });
+
   it('静态 instructions 要求长正文分自然段,并排除分场对白', () => {
     const instructions = buildScreenwriterInstructions();
     expect(instructions).toContain('分自然段');
     expect(instructions).toContain('段与段之间空一行');
     expect(instructions).toContain('分场对白不在此列');
+  });
+
+  it('静态 instructions 要求用户明确要求直接写时不要改成提问或阶段确认', () => {
+    const instructions = buildScreenwriterInstructions();
+    expect(instructions).toContain('用户明确要求直接写、不要提问或一次写完');
+    expect(instructions).toContain('视为用户已经授权你做必要的创作选择');
+    expect(instructions).toContain('不要改成提问、阶段确认或工作流说明');
+  });
+});
+
+describe('buildMckeeStoryCriticInstructions', () => {
+  it('评论 Agent 基于麦基式分析文件,只输出可用于修订的评论', () => {
+    const instructions = buildMckeeStoryCriticInstructions();
+    expect(instructions).toContain('麦基式故事评论 Agent');
+    expect(instructions).toContain('《故事的解剖》');
+    expect(instructions).toContain('主导意念');
+    expect(instructions).toContain('触发事件');
+    expect(instructions).toContain('场景节拍');
+    expect(instructions).toContain('不要直接改写剧本');
   });
 });
 
