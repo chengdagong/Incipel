@@ -54,3 +54,18 @@ export function normalizeParaLevel(v: unknown): ParaLevel {
 export function scaleGap(base: number, paraScale: number): number {
   return Math.round(base * paraScale);
 }
+
+export const TITLE_BODY_GAPS = {
+  readingPreview: 7,
+  inlineOutline: 7,
+  inlineScene: 7,
+  docWorldFacet: 8,
+  docOutline: 6,
+  docScript: 14,
+} as const;
+
+export type TitleBodyGap = keyof typeof TITLE_BODY_GAPS;
+
+export function scaleTitleBodyGap(gap: TitleBodyGap, paraScale: number): number {
+  return scaleGap(TITLE_BODY_GAPS[gap], paraScale);
+}

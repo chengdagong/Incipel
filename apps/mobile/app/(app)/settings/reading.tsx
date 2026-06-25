@@ -6,7 +6,7 @@ import { READING_I18N, useI18n } from '../../../src/i18n';
 import { defaultTheme, palette } from '../../../src/theme';
 import { useReadingPrefs } from '../../../src/readingPrefs';
 import { ReaderText } from '../../../src/components/ReaderText';
-import { scaleGap, type FontLevel, type LineLevel, type ParaLevel } from '../../../src/readingScale';
+import { scaleGap, scaleTitleBodyGap, type FontLevel, type LineLevel, type ParaLevel } from '../../../src/readingScale';
 import { SettingsGroup, SettingsScreen } from '../../../src/components/SettingsScaffold';
 
 export default function ReadingSettingsScreen() {
@@ -72,7 +72,9 @@ export default function ReadingSettingsScreen() {
 
       <View style={styles.previewCard}>
         <Text style={[styles.previewEyebrow, { color: accent }]}>{reading.previewLabel}</Text>
-        <ReaderText style={[styles.previewAct, { color: palette.textPrimary }]}>{reading.sampleAct}</ReaderText>
+        <ReaderText style={[styles.previewAct, { color: palette.textPrimary }, { marginBottom: scaleTitleBodyGap('readingPreview', paraScale) }]}>
+          {reading.sampleAct}
+        </ReaderText>
         <ReaderText style={[styles.previewBeat, { color: palette.textBody }]}>{reading.sampleBeat}</ReaderText>
         <ReaderText style={[styles.previewBeat, { color: palette.textBody }, { marginTop: scaleGap(9, paraScale) }]}>
           {reading.sampleBeat2}
@@ -143,6 +145,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   previewEyebrow: { fontSize: 11, letterSpacing: 1, fontWeight: '600', marginBottom: 9 },
-  previewAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22, marginBottom: 7 },
+  previewAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22 },
   previewBeat: { fontSize: 13, lineHeight: 23 },
 });

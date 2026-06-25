@@ -11,7 +11,7 @@ import { badgeBox, charView, splitBeat } from '../charView';
 import type { DocTarget } from './DocPanel';
 import { PortraitThumb } from './PortraitThumb';
 import { useReadingPrefs } from '../readingPrefs';
-import { scaleGap } from '../readingScale';
+import { scaleGap, scaleTitleBodyGap } from '../readingScale';
 import { DOCUMENT_TEXT_STYLES } from '../docTypography';
 
 // 本轮卡片只承载「新增/改动的实体切片」,各区可空。
@@ -69,7 +69,9 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
         <SectionCard label="secOutline" footer={openLabel(vol.beats)} onOpen={() => onOpenDoc?.({ view: 'beats' })} theme={theme}>
           {data.outline.map((a, i) => (
             <View key={a.id} style={i > 0 ? { marginTop: scaleGap(16, paraScale) } : undefined}>
-              <ReaderText style={[styles.outlineAct, { color: palette.textPrimary }]}>{a.act}</ReaderText>
+              <ReaderText style={[styles.outlineAct, { color: palette.textPrimary }, { marginBottom: scaleTitleBodyGap('inlineOutline', paraScale) }]}>
+                {a.act}
+              </ReaderText>
               {splitBeat(a.beat).map((para, j) => (
                 <ReaderText key={j} style={[styles.outlineBeat, { color: palette.textBody }, j > 0 && { marginTop: scaleGap(9, paraScale) }]}>
                   {para}
@@ -84,7 +86,9 @@ export function InlineCard({ data, theme = defaultTheme, onOpenDoc, onFocusAttr 
         <SectionCard label="secScenes" footer={openLabel(vol.script)} onOpen={() => onOpenDoc?.({ view: 'script' })} theme={theme}>
           {data.scenes.map((s) => (
             <View key={s.id} style={{ marginBottom: scaleGap(14, paraScale) }}>
-              <ReaderText style={[styles.sceneSlug, { color: palette.textSecondary }]}>{s.slug}</ReaderText>
+              <ReaderText style={[styles.sceneSlug, { color: palette.textSecondary }, { marginBottom: scaleTitleBodyGap('inlineScene', paraScale) }]}>
+                {s.slug}
+              </ReaderText>
               <ReaderText style={[styles.sceneContent, { color: palette.textBody }]}>{s.content}</ReaderText>
             </View>
           ))}
@@ -207,9 +211,9 @@ const styles = StyleSheet.create({
   secLine: { flex: 1, height: 1, marginLeft: 7 },
   bodyPara: { ...DOCUMENT_TEXT_STYLES.worldBody },
   // 大纲:幕名独占一行(衬线小标题),节拍逐段排开;段间留白让多点草案读得开。
-  outlineAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22, marginBottom: 7 },
+  outlineAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 14.5, fontWeight: '600', lineHeight: 22 },
   outlineBeat: { ...DOCUMENT_TEXT_STYLES.beatBody },
-  sceneSlug: { fontFamily: defaultTheme.fonts.mono, fontSize: 11, letterSpacing: 1, marginBottom: 7 },
+  sceneSlug: { fontFamily: defaultTheme.fonts.mono, fontSize: 11, letterSpacing: 1 },
   sceneContent: { fontFamily: defaultTheme.fonts.mono, fontSize: 12.5, lineHeight: 22 },
 
   // 人物卡

@@ -209,9 +209,9 @@ export function ReaderText({ style, ...rest }: TextProps) {
 
 ### 目标 / 范围
 
-- 调整剧本阅读正文里**段落 / 块之间**的竖向间距:节拍之间、世界观段落之间、对白 / 动作块之间、场与场、幕与幕。
+- 调整剧本阅读正文里**段落 / 块之间**的竖向间距:标题与下方第一段正文之间、节拍之间、世界观段落之间、对白 / 动作块之间、场与场、幕与幕。
 - 默认标准档倍率 1.0,升级零变化。
-- **不含**:卡片与卡片之间(分面卡、节拍卡、内联卡片之间)、结构性内边距(头部 / 页脚 / 标签到正文 / 徽标 / 标签 chip)。
+- **不含**:卡片与卡片之间(分面卡、节拍卡、内联卡片之间)、结构性内边距(头部 / 页脚 / 非剧本内容标签到正文 / 徽标 / 标签 chip)。
 
 ### 机制
 
@@ -222,20 +222,30 @@ export function ReaderText({ style, ...rest }: TextProps) {
 - `PARA_SCALES: Record<ParaLevel, number> = { compact: 0.6, standard: 1, loose: 1.6 }`
 - `normalizeParaLevel(v: unknown): ParaLevel`(未知 / 损坏回落 `standard`)
 - `scaleGap(base: number, paraScale: number): number = Math.round(base * paraScale)`(间距为整数像素)
+- `TITLE_BODY_GAPS` + `scaleTitleBodyGap(key, paraScale)`:标题与下方第一段正文之间也按段落间距档缩放,标准档保持原有基准值。
 
 `readingPrefs.tsx` 增 `paraLevel / setParaLevel / paraScale`(`paraScale = PARA_SCALES[paraLevel]`),AsyncStorage 键 `scn_read_para_v1`,默认 `standard`。
 
-### 参与缩放的间距点(共 8 处)
+### 参与缩放的主要间距点
+
+设置页预览:
+- 幕名到第一条节拍的间距(7)
+- 两条节拍之间的间距(9)
 
 `InlineCard.tsx`:
 - 世界观段落 `bodyPara` 的 `marginBottom`(8)
 - 幕间 `outlineActGap` 的 `marginTop`(16)
+- 幕名 `outlineAct` 到第一条节拍的 `marginBottom`(7)
 - 节拍间 `outlineBeatGap` 的 `marginTop`(9)
 - 场间 `scene` 的 `marginBottom`(14)
+- 场标题 `sceneSlug` 到正文的 `marginBottom`(7)
 
 `DocPanel.tsx`:
+- 世界设定标题 `facetLabelRow` 到正文的 `marginBottom`(8)
+- 幕名 `beatAct` 到第一段节拍的 `marginBottom`(6)
 - 节拍间 `beatTextGap` 的 `marginTop`(9)
 - 场间 script 包裹 `View` 的 `gap`(30;`marginTop: 18` 是顶部偏移,结构性,不动)
+- 场标题 `scriptSlug` 到第一段正文的 `marginBottom`(14)
 - 动作块 `action` 的 `marginBottom`(12)
 - 对白块 `cueBlock` 的 `marginBottom`(12)
 
@@ -255,6 +265,7 @@ export function ReaderText({ style, ...rest }: TextProps) {
 - `PARA_SCALES` 取值(`{ compact: 0.6, standard: 1, loose: 1.6 }`)。
 - `normalizeParaLevel` 回落标准档。
 - `scaleGap` 取整:`scaleGap(9, 0.6) = 5`、`scaleGap(16, 1.6) = 26`、`scaleGap(30, 0.6) = 18`、`scaleGap(10, 1) = 10`。
+- `scaleTitleBodyGap` 取整:标准档保持原有基准值,紧凑 / 宽松档随 `paraScale` 改变。
 
 ### 涉及文件
 
@@ -262,7 +273,7 @@ export function ReaderText({ style, ...rest }: TextProps) {
 
 ### 验收
 
-1. 设置页出现第三档「段落间距」,当前档高亮;预览随选择实时变化(两条节拍间距可见)。
-2. 改段落间距后,内联卡片与文档里节拍 / 段落 / 对白 / 场 / 幕之间的间距随之变化;卡片之间、结构性内边距不变。
+1. 设置页出现第三档「段落间距」,当前档高亮;预览随选择实时变化(幕名到第一条节拍、两条节拍之间的间距都可见)。
+2. 改段落间距后,内联卡片与文档里标题到第一段正文、节拍 / 段落 / 对白 / 场 / 幕之间的间距随之变化;卡片之间、结构性内边距不变。
 3. 重启保留;标准档与改动前像素一致。
 4. `readingScale.test.ts` 全部通过,`tsc --noEmit` 无报错。
