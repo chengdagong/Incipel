@@ -7,10 +7,14 @@ import {
   type ModelRuntimeConfig,
   type ModelUseConfig,
 } from './model/config.ts';
-import { buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } from './prompt.ts';
+import {
+  buildMckeeStoryCriticInstructions,
+  buildScreenwriterInstructions,
+  LOGLINE_INSTRUCTIONS,
+} from './prompt.ts';
 import { createStudioScreenplayTools } from './studio-screenplay-tools.ts';
 
-export type IncipelAgentName = 'screenwriter' | 'studio-screenwriter' | 'logline';
+export type IncipelAgentName = 'screenwriter' | 'studio-screenwriter' | 'mckee-story-critic' | 'logline';
 
 export const SCREENWRITING_MASTER_SKILL_PATH = fileURLToPath(
   new URL('../skills/screenwriting-master', import.meta.url),
@@ -36,6 +40,12 @@ export function createMastraAgents(config: ModelRuntimeConfig) {
         skills: [SCREENWRITING_MASTER_SKILL_PATH],
         tools: createStudioScreenplayTools(),
       },
+    ),
+    'mckee-story-critic': createAgent(
+      'incipel-mckee-story-critic',
+      'Incipel McKee Story Critic',
+      config.turn,
+      buildMckeeStoryCriticInstructions(),
     ),
     logline: createAgent('incipel-logline', 'Incipel Logline', config.logline, LOGLINE_INSTRUCTIONS),
   };

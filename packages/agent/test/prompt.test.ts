@@ -6,6 +6,7 @@ import {
   serializeScreenplay,
   buildPrompt,
   buildLoglinePrompt,
+  buildMckeeStoryCriticInstructions,
   buildScreenwriterInstructions,
   sanitizeGenre,
   type PromptMessage,
@@ -99,6 +100,26 @@ describe('buildScreenwriterInstructions', () => {
     expect(instructions).toContain('不要把可点选项写进回复文本');
     expect(instructions).toContain('客户端会把这些选项显示在本轮内联卡片之后');
     expect(instructions).toContain('propose_options(options):本次回复可点选项');
+  });
+
+  it('静态 instructions 要求故事大纲和节拍建议先请求麦基式评论,再修订后返回', () => {
+    const instructions = buildScreenwriterInstructions();
+    expect(instructions).toContain('request_mckee_story_critique');
+    expect(instructions).toContain('故事大纲、幕设计、场景节拍或结构修改建议');
+    expect(instructions).toContain('必须先把建议草稿交给 request_mckee_story_critique');
+    expect(instructions).toContain('根据评论修订后,再把最终建议返回给用户');
+  });
+});
+
+describe('buildMckeeStoryCriticInstructions', () => {
+  it('评论 Agent 基于麦基式分析文件,只输出可用于修订的评论', () => {
+    const instructions = buildMckeeStoryCriticInstructions();
+    expect(instructions).toContain('麦基式故事评论 Agent');
+    expect(instructions).toContain('《故事的解剖》');
+    expect(instructions).toContain('主导意念');
+    expect(instructions).toContain('触发事件');
+    expect(instructions).toContain('场景节拍');
+    expect(instructions).toContain('不要直接改写剧本');
   });
 });
 

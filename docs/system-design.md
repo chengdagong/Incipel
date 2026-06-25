@@ -270,12 +270,13 @@ messages
 每轮发完整对话历史(见 ADR-0010),同时把剧本状态作为结构化快照放进动态 prompt,不把剧本内容混在自由文本里重复展开。每轮发送:
 
 1. Mastra Agent instructions(编剧助手的人格 + 输出/工具约束)——注册在 Agent 上,稳定不变;
-2. Mastra agent-level skill:`screenwriter` 可按需加载 `screenwriting-master` 的 `SKILL.md` 和 `references/`;`logline` 不加载这个 skill;
+2. Mastra agent-level skill:`screenwriter` 可按需加载 `screenwriting-master` 的 `SKILL.md` 和 `references/`;`mckee-story-critic` 与 `logline` 不加载这个 skill;
 3. 动态 prompt 前缀:助手显示名 + 当前剧本状态(序列化为可读文本,含各实体 id)——剧本状态作为 cached prefix,变动小;
 4. 完整对话历史 + 本轮新消息。
 
 长会话的 token 量由 compact 机制控制(见 issue #49),不再用固定的最近 N 轮截断。
 
+- **麦基式内部评论**:`screenwriter` 在提出故事大纲、幕设计、场景节拍或结构修改建议前,通过内部 tool `request_mckee_story_critique` 请求 `mckee-story-critic` 评论草稿;评论结果只回到 `screenwriter` 用于修订,不写剧本、不发给客户端。
 - **logline 骰子**:走独立的 `/logline` 端点,用更小更便宜的模型,并对单用户限流(rate limit)。
 - **监控**:每轮记录 token 用量、延迟、tool-call 成功率、所用 provider、错误;按会话累计成本。
 

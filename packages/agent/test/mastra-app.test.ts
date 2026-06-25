@@ -59,16 +59,19 @@ function config(): ModelRuntimeConfig {
 }
 
 describe('createMastraAgents', () => {
-  it('把静态 instructions 注册到 screenwriter、studio-screenwriter 与 logline agent', async () => {
+  it('把静态 instructions 注册到 screenwriter、studio-screenwriter、mckee-story-critic 与 logline agent', async () => {
     const { createMastraAgents } = await import('../src/mastra-app');
-    const { buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } = await import('../src/prompt');
+    const { buildMckeeStoryCriticInstructions, buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } = await import(
+      '../src/prompt'
+    );
 
     const agents = createMastraAgents(config());
 
     expect(agents).toHaveProperty('screenwriter');
     expect(agents).toHaveProperty('studio-screenwriter');
+    expect(agents).toHaveProperty('mckee-story-critic');
     expect(agents).toHaveProperty('logline');
-    expect(h.agentConfigs).toHaveLength(3);
+    expect(h.agentConfigs).toHaveLength(4);
 
     const screenwriter = h.agentConfigs.find((agent) => agent.id === 'incipel-screenwriter')!;
     expect(screenwriter).toMatchObject({
@@ -99,6 +102,16 @@ describe('createMastraAgents', () => {
       }),
     );
 
+    const critic = h.agentConfigs.find((agent) => agent.id === 'incipel-mckee-story-critic')!;
+    expect(critic).toMatchObject({
+      id: 'incipel-mckee-story-critic',
+      name: 'Incipel McKee Story Critic',
+      model: 'openrouter/openai/gpt-test',
+      instructions: buildMckeeStoryCriticInstructions(),
+    });
+    expect(critic.instructions).toContain('麦基式故事评论 Agent');
+    expect(critic.tools).toBeUndefined();
+
     const logline = h.agentConfigs.find((agent) => agent.id === 'incipel-logline')!;
     expect(logline).toMatchObject({
       id: 'incipel-logline',
@@ -127,5 +140,8 @@ describe('createMastraAgents', () => {
 
     const logline = h.agentConfigs.find((agent) => agent.id === 'incipel-logline')!;
     expect(logline.skills).toBeUndefined();
+
+    const critic = h.agentConfigs.find((agent) => agent.id === 'incipel-mckee-story-critic')!;
+    expect(critic.skills).toBeUndefined();
   });
 });

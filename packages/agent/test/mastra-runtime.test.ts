@@ -159,12 +159,26 @@ describe('createMastraProvider.streamTurn', () => {
     });
     expect(h.lastStreamOptions).not.toHaveProperty('system');
     expect(Object.keys(h.lastStreamOptions.toolsets.screenplay)).toEqual(['add_character']);
+    expect(Object.keys(h.lastStreamOptions.toolsets.review)).toEqual(['request_mckee_story_critique']);
     expect(h.lastStreamOptions.clientTools).toBeUndefined();
     expect(h.createdTools[0]).toMatchObject({
       id: 'add_character',
       description: 'Incipel screenplay tool: add_character',
     });
     await expect(h.createdTools[0].execute()).resolves.toEqual({ ok: true });
+    const reviewTool = h.createdTools.find((tool) => tool.id === 'request_mckee_story_critique')!;
+    expect(reviewTool).toMatchObject({
+      id: 'request_mckee_story_critique',
+      description: 'Ask the McKee story critic Agent to review an outline or beat draft.',
+    });
+    await expect(
+      reviewTool.execute({
+        userGoal: '完善第二幕',
+        draft: '第二幕里主角找到线索,然后去见反派。',
+        target: 'beats',
+      }),
+    ).resolves.toEqual({ review: '一句测试 logline' });
+    expect(h.getAgentCalls).toEqual(['screenwriter', 'mckee-story-critic']);
   });
 
   it('error chunk 会抛出,交给 runTurnCore 的重试与 RUN_ERROR 处理', async () => {

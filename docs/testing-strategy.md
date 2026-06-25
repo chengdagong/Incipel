@@ -94,10 +94,10 @@
 
 ### 3.6 `prompt.ts` / `id.ts` / 模型适配器(单元,薄)
 
-- `serializeScreenplay`:各区块计数与 `[id]` 标注;`buildScreenwriterInstructions` 输出静态 Agent instructions;`buildPrompt` 只输出动态 prompt,包含助手显示名、完整对话历史、本轮用户消息,空段被过滤。
+- `serializeScreenplay`:各区块计数与 `[id]` 标注;`buildScreenwriterInstructions` 输出静态 Agent instructions,含麦基式评论工具调用要求;`buildMckeeStoryCriticInstructions` 输出评论 Agent instructions;`buildPrompt` 只输出动态 prompt,包含助手显示名、完整对话历史、本轮用户消息,空段被过滤。
 - `id.ts`:前缀正确即可,一例足够。
-- `makeAiSdkProvider`:喂一个伪 `fullStream`(`text-delta`/`tool-call`/`error` 各类 part),断言翻译成的 `StreamChunk` 正确、`error` part 被抛出;Mastra skill 内部工具调用不应被转成 Incipel 剧本工具调用。适配器工厂只测「缺 key 抛错」。
-- `mastra-app.ts`:断言 `screenwriter` 的 Mastra `skills` 配置包含 `screenwriting-master`,并用真实 Mastra skill API 覆盖 `listSkills()` / `getSkill()`;`logline` 不应加载该 skill。
+- `makeAiSdkProvider`:喂一个伪 `fullStream`(`text-delta`/`tool-call`/`error` 各类 part),断言翻译成的 `StreamChunk` 正确、`error` part 被抛出;Mastra skill 内部工具调用与 `request_mckee_story_critique` 不应被转成 Incipel 剧本工具调用。适配器工厂只测「缺 key 抛错」。
+- `mastra-app.ts`:断言 `screenwriter` 的 Mastra `skills` 配置包含 `screenwriting-master`,并用真实 Mastra skill API 覆盖 `listSkills()` / `getSkill()`;`mckee-story-critic` 与 `logline` 不应加载该 skill。
 
 ### 3.7 数据库 — RLS / 授权 / RPC(pgTAP,按不变量而非行覆盖)
 
