@@ -5,6 +5,10 @@ import type { ModelRuntimeConfig } from '../src/model/config';
 
 const h = vi.hoisted(() => ({
   agentConfigs: [] as any[],
+  mastraConfigs: [] as any[],
+  editorConfigs: [] as any[],
+  skillSourceConfigs: [] as any[],
+  workspaceConfigs: [] as any[],
 }));
 
 vi.mock('@mastra/core/agent', () => ({
@@ -24,6 +28,18 @@ vi.mock('@mastra/core/mastra', () => ({
 
     constructor(config: any) {
       this.config = config;
+      h.mastraConfigs.push(config);
+    }
+  },
+}));
+
+vi.mock('@mastra/editor', () => ({
+  MastraEditor: class {
+    config: any;
+
+    constructor(config?: any) {
+      this.config = config;
+      h.editorConfigs.push(config ?? {});
     }
   },
 }));
@@ -38,8 +54,31 @@ vi.mock('@mastra/core/storage', () => ({
   },
 }));
 
+vi.mock('@mastra/core/workspace', () => ({
+  LocalSkillSource: class {
+    config: any;
+
+    constructor(config: any) {
+      this.config = config;
+      h.skillSourceConfigs.push(config);
+    }
+  },
+  Workspace: class {
+    config: any;
+
+    constructor(config: any) {
+      this.config = config;
+      h.workspaceConfigs.push(config);
+    }
+  },
+}));
+
 beforeEach(() => {
   h.agentConfigs = [];
+  h.mastraConfigs = [];
+  h.editorConfigs = [];
+  h.skillSourceConfigs = [];
+  h.workspaceConfigs = [];
 });
 
 function config(): ModelRuntimeConfig {
@@ -143,5 +182,36 @@ describe('createMastraAgents', () => {
 
     const critic = h.agentConfigs.find((agent) => agent.id === 'incipel-mckee-story-critic')!;
     expect(critic.skills).toBeUndefined();
+  });
+});
+
+describe('createMastraApp', () => {
+  it('注册 MastraEditor,允许 Studio 编辑 agent instructions', async () => {
+    const { createMastraApp } = await import('../src/mastra-app');
+
+    createMastraApp(config());
+
+    expect(h.mastraConfigs).toHaveLength(1);
+    expect(h.editorConfigs).toEqual([{}]);
+    expect(h.mastraConfigs[0]!.editor).toBeDefined();
+  });
+
+  it('注册 workspace,让 Studio 读取本地 skills', async () => {
+    const { AGENT_PACKAGE_ROOT, createMastraApp } = await import('../src/mastra-app');
+
+    createMastraApp(config());
+
+    expect(h.skillSourceConfigs).toEqual([{ basePath: AGENT_PACKAGE_ROOT }]);
+    expect(h.workspaceConfigs).toEqual([
+      expect.objectContaining({
+        id: 'incipel-agent-workspace',
+        name: 'Incipel Agent Workspace',
+        skills: ['skills'],
+        checkSkillFileMtime: true,
+      }),
+    ]);
+    expect(h.workspaceConfigs[0]!.skillSource).toBeDefined();
+    expect(h.mastraConfigs[0]!.workspace).toBeDefined();
+    expect(AGENT_PACKAGE_ROOT).toMatch(/packages\/agent\/?$/);
   });
 });

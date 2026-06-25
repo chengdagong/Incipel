@@ -1,6 +1,8 @@
 import { Agent, type ToolsInput } from '@mastra/core/agent';
 import { Mastra } from '@mastra/core/mastra';
 import { InMemoryStore } from '@mastra/core/storage';
+import { LocalSkillSource, Workspace } from '@mastra/core/workspace';
+import { MastraEditor } from '@mastra/editor';
 import { fileURLToPath } from 'node:url';
 import {
   getModelConfig,
@@ -16,6 +18,8 @@ import { createStudioScreenplayTools } from './studio-screenplay-tools.ts';
 
 export type IncipelAgentName = 'screenwriter' | 'studio-screenwriter' | 'mckee-story-critic' | 'logline';
 
+export const AGENT_PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
+export const AGENT_SKILLS_PATH = 'skills';
 export const SCREENWRITING_MASTER_SKILL_PATH = fileURLToPath(
   new URL('../skills/screenwriting-master', import.meta.url),
 );
@@ -57,7 +61,9 @@ export type IncipelMastraApp = Mastra<IncipelMastraAgents>;
 export function createMastraApp(config: ModelRuntimeConfig = getModelConfig()): IncipelMastraApp {
   return new Mastra({
     agents: createMastraAgents(config),
+    editor: new MastraEditor(),
     storage: new InMemoryStore({ id: 'incipel-mastra-runtime' }),
+    workspace: createAgentWorkspace(),
   });
 }
 
@@ -88,4 +94,14 @@ function createAgent(
 
 function mastraModelId(model: string): string {
   return model.startsWith('openrouter/') ? model : `openrouter/${model}`;
+}
+
+function createAgentWorkspace() {
+  return new Workspace({
+    id: 'incipel-agent-workspace',
+    name: 'Incipel Agent Workspace',
+    skills: [AGENT_SKILLS_PATH],
+    skillSource: new LocalSkillSource({ basePath: AGENT_PACKAGE_ROOT }),
+    checkSkillFileMtime: true,
+  });
 }
