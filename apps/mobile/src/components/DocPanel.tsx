@@ -25,7 +25,7 @@ import { badgeBox, charView, splitBeat } from '../charView';
 import { PortraitThumb } from './PortraitThumb';
 import { ReaderText } from './ReaderText';
 import { useReadingPrefs } from '../readingPrefs';
-import { scaleGap } from '../readingScale';
+import { scaleGap, scaleTitleBodyGap } from '../readingScale';
 import { DOCUMENT_TEXT_STYLES } from '../docTypography';
 
 const MONO = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'ui-monospace' });
@@ -179,7 +179,7 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
                 {world.map((w) => (
                   <View key={w.id} style={[styles.facet, { backgroundColor: palette.cardBg, borderColor: palette.borderCard }]}>
                     {!!w.title && (
-                      <View style={styles.facetLabelRow}>
+                      <View style={[styles.facetLabelRow, { marginBottom: scaleTitleBodyGap('docWorldFacet', paraScale) }]}>
                         <View style={[styles.facetDot, { backgroundColor: accent }]} />
                         <ReaderText style={[styles.facetLabel, { color: palette.textPrimary }]}>{w.title}</ReaderText>
                       </View>
@@ -247,7 +247,9 @@ export function DocSheet({ open, onClose, screenplay, theme = defaultTheme, targ
               <View style={{ gap: 12 }}>
                 {outline.map((a) => (
                   <View key={a.id} style={[styles.beatCard, { backgroundColor: palette.cardBg, borderColor: palette.borderCard }]}>
-                    <ReaderText style={[styles.beatAct, { color: palette.textPrimary }]}>{a.act}</ReaderText>
+                    <ReaderText style={[styles.beatAct, { color: palette.textPrimary }, { marginBottom: scaleTitleBodyGap('docOutline', paraScale) }]}>
+                      {a.act}
+                    </ReaderText>
                     {splitBeat(a.beat).map((para, j) => (
                       <ReaderText key={j} style={[styles.beatText, { color: palette.textBody }, j > 0 && { marginTop: scaleGap(9, paraScale) }]}>
                         {para}
@@ -449,7 +451,9 @@ function ScriptView({ scenes, accent }: { scenes: Screenplay['scenes']; accent: 
         return (
           <View key={s.id}>
             <Text style={[styles.sceneMark, { color: accent }]}>{`— ${i + 1} —`}</Text>
-            <ReaderText style={[styles.scriptSlug, { color: palette.textSecondary }]}>{s.slug}</ReaderText>
+            <ReaderText style={[styles.scriptSlug, { color: palette.textSecondary }, { marginBottom: scaleTitleBodyGap('docScript', paraScale) }]}>
+              {s.slug}
+            </ReaderText>
             {blocks.map((b, j) =>
               b.isCue ? (
                 <View key={j} style={{ marginBottom: scaleGap(12, paraScale) }}>
@@ -529,7 +533,7 @@ const styles = StyleSheet.create({
 
   // 世界设定
   facet: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 13 },
-  facetLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  facetLabelRow: { flexDirection: 'row', alignItems: 'center' },
   facetDot: { width: 5, height: 5, borderRadius: 2.5, marginRight: 8 },
   facetLabel: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 13.5, fontWeight: '600' },
   facetBody: { ...DOCUMENT_TEXT_STYLES.worldBody },
@@ -570,12 +574,12 @@ const styles = StyleSheet.create({
 
   // 故事节拍
   beatCard: { borderWidth: 1, borderRadius: 13, paddingHorizontal: 15, paddingVertical: 14 },
-  beatAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 15, fontWeight: '600', marginBottom: 6 },
+  beatAct: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 15, fontWeight: '600' },
   beatText: { ...DOCUMENT_TEXT_STYLES.beatBody },
 
   // 剧本正文
   sceneMark: { fontFamily: defaultTheme.fonts.serifTitle, fontSize: 12, fontWeight: '600', letterSpacing: 3, textAlign: 'center', marginBottom: 12 },
-  scriptSlug: { fontFamily: MONO, fontSize: 11.5, letterSpacing: 1, fontWeight: '600', marginBottom: 14 },
+  scriptSlug: { fontFamily: MONO, fontSize: 11.5, letterSpacing: 1, fontWeight: '600' },
   action: { fontSize: 13, lineHeight: 24 },
   cueName: { fontSize: 12, letterSpacing: 2, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
   cueParen: { fontSize: 11, textAlign: 'center', marginBottom: 4 },
