@@ -17,6 +17,7 @@
     "@hono/node-server": "1.19.14",
     "@incipel/shared": "workspace:*",
     "@mastra/core": "1.46.0",
+    "@mastra/editor": "0.13.1",
     "@mastra/hono": "1.5.1",
     "@supabase/supabase-js": "^2.45.0",
     "ai": "6.0.209",
