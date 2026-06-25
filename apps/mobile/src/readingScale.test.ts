@@ -6,8 +6,10 @@ import {
   normalizeFontLevel,
   normalizeLineLevel,
   normalizeParaLevel,
+  scaleTitleBodyGap,
   scaleGap,
   scaleReaderStyle,
+  TITLE_BODY_GAPS,
 } from './readingScale';
 
 describe('readingScale', () => {
@@ -67,5 +69,11 @@ describe('readingScale', () => {
     expect(scaleGap(9, 0.6)).toBe(5); // 5.4 → 5
     expect(scaleGap(16, 1.6)).toBe(26); // 25.6 → 26
     expect(scaleGap(30, 0.6)).toBe(18); // 18.0 → 18
+  });
+
+  it('标题和第一段正文之间的间距也按段落间距档缩放', () => {
+    expect(scaleTitleBodyGap('readingPreview', 1)).toBe(TITLE_BODY_GAPS.readingPreview);
+    expect(scaleTitleBodyGap('readingPreview', 1.6)).toBe(11);
+    expect(scaleTitleBodyGap('docOutline', 0.6)).toBe(4);
   });
 });

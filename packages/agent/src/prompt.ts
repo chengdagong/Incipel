@@ -99,6 +99,10 @@ export function buildScreenwriterInstructions(): string {
 - propose_options(options):本次回复可点选项,最多 3 个。只把用户可以点击的选项放在这里,不要在回复文本里再写一遍。
 - request_mckee_story_critique(userGoal,draft,target):内部评论工具。用于把故事大纲、幕设计、场景节拍或结构修改建议的草稿交给麦基式故事评论 Agent。评论工具只返回意见,不写剧本。
 
+# 长正文要分段
+- 节拍正文、世界观小节正文、人物「背景」小传这类成段的长文,内容较长时要分自然段:按意群拆成若干段,段与段之间空一行;不要把整段写成不分行的一大块。
+- 分场对白不在此列——它本来就逐行写「角色（提示）：台词」。
+
 # id 规则(重要)
 - 新建用 add_*(不带 id),修改用 update_*(必须带 id),删除用 remove_*(必须带 id)。
 - id 一律由系统生成,你**无权自造 id**。update_* / remove_* 只能引用当前剧本里**真实存在**的 id;系统已在工具可选项里把可用 id 锁定。
@@ -108,6 +112,16 @@ export function buildScreenwriterInstructions(): string {
 - 消息里可能有形如「（聚焦：…）」的前缀,那是客户端注入的聚焦上下文(指明用户想聊哪个人物/属性),**不是用户自己的话,也不代表用户的语言**;判断回复语言时看用户自己写的正文,别被这个标记带偏。
 - 用户只发了聚焦标记、没写正文时,按剧本内容的语言回复(默认中文)。
 - 专业而亲切,像一位懂行又愿意把手弄脏的编剧搭档。简洁,不啰嗦。`;
+}
+
+// 把可能多行的值缩进:首行保持原位(接在标签 / 冒号后),续行统一加 indent、空行保持空。
+// 节拍 / 世界观正文 / 人物背景小传 / 分场对白都可能含换行;不缩进的话续行会顶到第 0 列,
+// 和下一条 `- [id]` 同列、看起来像顶层内容。单行值原样返回,不影响既有快照格式。
+function indentContinuation(value: string, indent: string): string {
+  return value
+    .split('\n')
+    .map((line, i) => (i === 0 || line === '' ? line : indent + line))
+    .join('\n');
 }
 
 // 把当前剧本序列化成模型可读的文本(含各实体 id),作为 cached prefix。
@@ -122,7 +136,7 @@ export function serializeScreenplay(state: Screenplay): string {
   lines.push(`## 世界观(${state.world.length} 节)`);
   for (const w of state.world) {
     lines.push(`- [${w.id}] ${w.title}`);
-    if (w.text) lines.push(`  ${w.text}`);
+    if (w.text) lines.push(`  ${indentContinuation(w.text, '  ')}`);
   }
 
   lines.push('');
@@ -130,21 +144,21 @@ export function serializeScreenplay(state: Screenplay): string {
   for (const c of state.characters) {
     lines.push(`- [${c.id}] ${c.name}${c.role ? ` — ${c.role}` : ''}`);
     for (const at of c.attrs) {
-      lines.push(`    - [${at.id}] ${at.label}: ${at.value}`);
+      lines.push(`    - [${at.id}] ${at.label}: ${indentContinuation(at.value, '      ')}`);
     }
   }
 
   lines.push('');
   lines.push(`## 大纲(${state.outline.length} 幕)`);
   for (const act of state.outline) {
-    lines.push(`- [${act.id}] ${act.act}: ${act.beat}`);
+    lines.push(`- [${act.id}] ${act.act}: ${indentContinuation(act.beat, '  ')}`);
   }
 
   lines.push('');
   lines.push(`## 分场(${state.scenes.length})`);
   for (const s of state.scenes) {
     lines.push(`- [${s.id}] ${s.slug}`);
-    if (s.content) lines.push(`  ${s.content}`);
+    if (s.content) lines.push(`  ${indentContinuation(s.content, '  ')}`);
   }
 
   return lines.join('\n');

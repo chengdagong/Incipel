@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # 被 scripts/dev-ios.sh / scripts/dev-android.sh 通过 `source` 引入。
 #
-# 职责:确定「本 worktree」的开发隔离参数(Metro 端口 / E2E iOS simulator 名 / Android serial),
+# 职责:确定「本 worktree」的开发隔离参数(E2E iOS simulator 名 / Android serial / agent 端口),
 # 持久化到本 worktree 根目录的 .worktree-dev.env(已被 .gitignore 忽略,每个 worktree 各持一份)。
-#   - EXPO_PORT          : Metro 端口,固定 8081(我们总是只跑一个 dev 环境,不再 per-worktree 错开)
 #   - DEV_AGENT_PORT     : 日常 dev agent server 端口,默认 4111;dev:agent 用户同意 fallback 后会保存为所选端口
 #   - E2E_AGENT_PORT     : E2E runner 的 agent server 端口,按 worktree 真实路径派生
 #   - AGENT_PORT         : 兼容旧脚本的 dev agent server 端口,等于 DEV_AGENT_PORT
@@ -81,12 +80,7 @@ NODE
   ( cd "$REPO_ROOT" && pnpm install )
 fi
 
-# 2) Metro 端口:固定 8081。我们总是只跑一个 dev 环境,不再为每个 worktree 错开端口
-#    (以前从 8081 起逐个避让分配,现已去掉)。这样直接 `expo start`(默认 8081)与本脚本一致。
-#    放在载入 .worktree-dev.env 之后,覆盖旧文件里可能残留的分配值。要临时改端口,改这一行即可。
-EXPO_PORT=8081
-
-# 3) E2E iOS simulator 名:缺省则由分支名派生(把 / 与非字母数字折成 -)
+# 2) E2E iOS simulator 名:缺省则由分支名派生(把 / 与非字母数字折成 -)
 if [ -z "${IOS_SIMULATOR_NAME:-}" ]; then
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-' | tr -cd '[:alnum:]_-')"
   [ -z "$branch" ] && branch="$(basename "$REPO_ROOT")"
@@ -95,7 +89,7 @@ fi
 
 ANDROID_SERIAL="${ANDROID_SERIAL:-}"
 
-# 4) 写回:持久化本 worktree 选定的设备项(端口是派生值,不入文件)。
+# 3) 写回:持久化本 worktree 选定的设备项。Metro 端口由每次 dev 命令现场选择,不写入本文件。
 cat > "$ENV_FILE" <<EOF
 # 本 worktree 的开发隔离配置(由 scripts/lib/worktree-dev-env.sh 自动生成,可手改)。
 # 该文件已被 .gitignore 忽略,每个 worktree 各持一份。说明见 docs/worktree-dev.md。
@@ -106,4 +100,4 @@ IOS_SIMULATOR_NAME="$IOS_SIMULATOR_NAME"
 ANDROID_SERIAL="$ANDROID_SERIAL"
 EOF
 
-export REPO_ROOT ENV_FILE EXPO_PORT DEV_AGENT_PORT E2E_AGENT_PORT AGENT_PORT IOS_SIMULATOR_NAME ANDROID_SERIAL
+export REPO_ROOT ENV_FILE DEV_AGENT_PORT E2E_AGENT_PORT AGENT_PORT IOS_SIMULATOR_NAME ANDROID_SERIAL
