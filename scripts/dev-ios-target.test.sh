@@ -86,6 +86,10 @@ if ! grep -Fq 'real-ai' "$E2E_IOS"; then
   fail "e2e-ios.sh 应支持 real-ai 层。"
 fi
 
+if ! grep -Fq 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' "$ROOT/.github/workflows/ci.yml"; then
+  fail "CI 的 pnpm -r test step 应注入 OPENROUTER_API_KEY secret。"
+fi
+
 if ! grep -Fq 'MODEL_PROVIDER=openrouter' "$E2E_IOS"; then
   fail "e2e-ios.sh 的 real-ai 层应使用 MODEL_PROVIDER=openrouter。"
 fi

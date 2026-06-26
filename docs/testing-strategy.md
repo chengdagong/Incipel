@@ -151,9 +151,9 @@
 | 阶段 | 内容 | 触发 |
 |---|---|---|
 | 1 | `pnpm -r typecheck`(已有) | 每个 PR |
-| 2 | `pnpm -r test`(Vitest:shared + agent) | 每个 PR,秒级,无外部依赖 |
+| 2 | `pnpm -r test`(Vitest:shared + agent,含 `@incipel/agent` real AI integration) | 每个 PR,必须配置 `OPENROUTER_API_KEY`;缺 key 时测试失败 |
 | 3 | pgTAP:`supabase db reset` + `supabase test db` | 每个 PR(独立 job,较慢但 gate) |
-| 4 | smoke / verify-summary / `test:real-ai`(真实模型) | 定时(nightly)或手动,不进 PR——花钱、不确定、需 key |
+| 4 | smoke / verify-summary(真实模型补充检查) | 定时(nightly)或手动;`test:real-ai` 已由阶段 2 执行 |
 
 建议在根 `package.json` 加 `"test": "pnpm -r test"`,各包加 `vitest` 与 `"test": "vitest run"`。
 
