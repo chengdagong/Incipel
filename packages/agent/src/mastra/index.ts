@@ -3,9 +3,16 @@ import { LocalSkillSource, Workspace } from '@mastra/core/workspace';
 import { MastraEditor } from '@mastra/editor';
 import { LibSQLStore } from '@mastra/libsql';
 import {
+  MastraStorageExporter,
+  Observability,
+  SamplingStrategyType,
+  SensitiveDataFilter,
+} from '@mastra/observability';
+import {
   getModelConfig,
   type ModelRuntimeConfig,
 } from '../model/config.ts';
+import { incipelMastraScorers } from './scorers.ts';
 import {
   AGENT_PACKAGE_ROOT,
   AGENT_SKILLS_PATH,
@@ -29,6 +36,8 @@ export function createMastraApp(config: ModelRuntimeConfig = getModelConfig()): 
   return new Mastra({
     agents: createMastraAgents(config),
     editor: new MastraEditor(),
+    observability: createMastraStudioObservability(),
+    scorers: incipelMastraScorers,
     storage: createMastraStudioStorage(),
     workspace: createAgentWorkspace(),
   });
@@ -55,5 +64,18 @@ function createMastraStudioStorage() {
   return new LibSQLStore({
     id: 'incipel-mastra-studio',
     url: `file:${MASTRA_STUDIO_DB_PATH}`,
+  });
+}
+
+function createMastraStudioObservability() {
+  return new Observability({
+    configs: {
+      local: {
+        serviceName: 'incipel-agent-studio',
+        sampling: { type: SamplingStrategyType.ALWAYS },
+        exporters: [new MastraStorageExporter()],
+        spanOutputProcessors: [new SensitiveDataFilter()],
+      },
+    },
   });
 }

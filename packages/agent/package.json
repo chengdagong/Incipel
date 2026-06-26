@@ -21,6 +21,7 @@
     "@mastra/hono": "1.5.1",
     "@mastra/libsql": "1.14.1",
     "@mastra/memory": "1.21.1",
+    "@mastra/observability": "1.15.1",
     "@supabase/supabase-js": "^2.45.0",
     "ai": "6.0.209",
     "dotenv": "^17.4.2",
