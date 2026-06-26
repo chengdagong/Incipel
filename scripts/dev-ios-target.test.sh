@@ -7,6 +7,7 @@ DEV_ANDROID="$ROOT/scripts/dev-android.sh"
 E2E_IOS="$ROOT/scripts/e2e-ios.sh"
 WORKTREE_ENV="$ROOT/scripts/lib/worktree-dev-env.sh"
 PACKAGE_JSON="$ROOT/package.json"
+CI_YML="$ROOT/.github/workflows/ci.yml"
 INC_DEV="$ROOT/tools/incipel-dev/cli.mjs"
 
 fail() {
@@ -85,6 +86,13 @@ fi
 if ! grep -Fq 'real-ai' "$E2E_IOS"; then
   fail "e2e-ios.sh 应支持 real-ai 层。"
 fi
+
+require_contains "$CI_YML" "real-ai-integration:" "CI 应单独定义 real-ai-integration job。"
+require_contains "$CI_YML" "if: github.event_name == 'push'" "real-ai-integration job 应只在 push 触发时运行。"
+require_contains "$CI_YML" "pnpm --filter @incipel/agent test:real-ai" "real-ai-integration job 应运行 agent 的真实模型测试。"
+require_contains "$CI_YML" 'OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}' "real-ai-integration job 应注入 OPENROUTER_API_KEY secret。"
+require_contains "$CI_YML" "pnpm --filter @incipel/agent exec vitest run --exclude test/real-ai-runtime.integration.test.ts" "普通 PR 测试不应运行需要 secret 的真实模型测试。"
+require_not_contains "$CI_YML" "pnpm -r test" "普通 CI job 不应通过 pnpm -r test 把真实模型测试放进 pull_request。"
 
 if ! grep -Fq 'MODEL_PROVIDER=openrouter' "$E2E_IOS"; then
   fail "e2e-ios.sh 的 real-ai 层应使用 MODEL_PROVIDER=openrouter。"

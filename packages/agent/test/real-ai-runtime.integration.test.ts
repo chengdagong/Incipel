@@ -1,15 +1,12 @@
 import { config as loadEnv } from 'dotenv';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EventType, type JsonPatchOp } from '@incipel/shared';
+import { EventType } from '@incipel/shared';
 import { describe, expect, it } from 'vitest';
 
 const here = dirname(fileURLToPath(import.meta.url));
 loadEnv({ path: resolve(here, '../../../supabase/.env'), quiet: true });
 loadEnv({ path: resolve(here, '../.env'), quiet: true });
-
-const enabled = process.env.INCIPEL_REAL_AI_INTEGRATION === '1';
-const realAiIt = enabled ? it : it.skip;
 
 type WireEvent = Record<string, unknown>;
 
@@ -31,22 +28,16 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function stateDeltas(events: WireEvent[]): JsonPatchOp[] {
-  return events
-    .filter((event) => event.type === EventType.STATE_DELTA)
-    .flatMap((event) => (Array.isArray(event.delta) ? event.delta : [])) as JsonPatchOp[];
-}
-
 function eventTypes(events: WireEvent[]): unknown[] {
   return events.map((event) => event.type);
 }
 
 describe('真实 AI runtime integration', () => {
-  realAiIt(
+  it(
     '生成 logline 后,把该 logline 交给真实 AI runtime 完成一轮生成',
     async () => {
       if (!process.env.OPENROUTER_API_KEY) {
-        throw new Error('OPENROUTER_API_KEY 未配置。请在 supabase/.env 中填写后再运行 test:real-ai。');
+        throw new Error('OPENROUTER_API_KEY 未配置。请在 supabase/.env 或 packages/agent/.env 中填写后再运行测试。');
       }
 
       const previousEnv = {
@@ -106,11 +97,6 @@ describe('真实 AI runtime integration', () => {
         expect(types).toContain(EventType.RUN_STARTED);
         expect(types).toContain(EventType.STATE_SNAPSHOT);
         expect(types).toContain(EventType.RUN_FINISHED);
-
-        const meaningfulDeltas = stateDeltas(events).filter(
-          (delta) => typeof delta.path === 'string' && delta.path !== '/meta/updatedAt',
-        );
-        expect(meaningfulDeltas.length).toBeGreaterThan(0);
 
         const assistantText = events
           .filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT)

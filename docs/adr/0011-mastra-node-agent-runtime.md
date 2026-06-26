@@ -12,7 +12,7 @@ Mastra 提供 TypeScript agent abstraction、tool 注册、streaming chunk、模
 ## 决定
 
 - agent runtime 改为 `packages/agent/src/mastra-app.ts` 定义的 Mastra application。
-- Mastra application 注册 `screenwriter` 与 `logline` 两个 agent,不通过 Mastra `server.apiRoutes` 承载公开的 AG-UI HTTP routes。
+- Mastra application 注册生产用 `screenwriter` / `logline` agent,以及 Mastra Studio 调试用 `studio-screenwriter` / `mckee-story-critic` agent,不通过 Mastra `server.apiRoutes` 承载公开的 AG-UI HTTP routes。
 - `screenwriter` 通过 Mastra agent-level `skills` 配置加载 `packages/agent/skills/screenwriting-master`,该目录来自 [Shanyin-ai/shanyin-screenwriting-master](https://github.com/Shanyin-ai/shanyin-screenwriting-master) 的 `.skill` 包;`logline` agent 不加载该 skill,继续只生成一句 logline。
 - `packages/agent/src/index.ts` 创建 Hono app,先直接注册 `/run`、`/logline` 和 `/health`,再交给 `@mastra/hono` 的 `MastraServer` 初始化,最后由 `@hono/node-server` 启动 HTTP 服务。
 - `packages/agent/src/routes.ts` 负责 Hono route handlers、Supabase JWT 校验、AG-UI SSE 编排和 SupabaseStore。公开 routes 直接挂在外层 Hono app 上,以便请求体上限在读取 JSON 前生效。`packages/agent/src/app.ts` 仅保留给 `app.request()` 测试使用的 Hono wrapper。
@@ -20,7 +20,7 @@ Mastra 提供 TypeScript agent abstraction、tool 注册、streaming chunk、模
 - 移动端默认用 `EXPO_PUBLIC_AGENT_URL` 指向 Mastra application agent server base URL;日常 dev 默认为 `http://127.0.0.1:4111`,`pnpm dev:agent` 若经用户确认改用下一个可用端口,会把所选端口保存到 `.worktree-dev.env`,后续 env sync 会继续写入该端口;E2E release runner 构建时临时改成 worktree 相关测试端口。Expo Go / development build 可在设置页用 AsyncStorage 保存开发用 Agent 地址;release build 隐藏该设置,只使用构建时写入的 URL。
 - Supabase 继续负责数据库、Auth、Storage,不再承载 agent runtime。
 - `supabase/functions/agent` 仅作为历史入口保留,不再部署新的 agent runtime。
-- Mastra 自身配置 `InMemoryStore` 仅用于 framework 内部状态;产品数据仍由 Incipel 的 Supabase Store 读写。
+- Mastra 自身配置本地 libSQL storage,用于 Mastra Studio 的 message history 与 framework 内部状态;`studio-screenwriter` 配置 Mastra `Memory`,使 Studio 聊天记录写入 `packages/agent/.mastra-studio.db`。产品数据仍由 Incipel 的 Supabase Store 读写。
 
 ## 后果
 

@@ -151,11 +151,14 @@
 | 阶段 | 内容 | 触发 |
 |---|---|---|
 | 1 | `pnpm -r typecheck`(已有) | 每个 PR |
-| 2 | `pnpm -r test`(Vitest:shared + agent) | 每个 PR,秒级,无外部依赖 |
-| 3 | pgTAP:`supabase db reset` + `supabase test db` | 每个 PR(独立 job,较慢但 gate) |
-| 4 | smoke / verify-summary / `test:real-ai`(真实模型) | 定时(nightly)或手动,不进 PR——花钱、不确定、需 key |
+| 2 | 不需要 secret 的测试:`scripts/dev-ios-target.test.sh`、`tools/incipel-dev/cli.test.mjs`、shared/mobile Vitest、agent Vitest(排除 real AI integration) | 每个 PR |
+| 3 | `pnpm --filter @incipel/agent test:real-ai`(`@incipel/agent` real AI integration) | push 到 `main`;必须配置 `OPENROUTER_API_KEY`;缺 key 时测试失败 |
+| 4 | pgTAP:`supabase db reset` + `supabase test db` | 每个 PR(独立 job,较慢但作为合并前检查) |
+| 5 | smoke / verify-summary(真实模型补充检查) | 定时(nightly)或手动;`test:real-ai` 已由阶段 3 执行 |
 
 建议在根 `package.json` 加 `"test": "pnpm -r test"`,各包加 `vitest` 与 `"test": "vitest run"`。
+
+`pull_request` job 不注入 `OPENROUTER_API_KEY`:PR 分支可以修改测试代码并读取环境变量,因此需要 secret 的真实模型测试只放在 `push` 到 `main` 的 CI job 中。该测试本身仍是无条件测试:一旦运行,缺少 `OPENROUTER_API_KEY` 就失败,不会静默跳过。
 
 ---
 

@@ -1,8 +1,9 @@
 import { Agent, type ToolsInput } from '@mastra/core/agent';
 import { Mastra } from '@mastra/core/mastra';
-import { InMemoryStore } from '@mastra/core/storage';
 import { LocalSkillSource, Workspace } from '@mastra/core/workspace';
 import { MastraEditor } from '@mastra/editor';
+import { LibSQLStore } from '@mastra/libsql';
+import { Memory } from '@mastra/memory';
 import { fileURLToPath } from 'node:url';
 import {
   getModelConfig,
@@ -24,6 +25,7 @@ export type IncipelAgentName = 'screenwriter' | 'studio-screenwriter' | 'mckee-s
 
 export const AGENT_PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const AGENT_SKILLS_PATH = 'skills';
+export const MASTRA_STUDIO_DB_PATH = fileURLToPath(new URL('../.mastra-studio.db', import.meta.url));
 export const SCREENWRITING_MASTER_SKILL_PATH = fileURLToPath(
   new URL('../skills/screenwriting-master', import.meta.url),
 );
@@ -33,6 +35,7 @@ const STUDIO_MCKEE_CRITIC_SOURCE_PROMPT =
 
 export function createMastraAgents(config: ModelRuntimeConfig) {
   const screenwriterInstructions = buildScreenwriterInstructions();
+  const studioMemory = createStudioMemory();
   const mckeeStoryCritic = createAgent(
     'incipel-mckee-story-critic',
     'Incipel McKee Story Critic',
@@ -58,6 +61,7 @@ export function createMastraAgents(config: ModelRuntimeConfig) {
       screenwriterInstructions,
       {
         skills: [SCREENWRITING_MASTER_SKILL_PATH],
+        memory: studioMemory,
         tools: {
           ...createStudioScreenplayTools(),
           ...createMckeeCriticReviewTools({
@@ -81,7 +85,7 @@ export function createMastraApp(config: ModelRuntimeConfig = getModelConfig()): 
   return new Mastra({
     agents: createMastraAgents(config),
     editor: new MastraEditor(),
-    storage: new InMemoryStore({ id: 'incipel-mastra-runtime' }),
+    storage: createMastraStudioStorage(),
     workspace: createAgentWorkspace(),
   });
 }
@@ -98,9 +102,9 @@ function createAgent(
   name: string,
   useConfig: ModelUseConfig,
   instructions: string,
-  options: { skills?: string[]; tools?: ToolsInput } = {},
+  options: { skills?: string[]; tools?: ToolsInput; memory?: Memory } = {},
 ): Agent {
-  const { skills, tools } = options;
+  const { skills, tools, memory } = options;
   return new Agent({
     id,
     name,
@@ -108,6 +112,7 @@ function createAgent(
     model: mastraModelId(useConfig.model),
     ...(skills ? { skills } : {}),
     ...(tools ? { tools } : {}),
+    ...(memory ? { memory } : {}),
   });
 }
 
@@ -122,5 +127,21 @@ function createAgentWorkspace() {
     skills: [AGENT_SKILLS_PATH],
     skillSource: new LocalSkillSource({ basePath: AGENT_PACKAGE_ROOT }),
     checkSkillFileMtime: true,
+  });
+}
+
+function createMastraStudioStorage() {
+  return new LibSQLStore({
+    id: 'incipel-mastra-studio',
+    url: `file:${MASTRA_STUDIO_DB_PATH}`,
+  });
+}
+
+function createStudioMemory() {
+  return new Memory({
+    options: {
+      lastMessages: 50,
+      generateTitle: true,
+    },
   });
 }

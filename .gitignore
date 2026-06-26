@@ -41,3 +41,6 @@ supabase/functions/*/deno.lock
 
 # Mastra Studio 本地 Screenplay 调试状态
 packages/agent/.mastra-studio-screenplay.json
+
+# Mastra Studio 本地聊天记录
+packages/agent/.mastra-studio.db*

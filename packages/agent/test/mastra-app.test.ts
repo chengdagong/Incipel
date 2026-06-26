@@ -7,6 +7,8 @@ const h = vi.hoisted(() => ({
   agentConfigs: [] as any[],
   mastraConfigs: [] as any[],
   editorConfigs: [] as any[],
+  libsqlStoreConfigs: [] as any[],
+  memoryConfigs: [] as any[],
   skillSourceConfigs: [] as any[],
   workspaceConfigs: [] as any[],
 }));
@@ -44,6 +46,28 @@ vi.mock('@mastra/editor', () => ({
   },
 }));
 
+vi.mock('@mastra/libsql', () => ({
+  LibSQLStore: class {
+    config: any;
+
+    constructor(config: any) {
+      this.config = config;
+      h.libsqlStoreConfigs.push(config);
+    }
+  },
+}));
+
+vi.mock('@mastra/memory', () => ({
+  Memory: class {
+    config: any;
+
+    constructor(config?: any) {
+      this.config = config ?? {};
+      h.memoryConfigs.push(config ?? {});
+    }
+  },
+}));
+
 vi.mock('@mastra/core/storage', () => ({
   InMemoryStore: class {
     config: any;
@@ -77,6 +101,8 @@ beforeEach(() => {
   h.agentConfigs = [];
   h.mastraConfigs = [];
   h.editorConfigs = [];
+  h.libsqlStoreConfigs = [];
+  h.memoryConfigs = [];
   h.skillSourceConfigs = [];
   h.workspaceConfigs = [];
 });
@@ -184,6 +210,33 @@ describe('createMastraAgents', () => {
     const critic = h.agentConfigs.find((agent) => agent.id === 'incipel-mckee-story-critic')!;
     expect(critic.skills).toBeUndefined();
   });
+
+  it('只给 Studio 调试 agent 配置 message history memory', async () => {
+    const { createMastraAgents } = await import('../src/mastra-app');
+
+    createMastraAgents(config());
+
+    expect(h.memoryConfigs).toHaveLength(1);
+    const studioScreenwriter = h.agentConfigs.find(
+      (agent) => agent.id === 'incipel-studio-screenwriter',
+    )!;
+    expect(studioScreenwriter.memory).toBeDefined();
+    expect(studioScreenwriter.memory.config).toEqual({
+      options: {
+        lastMessages: 50,
+        generateTitle: true,
+      },
+    });
+
+    const screenwriter = h.agentConfigs.find((agent) => agent.id === 'incipel-screenwriter')!;
+    expect(screenwriter.memory).toBeUndefined();
+
+    const logline = h.agentConfigs.find((agent) => agent.id === 'incipel-logline')!;
+    expect(logline.memory).toBeUndefined();
+
+    const critic = h.agentConfigs.find((agent) => agent.id === 'incipel-mckee-story-critic')!;
+    expect(critic.memory).toBeUndefined();
+  });
 });
 
 describe('createMastraApp', () => {
@@ -214,5 +267,18 @@ describe('createMastraApp', () => {
     expect(h.workspaceConfigs[0]!.skillSource).toBeDefined();
     expect(h.mastraConfigs[0]!.workspace).toBeDefined();
     expect(AGENT_PACKAGE_ROOT).toMatch(/packages\/agent\/?$/);
+  });
+
+  it('使用固定路径的 libSQL storage 保存 Studio message history', async () => {
+    const { createMastraApp } = await import('../src/mastra-app');
+
+    createMastraApp(config());
+
+    expect(h.mastraConfigs).toHaveLength(1);
+    expect(h.libsqlStoreConfigs).toHaveLength(1);
+    expect(h.mastraConfigs[0]!.storage.config).toEqual({
+      id: 'incipel-mastra-studio',
+      url: expect.stringMatching(/^file:.*packages\/agent\/\.mastra-studio\.db$/),
+    });
   });
 });
