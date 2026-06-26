@@ -3,7 +3,7 @@ import { env } from '../env.ts';
 
 export type ProviderName = 'openrouter' | 'stub';
 export type ModelKind = 'turn' | 'logline';
-export type ReasoningEffort = 'low' | 'medium' | 'high';
+export type ReasoningEffort = 'low' | 'medium' | 'high' | 'max';
 
 export type ReasoningConfig =
   | { enabled: false }
@@ -110,8 +110,8 @@ function readReasoningConfig(raw: RawReasoningConfig | undefined): ReasoningConf
 
 function readOptionalReasoningEffort(name: string, raw: unknown): ReasoningEffort | undefined {
   if (raw === undefined || raw === '') return undefined;
-  if (raw === 'low' || raw === 'medium' || raw === 'high') return raw;
-  throw new Error(`${name} 必须是 low、medium 或 high`);
+  if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max') return raw;
+  throw new Error(`${name} 必须是 low、medium、high 或 max`);
 }
 
 function readOptionalNumber(name: string, raw: unknown): number | undefined {

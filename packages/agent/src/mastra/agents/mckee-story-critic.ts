@@ -6,6 +6,7 @@ export function createMckeeStoryCriticAgent(config: ModelRuntimeConfig) {
   return createAgent(
     'incipel-mckee-story-critic',
     'Incipel McKee Story Critic',
+    config.provider,
     config.turn,
     buildMckeeStoryCriticInstructions(),
   );

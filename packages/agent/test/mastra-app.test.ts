@@ -219,6 +219,10 @@ describe('createMastraAgents', () => {
       id: 'incipel-screenwriter',
       name: 'Incipel Screenwriter',
       model: 'openrouter/openai/gpt-test',
+      defaultOptions: {
+        modelSettings: { temperature: 0.2 },
+        providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
+      },
       instructions: buildScreenwriterInstructions(),
     });
     expect(screenwriter.instructions).toContain('可点选项只通过 propose_options 发出');
@@ -232,6 +236,10 @@ describe('createMastraAgents', () => {
       id: 'incipel-studio-screenwriter',
       name: 'Incipel Studio Screenwriter',
       model: 'openrouter/openai/gpt-test',
+      defaultOptions: {
+        modelSettings: { temperature: 0.2 },
+        providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
+      },
       instructions: buildScreenwriterInstructions(),
     });
     expect(studioScreenwriter.tools).toEqual(
@@ -249,6 +257,10 @@ describe('createMastraAgents', () => {
       id: 'incipel-mckee-story-critic',
       name: 'Incipel McKee Story Critic',
       model: 'openrouter/openai/gpt-test',
+      defaultOptions: {
+        modelSettings: { temperature: 0.2 },
+        providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
+      },
       instructions: buildMckeeStoryCriticInstructions(),
     });
     expect(critic.instructions).toContain('麦基式故事评论 Agent');
@@ -259,6 +271,9 @@ describe('createMastraAgents', () => {
       id: 'incipel-logline',
       name: 'Incipel Logline',
       model: 'openrouter/openai/gpt-logline',
+      defaultOptions: {
+        modelSettings: { temperature: 0.5 },
+      },
       instructions: LOGLINE_INSTRUCTIONS,
     });
     expect(logline.instructions).toContain('只输出这句 logline 本身');

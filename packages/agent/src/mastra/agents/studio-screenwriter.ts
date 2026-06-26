@@ -19,6 +19,7 @@ export function createStudioScreenwriterAgent(input: {
   return createAgent(
     'incipel-studio-screenwriter',
     'Incipel Studio Screenwriter',
+    input.config.provider,
     input.config.turn,
     input.instructions,
     {
