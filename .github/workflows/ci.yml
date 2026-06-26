@@ -1,5 +1,6 @@
 # CI(见 docs/testing-strategy.md §6)。
-# 阶段 1/2:typecheck + Vitest,每个 PR 跑;Vitest 含 real AI integration,需注入 OPENROUTER_API_KEY。
+# 阶段 1/2:typecheck + 不需要 secret 的测试,每个 PR 跑。
+# real AI integration 只在 push 到 main 后跑,需注入 OPENROUTER_API_KEY。
 # 阶段 3:pgTAP,需本地 Supabase 栈(Docker),独立 job。
 # 阶段 4:smoke / verify-summary 可另建 schedule/workflow_dispatch 的补充 job。
 name: CI
@@ -23,7 +24,22 @@ jobs:
       - run: pnpm -r typecheck
       - run: bash scripts/dev-ios-target.test.sh
       - run: node --test tools/incipel-dev/cli.test.mjs
-      - run: pnpm -r test
+      - run: pnpm --filter @incipel/shared test
+      - run: pnpm --filter @incipel/mobile test
+      - run: pnpm --filter @incipel/agent exec vitest run --exclude test/real-ai-runtime.integration.test.ts
+
+  real-ai-integration:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @incipel/agent test:real-ai
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
