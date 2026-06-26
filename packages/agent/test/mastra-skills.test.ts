@@ -19,7 +19,7 @@ function config(): ModelRuntimeConfig {
 
 describe('Mastra screenwriter skills', () => {
   it('screenwriter 可经 Mastra skill API 读取山音编剧 skill,logline 不挂载该 skill', async () => {
-    const { createMastraAgents } = await import('../src/mastra-app');
+    const { createMastraAgents } = await import('../src/mastra');
 
     const agents = createMastraAgents(config());
     const screenwriterSkills = await agents.screenwriter.listSkills();

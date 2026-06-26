@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { emptyScreenplay } from '@incipel/shared';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createStudioScreenplayStore } from '../src/studio-screenplay-store';
+import { createStudioScreenplayStore } from '../src/mastra/tools/studio-screenplay-store';
 
 let tempDir: string | null = null;
 

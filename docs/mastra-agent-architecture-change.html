@@ -520,7 +520,7 @@
             <span class="tag">Changed</span>
             <h3>agent runtime 改为 Node server</h3>
             <p>
-              <code>packages/agent/src/mastra-app.ts</code> 注册 Mastra application 和
+              <code>packages/agent/src/mastra/index.ts</code> 注册 Mastra application 和
               agents；AG-UI HTTP routes 直接注册到外层 Hono app，再由 <code>@mastra/hono</code> 初始化。
             </p>
           </article>
@@ -758,8 +758,8 @@
             <span>Node server entrypoint。读取 <code>HOST</code>、<code>AGENT_PORT</code> 或 <code>PORT</code>，创建 Hono app，交给 <code>MastraServer</code> 初始化后再启动 HTTP server。</span>
           </div>
           <div class="file-row">
-            <strong>packages/agent/src/mastra-app.ts</strong>
-            <span>Mastra application registry。注册 <code>screenwriter</code>、<code>logline</code> agents，并配置 Mastra framework storage。</span>
+            <strong>packages/agent/src/mastra/</strong>
+            <span>Mastra application registry。入口在 <code>index.ts</code>，Agent 定义在 <code>agents/</code>，tool wrappers 在 <code>tools/</code>，并配置 Mastra framework storage。</span>
           </div>
           <div class="file-row">
             <strong>packages/agent/src/routes.ts</strong>

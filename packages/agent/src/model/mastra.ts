@@ -11,9 +11,9 @@ import type {
   StreamTurnInput,
 } from './provider.ts';
 import { env } from '../env.ts';
-import { getMastraApp, type IncipelAgentName } from '../mastra-app.ts';
-import { createMckeeCriticReviewTools } from '../mckee-critic-review-tool.ts';
-import { createNoopScreenplayMastraTools } from '../screenplay-mastra-tools.ts';
+import { getMastraApp, type IncipelAgentName } from '../mastra/index.ts';
+import { createMckeeCriticReviewTools } from '../mastra/tools/mckee-critic-review.ts';
+import { createNoopScreenplayMastraTools } from '../mastra/tools/screenplay.ts';
 
 const MAX_TURN_STEPS = 8;
 

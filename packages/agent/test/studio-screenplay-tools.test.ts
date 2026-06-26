@@ -1,6 +1,6 @@
 import { emptyScreenplay, TOOL_NAMES, type Screenplay } from '@incipel/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StudioScreenplayStore } from '../src/studio-screenplay-store';
+import type { StudioScreenplayStore } from '../src/mastra/tools/studio-screenplay-store';
 
 const h = vi.hoisted(() => ({
   createdTools: [] as any[],
@@ -100,7 +100,7 @@ function liveReferenceFailingStore(): LiveReferenceFailingStore {
 
 describe('createStudioScreenplayTools', () => {
   it('registers every screenplay tool plus Studio read/reset tools', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
 
     const tools = createStudioScreenplayTools(memoryStore());
 
@@ -110,7 +110,7 @@ describe('createStudioScreenplayTools', () => {
   });
 
   it('add_character tool applies to local state', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
     const tools = createStudioScreenplayTools(memoryStore());
 
     const result = await (tools.add_character as ToolDefinition).execute(
@@ -124,7 +124,7 @@ describe('createStudioScreenplayTools', () => {
   });
 
   it('update_character with missing id returns a structured error and current state', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
     const tools = createStudioScreenplayTools(memoryStore());
 
     const result = await (tools.update_character as ToolDefinition).execute(
@@ -138,7 +138,7 @@ describe('createStudioScreenplayTools', () => {
   });
 
   it('read_studio_screenplay returns a structured error when local JSON is invalid', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
     const store = invalidJsonStore();
     const tools = createStudioScreenplayTools(store);
 
@@ -150,7 +150,7 @@ describe('createStudioScreenplayTools', () => {
   });
 
   it('product tools return a structured error when local JSON is invalid', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
     const store = invalidJsonStore();
     const tools = createStudioScreenplayTools(store);
 
@@ -163,7 +163,7 @@ describe('createStudioScreenplayTools', () => {
   });
 
   it('read/reset inspect local state', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
     const store = memoryStore();
     const tools = createStudioScreenplayTools(store);
 
@@ -177,7 +177,7 @@ describe('createStudioScreenplayTools', () => {
   });
 
   it('propose_options returns an empty patch without writing local state', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
     const store = memoryStore();
     const tools = createStudioScreenplayTools(store);
 
@@ -193,7 +193,7 @@ describe('createStudioScreenplayTools', () => {
   });
 
   it('does not mutate returned or internal state when write fails', async () => {
-    const { createStudioScreenplayTools } = await import('../src/studio-screenplay-tools');
+    const { createStudioScreenplayTools } = await import('../src/mastra/tools/studio-screenplay');
     const store = liveReferenceFailingStore();
     const tools = createStudioScreenplayTools(store);
 

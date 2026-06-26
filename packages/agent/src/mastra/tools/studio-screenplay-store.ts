@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { emptyScreenplay, normalizeScreenplay, type Screenplay } from '@incipel/shared';
 
-const agentPackageDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const agentPackageDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 export const DEFAULT_STUDIO_SCREENPLAY_PATH = resolve(
   agentPackageDir,
   '.mastra-studio-screenplay.json',

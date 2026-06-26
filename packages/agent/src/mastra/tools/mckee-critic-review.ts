@@ -1,12 +1,12 @@
 import type { ToolsInput } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { buildMckeeStoryCriticPrompt } from './prompt.ts';
+import { buildMckeeStoryCriticPrompt } from '../../prompt.ts';
 import {
   providerOptionsForUse,
   type ModelRuntimeConfig,
   type ModelUseConfig,
-} from './model/config.ts';
+} from '../../model/config.ts';
 
 export const MCKEE_CRITIQUE_TOOL_NAME = 'request_mckee_story_critique';
 

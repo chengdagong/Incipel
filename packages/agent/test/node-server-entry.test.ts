@@ -32,7 +32,7 @@ vi.mock('@mastra/hono', () => ({
   },
 }));
 
-vi.mock('../src/mastra-app.ts', () => ({
+vi.mock('../src/mastra/index.ts', () => ({
   getMastraApp: () => h.mastra,
 }));
 
