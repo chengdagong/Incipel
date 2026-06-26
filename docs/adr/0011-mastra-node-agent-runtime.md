@@ -21,7 +21,7 @@ Mastra 提供 TypeScript agent abstraction、tool 注册、streaming chunk、模
 - 移动端默认用 `EXPO_PUBLIC_AGENT_URL` 指向 Mastra application agent server base URL;日常 dev 默认为 `http://127.0.0.1:4111`,`pnpm dev:agent` 若经用户确认改用下一个可用端口,会把所选端口保存到 `.worktree-dev.env`,后续 env sync 会继续写入该端口;E2E release runner 构建时临时改成 worktree 相关测试端口。Expo Go / development build 可在设置页用 AsyncStorage 保存开发用 Agent 地址;release build 隐藏该设置,只使用构建时写入的 URL。
 - Supabase 继续负责数据库、Auth、Storage,不再承载 agent runtime。
 - `supabase/functions/agent` 仅作为历史入口保留,不再部署新的 agent runtime。
-- Mastra 自身配置本地 libSQL storage,用于 Mastra Studio 的 message history、trace、score 与 framework 内部状态;`studio-screenwriter` 配置 Mastra `Memory`,使 Studio 聊天记录写入 `packages/agent/.mastra-studio.db`。Mastra observability 使用 `MastraStorageExporter` 和 `SamplingStrategyType.ALWAYS`,使本地 Studio 可以查看 Trace 并对历史 trace 运行 scorer。产品数据仍由 Incipel 的 Supabase Store 读写。
+- Mastra 自身配置 composite storage:默认 domain 使用本地 libSQL storage,用于 Mastra Studio 的 message history 与 framework 内部状态;observability domain 使用本地 DuckDB storage(`packages/agent/.mastra-studio.db.duckdb`),用于 Trace、Logs、Metrics、score 和 feedback 查询。`studio-screenwriter` 配置 Mastra `Memory`,使 Studio 聊天记录写入 `packages/agent/.mastra-studio.db`。Mastra observability 使用 `MastraStorageExporter` 和 `SamplingStrategyType.ALWAYS`,使本地 Studio 可以查看 Trace 并对历史 trace 运行 scorer。产品数据仍由 Incipel 的 Supabase Store 读写。
 
 ## 后果
 

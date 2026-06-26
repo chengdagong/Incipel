@@ -1,5 +1,7 @@
 import { Mastra } from '@mastra/core/mastra';
+import { MastraCompositeStore } from '@mastra/core/storage';
 import { LocalSkillSource, Workspace } from '@mastra/core/workspace';
+import { DuckDBStore } from '@mastra/duckdb';
 import { MastraEditor } from '@mastra/editor';
 import { LibSQLStore } from '@mastra/libsql';
 import {
@@ -17,6 +19,7 @@ import {
   AGENT_PACKAGE_ROOT,
   AGENT_SKILLS_PATH,
   MASTRA_STUDIO_DB_PATH,
+  MASTRA_STUDIO_OBSERVABILITY_DB_PATH,
   createMastraAgents,
 } from './agents/index.ts';
 
@@ -25,6 +28,7 @@ export {
   AGENT_SKILLS_PATH,
   createMastraAgents,
   MASTRA_STUDIO_DB_PATH,
+  MASTRA_STUDIO_OBSERVABILITY_DB_PATH,
   SCREENWRITING_MASTER_SKILL_PATH,
 } from './agents/index.ts';
 export type { IncipelAgentName } from './agents/index.ts';
@@ -61,9 +65,20 @@ function createAgentWorkspace() {
 }
 
 function createMastraStudioStorage() {
-  return new LibSQLStore({
+  const studioStorage = new LibSQLStore({
     id: 'incipel-mastra-studio',
     url: `file:${MASTRA_STUDIO_DB_PATH}`,
+  });
+  const observabilityStorage = new DuckDBStore({
+    path: MASTRA_STUDIO_OBSERVABILITY_DB_PATH,
+  });
+
+  return new MastraCompositeStore({
+    id: 'incipel-mastra-studio',
+    default: studioStorage,
+    domains: {
+      observability: observabilityStorage.observability,
+    },
   });
 }
 

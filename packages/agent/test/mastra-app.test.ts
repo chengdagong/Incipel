@@ -6,6 +6,8 @@ import type { ModelRuntimeConfig } from '../src/model/config';
 const h = vi.hoisted(() => ({
   agentConfigs: [] as any[],
   mastraConfigs: [] as any[],
+  compositeStoreConfigs: [] as any[],
+  duckdbStoreConfigs: [] as any[],
   editorConfigs: [] as any[],
   libsqlStoreConfigs: [] as any[],
   memoryConfigs: [] as any[],
@@ -123,6 +125,27 @@ vi.mock('@mastra/core/storage', () => ({
       this.config = config;
     }
   },
+  MastraCompositeStore: class {
+    config: any;
+
+    constructor(config: any) {
+      this.config = config;
+      h.compositeStoreConfigs.push(config);
+    }
+  },
+}));
+
+vi.mock('@mastra/duckdb', () => ({
+  DuckDBStore: class {
+    config: any;
+    observability: any;
+
+    constructor(config?: any) {
+      this.config = config ?? {};
+      this.observability = { kind: 'duckdb-observability', config: this.config };
+      h.duckdbStoreConfigs.push(this.config);
+    }
+  },
 }));
 
 vi.mock('@mastra/core/workspace', () => ({
@@ -147,6 +170,8 @@ vi.mock('@mastra/core/workspace', () => ({
 beforeEach(() => {
   h.agentConfigs = [];
   h.mastraConfigs = [];
+  h.compositeStoreConfigs = [];
+  h.duckdbStoreConfigs = [];
   h.editorConfigs = [];
   h.libsqlStoreConfigs = [];
   h.memoryConfigs = [];
@@ -352,10 +377,33 @@ describe('createMastraApp', () => {
 
     expect(h.mastraConfigs).toHaveLength(1);
     expect(h.libsqlStoreConfigs).toHaveLength(1);
-    expect(h.mastraConfigs[0]!.storage.config).toEqual({
+    expect(h.compositeStoreConfigs).toHaveLength(1);
+    expect(h.compositeStoreConfigs[0]!.default.config).toEqual({
       id: 'incipel-mastra-studio',
       url: expect.stringMatching(/^file:.*packages\/agent\/\.mastra-studio\.db$/),
     });
+  });
+
+  it('使用 DuckDB storage 支持 Studio observability 查询', async () => {
+    const { createMastraApp } = await import('../src/mastra');
+
+    createMastraApp(config());
+
+    expect(h.duckdbStoreConfigs).toEqual([
+      {
+        path: expect.stringMatching(/packages\/agent\/\.mastra-studio\.db\.duckdb$/),
+      },
+    ]);
+    expect(h.compositeStoreConfigs).toHaveLength(1);
+    expect(h.compositeStoreConfigs[0]).toMatchObject({
+      id: 'incipel-mastra-studio',
+      domains: {
+        observability: expect.objectContaining({
+          kind: 'duckdb-observability',
+        }),
+      },
+    });
+    expect(h.mastraConfigs[0]!.storage.config).toBe(h.compositeStoreConfigs[0]);
   });
 
   it('注册本地 observability,让 Studio 可以查看 trace 并评分', async () => {
