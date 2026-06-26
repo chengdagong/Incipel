@@ -1,23 +1,27 @@
-import { Agent, type ToolsInput } from '@mastra/core/agent';
-import type { Memory } from '@mastra/memory';
+import { Agent, type AgentConfig, type ToolsInput } from '@mastra/core/agent';
 import type { ModelUseConfig } from '../../model/config.ts';
+import { incipelAgentScorers } from '../scorers.ts';
+
+type CreateAgentOptions = Pick<AgentConfig<string, ToolsInput>, 'editor' | 'memory' | 'scorers' | 'skills' | 'tools'>;
 
 export function createAgent(
   id: string,
   name: string,
   useConfig: ModelUseConfig,
   instructions: string,
-  options: { skills?: string[]; tools?: ToolsInput; memory?: Memory } = {},
+  options: CreateAgentOptions = {},
 ): Agent {
-  const { skills, tools, memory } = options;
+  const { editor, skills, tools, memory, scorers = incipelAgentScorers } = options;
   return new Agent({
     id,
     name,
     instructions,
     model: mastraModelId(useConfig.model),
+    ...(editor !== undefined ? { editor } : {}),
     ...(skills ? { skills } : {}),
     ...(tools ? { tools } : {}),
     ...(memory ? { memory } : {}),
+    ...(scorers ? { scorers } : {}),
   });
 }
 

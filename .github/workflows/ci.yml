@@ -29,7 +29,7 @@ jobs:
       - run: pnpm --filter @incipel/agent exec vitest run --exclude test/real-ai-runtime.integration.test.ts
 
   real-ai-integration:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

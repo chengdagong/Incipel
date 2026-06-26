@@ -9,7 +9,11 @@ const h = vi.hoisted(() => ({
   editorConfigs: [] as any[],
   libsqlStoreConfigs: [] as any[],
   memoryConfigs: [] as any[],
+  observabilityConfigs: [] as any[],
+  scorerConfigs: [] as any[],
   skillSourceConfigs: [] as any[],
+  storageExporterConfigs: [] as any[],
+  sensitiveDataFilterConfigs: [] as any[],
   workspaceConfigs: [] as any[],
 }));
 
@@ -35,6 +39,19 @@ vi.mock('@mastra/core/mastra', () => ({
   },
 }));
 
+vi.mock('@mastra/core/evals', () => ({
+  createScorer: (config: any) => {
+    const scorer = {
+      config,
+      generateScore(fn: any) {
+        return { ...this, generateScoreFn: fn };
+      },
+    };
+    h.scorerConfigs.push(config);
+    return scorer;
+  },
+}));
+
 vi.mock('@mastra/editor', () => ({
   MastraEditor: class {
     config: any;
@@ -43,6 +60,36 @@ vi.mock('@mastra/editor', () => ({
       this.config = config;
       h.editorConfigs.push(config ?? {});
     }
+  },
+}));
+
+vi.mock('@mastra/observability', () => ({
+  MastraStorageExporter: class {
+    config: any;
+
+    constructor(config?: any) {
+      this.config = config ?? {};
+      h.storageExporterConfigs.push(config ?? {});
+    }
+  },
+  Observability: class {
+    config: any;
+
+    constructor(config: any) {
+      this.config = config;
+      h.observabilityConfigs.push(config);
+    }
+  },
+  SensitiveDataFilter: class {
+    config: any;
+
+    constructor(config?: any) {
+      this.config = config ?? {};
+      h.sensitiveDataFilterConfigs.push(config ?? {});
+    }
+  },
+  SamplingStrategyType: {
+    ALWAYS: 'always',
   },
 }));
 
@@ -103,7 +150,11 @@ beforeEach(() => {
   h.editorConfigs = [];
   h.libsqlStoreConfigs = [];
   h.memoryConfigs = [];
+  h.observabilityConfigs = [];
+  h.scorerConfigs = [];
   h.skillSourceConfigs = [];
+  h.storageExporterConfigs = [];
+  h.sensitiveDataFilterConfigs = [];
   h.workspaceConfigs = [];
 });
 
@@ -186,6 +237,31 @@ describe('createMastraAgents', () => {
       instructions: LOGLINE_INSTRUCTIONS,
     });
     expect(logline.instructions).toContain('只输出这句 logline 本身');
+  });
+
+  it('为 Studio 中的 agent 启用 Evaluate 与 Review', async () => {
+    const { createMastraAgents } = await import('../src/mastra');
+
+    createMastraAgents(config());
+
+    for (const id of [
+      'incipel-screenwriter',
+      'incipel-studio-screenwriter',
+      'incipel-mckee-story-critic',
+      'incipel-logline',
+    ]) {
+      const agent = h.agentConfigs.find((candidate) => candidate.id === id)!;
+      expect(agent.scorers.incipelResponseCompleteness.scorer.config).toEqual({
+        id: 'incipel-response-completeness',
+        description: 'Scores whether an Incipel agent response contains non-empty text.',
+        type: 'agent',
+      });
+      expect(agent.scorers.incipelResponseCompleteness.sampling).toEqual({
+        type: 'ratio',
+        rate: 1,
+      });
+      expect(agent.editor).not.toBe(false);
+    }
   });
 
   it('给 screenwriter 与 studio-screenwriter agent 挂载山音编剧 skill,不影响 logline agent', async () => {
@@ -280,5 +356,25 @@ describe('createMastraApp', () => {
       id: 'incipel-mastra-studio',
       url: expect.stringMatching(/^file:.*packages\/agent\/\.mastra-studio\.db$/),
     });
+  });
+
+  it('注册本地 observability,让 Studio 可以查看 trace 并评分', async () => {
+    const { createMastraApp } = await import('../src/mastra');
+
+    createMastraApp(config());
+
+    expect(h.observabilityConfigs).toHaveLength(1);
+    expect(h.storageExporterConfigs).toEqual([{}]);
+    expect(h.sensitiveDataFilterConfigs).toEqual([{}]);
+    expect(h.observabilityConfigs[0]!.configs).toEqual({
+      local: {
+        serviceName: 'incipel-agent-studio',
+        sampling: { type: 'always' },
+        exporters: [expect.objectContaining({ config: {} })],
+        spanOutputProcessors: [expect.objectContaining({ config: {} })],
+      },
+    });
+    expect(h.mastraConfigs[0]!.observability.config).toBe(h.observabilityConfigs[0]);
+    expect(h.mastraConfigs[0]!.scorers).toHaveProperty('incipelResponseCompleteness');
   });
 });
