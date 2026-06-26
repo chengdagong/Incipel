@@ -10,7 +10,7 @@
     "smoke": "tsx src/dev/smoke-turn.ts",
     "typecheck": "tsc --noEmit",
     "test:real-ai": "vitest run test/real-ai-runtime.integration.test.ts",
-    "test": "vitest run"
+    "test": "vitest run --exclude test/real-ai-runtime.integration.test.ts"
   },
   "dependencies": {
     "@ag-ui/core": "0.0.57",
