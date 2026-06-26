@@ -2,8 +2,8 @@ import type { ToolsInput } from '@mastra/core/agent';
 import { createTool } from '@mastra/core/tools';
 import { buildStudioToolSchemas, type JsonPatchOp, type Screenplay } from '@incipel/shared';
 import { z } from 'zod';
-import { applyToolCall } from './apply.ts';
-import { createScreenplayMastraTools } from './screenplay-mastra-tools.ts';
+import { applyToolCall } from '../../apply.ts';
+import { createScreenplayMastraTools } from './screenplay.ts';
 import {
   studioScreenplayStore,
   type StudioScreenplayStore,

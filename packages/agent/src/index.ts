@@ -3,7 +3,7 @@ import { MastraServer } from '@mastra/hono';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { env } from './env.ts';
-import { getMastraApp } from './mastra-app.ts';
+import { getMastraApp } from './mastra/index.ts';
 import { registerAgentHonoRoutes } from './routes.ts';
 
 const host = env('HOST') || '127.0.0.1';

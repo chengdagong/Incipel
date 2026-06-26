@@ -33,7 +33,7 @@ vi.mock('@mastra/core/agent', () => ({
   },
 }));
 
-vi.mock('../src/mastra-app.ts', () => ({
+vi.mock('../src/mastra/index.ts', () => ({
   getMastraApp: () => ({
     getAgent: (name: string) => {
       h.getAgentCalls.push(name);
@@ -98,7 +98,7 @@ function config(overrides: Partial<ModelRuntimeConfig> = {}): ModelRuntimeConfig
 
 describe('createScreenplayMastraTools', () => {
   it('把 Mastra execute 的第一个参数传给 screenplay tool 执行器', async () => {
-    const { createScreenplayMastraTools } = await import('../src/screenplay-mastra-tools');
+    const { createScreenplayMastraTools } = await import('../src/mastra/tools/screenplay');
     const executeTool = vi.fn(async () => ({ ok: true }));
 
     const tools = createScreenplayMastraTools({

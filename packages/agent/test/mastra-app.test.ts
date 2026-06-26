@@ -99,7 +99,7 @@ function config(): ModelRuntimeConfig {
 
 describe('createMastraAgents', () => {
   it('把静态 instructions 注册到 screenwriter、studio-screenwriter、mckee-story-critic 与 logline agent', async () => {
-    const { createMastraAgents } = await import('../src/mastra-app');
+    const { createMastraAgents } = await import('../src/mastra');
     const { buildMckeeStoryCriticInstructions, buildScreenwriterInstructions, LOGLINE_INSTRUCTIONS } = await import(
       '../src/prompt'
     );
@@ -163,7 +163,7 @@ describe('createMastraAgents', () => {
   });
 
   it('给 screenwriter 与 studio-screenwriter agent 挂载山音编剧 skill,不影响 logline agent', async () => {
-    const { createMastraAgents, SCREENWRITING_MASTER_SKILL_PATH } = await import('../src/mastra-app');
+    const { createMastraAgents, SCREENWRITING_MASTER_SKILL_PATH } = await import('../src/mastra');
 
     createMastraAgents(config());
 
@@ -188,7 +188,7 @@ describe('createMastraAgents', () => {
 
 describe('createMastraApp', () => {
   it('注册 MastraEditor,允许 Studio 编辑 agent instructions', async () => {
-    const { createMastraApp } = await import('../src/mastra-app');
+    const { createMastraApp } = await import('../src/mastra');
 
     createMastraApp(config());
 
@@ -198,7 +198,7 @@ describe('createMastraApp', () => {
   });
 
   it('注册 workspace,让 Studio 读取本地 skills', async () => {
-    const { AGENT_PACKAGE_ROOT, createMastraApp } = await import('../src/mastra-app');
+    const { AGENT_PACKAGE_ROOT, createMastraApp } = await import('../src/mastra');
 
     createMastraApp(config());
 
