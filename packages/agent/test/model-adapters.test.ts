@@ -1,8 +1,10 @@
 // 模型适配器工厂(testing-strategy §3.6):只测密钥检查与默认 runtime 选择。
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 beforeEach(() => {
+  vi.resetModules();
+  vi.doUnmock('../src/model/mastra');
   delete process.env.MODEL_PROVIDER;
   delete process.env.OPENROUTER_API_KEY;
 });
@@ -15,6 +17,12 @@ describe('model adapters — Mastra runtime', () => {
 
   it('createModelProvider 默认返回 Mastra-backed provider', async () => {
     process.env.OPENROUTER_API_KEY = 'sk-test';
+    vi.doMock('../src/model/mastra', () => ({
+      createMastraProvider: () => ({
+        streamTurn: async function* () {},
+        completeLogline: async () => 'ok',
+      }),
+    }));
     const { createModelProvider } = await import('../src/model/provider');
 
     await expect(createModelProvider()).resolves.toMatchObject({

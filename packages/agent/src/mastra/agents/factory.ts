@@ -1,12 +1,15 @@
 import { Agent, type AgentConfig, type ToolsInput } from '@mastra/core/agent';
 import {
-  providerOptionsForUse,
   type ModelUseConfig,
   type ProviderName,
 } from '../../model/config.ts';
 import { incipelAgentScorers } from '../scorers.ts';
+import { createOpenRouterModel } from '../tools/openrouter-tools.ts';
 
-type CreateAgentOptions = Pick<AgentConfig<string, ToolsInput>, 'editor' | 'memory' | 'scorers' | 'skills' | 'tools'>;
+type CreateAgentOptions = Pick<
+  AgentConfig<string, ToolsInput>,
+  'editor' | 'inputProcessors' | 'memory' | 'scorers' | 'skills' | 'tools'
+>;
 
 export function createAgent(
   id: string,
@@ -16,15 +19,23 @@ export function createAgent(
   instructions: string,
   options: CreateAgentOptions = {},
 ): Agent {
-  const { editor, skills, tools, memory, scorers = incipelAgentScorers } = options;
-  const defaultOptions = defaultOptionsForUse(provider, useConfig);
+  const {
+    editor,
+    inputProcessors,
+    skills,
+    tools,
+    memory,
+    scorers = incipelAgentScorers,
+  } = options;
+  const defaultOptions = defaultOptionsForUse(useConfig);
   return new Agent({
     id,
     name,
     instructions,
-    model: mastraModelId(useConfig.model),
+    model: mastraModel(provider, useConfig),
     ...(defaultOptions ? { defaultOptions } : {}),
     ...(editor !== undefined ? { editor } : {}),
+    ...(inputProcessors ? { inputProcessors } : {}),
     ...(skills ? { skills } : {}),
     ...(tools ? { tools } : {}),
     ...(memory ? { memory } : {}),
@@ -36,16 +47,21 @@ function mastraModelId(model: string): string {
   return model.startsWith('openrouter/') ? model : `openrouter/${model}`;
 }
 
-function defaultOptionsForUse(
+function mastraModel(
   provider: ProviderName,
+  useConfig: ModelUseConfig,
+): AgentConfig<string, ToolsInput>['model'] {
+  if (provider === 'openrouter') return createOpenRouterModel(useConfig.model, useConfig);
+  return mastraModelId(useConfig.model);
+}
+
+function defaultOptionsForUse(
   useConfig: ModelUseConfig,
 ): AgentConfig<string, ToolsInput>['defaultOptions'] | undefined {
   const modelSettings = useConfig.temperature === undefined ? undefined : { temperature: useConfig.temperature };
-  const providerOptions = providerOptionsForUse(provider, useConfig);
 
-  if (!modelSettings && !providerOptions) return undefined;
+  if (!modelSettings) return undefined;
   return {
-    ...(modelSettings ? { modelSettings } : {}),
-    ...(providerOptions ? { providerOptions: providerOptions as Record<string, Record<string, unknown>> } : {}),
+    modelSettings,
   } as AgentConfig<string, ToolsInput>['defaultOptions'];
 }

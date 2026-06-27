@@ -6,6 +6,10 @@ const h = vi.hoisted(() => ({
   serverConfig: null as any,
   agentRoutesApp: null as any,
   agentRoutesCalls: 0,
+  prepareMastraArg: null as any,
+  prepareCalls: 0,
+  prepareCompleted: false,
+  prepareCompletedAtServerInit: false,
   initCalls: 0,
   initCompleted: false,
   initCompletedAtServe: false,
@@ -26,6 +30,7 @@ vi.mock('@mastra/hono', () => ({
     }
 
     async init() {
+      h.prepareCompletedAtServerInit = h.prepareCompleted;
       h.initCalls += 1;
       h.initCompleted = true;
     }
@@ -34,6 +39,11 @@ vi.mock('@mastra/hono', () => ({
 
 vi.mock('../src/mastra/index.ts', () => ({
   getMastraApp: () => h.mastra,
+  prepareMastraStudioEditor: async (mastra: any) => {
+    h.prepareMastraArg = mastra;
+    h.prepareCalls += 1;
+    h.prepareCompleted = true;
+  },
 }));
 
 vi.mock('../src/routes.ts', () => ({
@@ -51,6 +61,10 @@ beforeEach(() => {
   h.serverConfig = null;
   h.agentRoutesApp = null;
   h.agentRoutesCalls = 0;
+  h.prepareMastraArg = null;
+  h.prepareCalls = 0;
+  h.prepareCompleted = false;
+  h.prepareCompletedAtServerInit = false;
   h.initCalls = 0;
   h.initCompleted = false;
   h.initCompletedAtServe = false;
@@ -64,6 +78,9 @@ describe('Node agent server entry', () => {
     await import('../src/index');
 
     expect(h.serverConfig?.mastra).toBe(h.mastra);
+    expect(h.prepareMastraArg).toBe(h.mastra);
+    expect(h.prepareCalls).toBe(1);
+    expect(h.prepareCompletedAtServerInit).toBe(true);
     expect(h.agentRoutesApp).toBe(h.serverConfig.app);
     expect(h.agentRoutesCalls).toBe(1);
     expect(h.initCalls).toBe(1);

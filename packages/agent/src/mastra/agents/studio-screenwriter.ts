@@ -5,7 +5,9 @@ import {
   createMckeeCriticReviewTools,
   type MckeeCriticRegistry,
 } from '../tools/mckee-critic-review.ts';
+import { createOpenRouterServerTools } from '../tools/openrouter-tools.ts';
 import { createStudioScreenplayTools } from '../tools/studio-screenplay.ts';
+import { OpenRouterWebToolPolicyProcessor } from '../processors/openrouter-web-tool-policy.ts';
 import { createAgent } from './factory.ts';
 
 const STUDIO_MCKEE_CRITIC_SOURCE_PROMPT =
@@ -23,6 +25,8 @@ export function createStudioScreenwriterAgent(input: {
     input.config.turn,
     input.instructions,
     {
+      editor: { instructions: true },
+      inputProcessors: [new OpenRouterWebToolPolicyProcessor()],
       skills: [SCREENWRITING_MASTER_SKILL_PATH],
       memory: createStudioMemory(),
       tools: {
@@ -33,6 +37,7 @@ export function createStudioScreenwriterAgent(input: {
           useConfig: input.config.turn,
           provider: input.config.provider,
         }),
+        ...createOpenRouterServerTools(),
       },
     },
   );

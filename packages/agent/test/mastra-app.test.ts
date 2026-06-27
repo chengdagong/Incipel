@@ -8,8 +8,10 @@ const h = vi.hoisted(() => ({
   mastraConfigs: [] as any[],
   compositeStoreConfigs: [] as any[],
   duckdbStoreConfigs: [] as any[],
+  duckdbStoreCloseConfigs: [] as any[],
   editorConfigs: [] as any[],
   libsqlStoreConfigs: [] as any[],
+  libsqlStoreCloseConfigs: [] as any[],
   memoryConfigs: [] as any[],
   observabilityConfigs: [] as any[],
   scorerConfigs: [] as any[],
@@ -103,6 +105,10 @@ vi.mock('@mastra/libsql', () => ({
       this.config = config;
       h.libsqlStoreConfigs.push(config);
     }
+
+    async close() {
+      h.libsqlStoreCloseConfigs.push(this.config);
+    }
   },
 }));
 
@@ -145,6 +151,10 @@ vi.mock('@mastra/duckdb', () => ({
       this.observability = { kind: 'duckdb-observability', config: this.config };
       h.duckdbStoreConfigs.push(this.config);
     }
+
+    async close() {
+      h.duckdbStoreCloseConfigs.push(this.config);
+    }
   },
 }));
 
@@ -172,8 +182,10 @@ beforeEach(() => {
   h.mastraConfigs = [];
   h.compositeStoreConfigs = [];
   h.duckdbStoreConfigs = [];
+  h.duckdbStoreCloseConfigs = [];
   h.editorConfigs = [];
   h.libsqlStoreConfigs = [];
+  h.libsqlStoreCloseConfigs = [];
   h.memoryConfigs = [];
   h.observabilityConfigs = [];
   h.scorerConfigs = [];
@@ -199,6 +211,43 @@ function config(): ModelRuntimeConfig {
   };
 }
 
+function expectOpenRouterModel(model: any, modelId: string, extraBody?: Record<string, unknown>) {
+  expect(model).toMatchObject({
+    provider: 'openrouter',
+    modelId,
+  });
+  if (extraBody) {
+    expect(model.settings.extraBody).toEqual(extraBody);
+  } else {
+    expect(model.settings.extraBody).toBeUndefined();
+  }
+}
+
+function openRouterSuccessResponse() {
+  return {
+    id: 'chatcmpl-test',
+    object: 'chat.completion',
+    created: 0,
+    model: 'openai/gpt-test',
+    provider: 'openai',
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: 'assistant',
+          content: 'ok',
+        },
+        finish_reason: 'stop',
+      },
+    ],
+    usage: {
+      prompt_tokens: 1,
+      completion_tokens: 1,
+      total_tokens: 2,
+    },
+  };
+}
+
 describe('createMastraAgents', () => {
   it('把静态 instructions 注册到 screenwriter、studio-screenwriter、mckee-story-critic 与 logline agent', async () => {
     const { createMastraAgents } = await import('../src/mastra');
@@ -218,12 +267,13 @@ describe('createMastraAgents', () => {
     expect(screenwriter).toMatchObject({
       id: 'incipel-screenwriter',
       name: 'Incipel Screenwriter',
-      model: 'openrouter/openai/gpt-test',
       defaultOptions: {
         modelSettings: { temperature: 0.2 },
-        providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
       },
       instructions: buildScreenwriterInstructions(),
+    });
+    expectOpenRouterModel(screenwriter.model, 'openai/gpt-test', {
+      reasoning: { enabled: true, effort: 'high' },
     });
     expect(screenwriter.instructions).toContain('可点选项只通过 propose_options 发出');
     expect(screenwriter.instructions).not.toContain('主管编剧');
@@ -235,12 +285,14 @@ describe('createMastraAgents', () => {
     expect(studioScreenwriter).toMatchObject({
       id: 'incipel-studio-screenwriter',
       name: 'Incipel Studio Screenwriter',
-      model: 'openrouter/openai/gpt-test',
       defaultOptions: {
         modelSettings: { temperature: 0.2 },
-        providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
       },
       instructions: buildScreenwriterInstructions(),
+      editor: { instructions: true },
+    });
+    expectOpenRouterModel(studioScreenwriter.model, 'openai/gpt-test', {
+      reasoning: { enabled: true, effort: 'high' },
     });
     expect(studioScreenwriter.tools).toEqual(
       expect.objectContaining({
@@ -249,19 +301,34 @@ describe('createMastraAgents', () => {
         request_mckee_story_critique: expect.anything(),
         read_studio_screenplay: expect.anything(),
         reset_studio_screenplay: expect.anything(),
+        openrouter_web_search: expect.anything(),
+        openrouter_web_fetch: expect.anything(),
       }),
     );
+    expect(studioScreenwriter.tools.openrouter_web_search).toMatchObject({
+      type: 'provider',
+      id: 'openrouter.web_search',
+    });
+    expect(studioScreenwriter.tools.openrouter_web_fetch).toMatchObject({
+      type: 'provider',
+      id: 'openrouter.web_fetch',
+      args: {},
+    });
+    expect(studioScreenwriter.inputProcessors).toEqual([
+      expect.objectContaining({ id: 'openrouter-web-tool-policy' }),
+    ]);
 
     const critic = h.agentConfigs.find((agent) => agent.id === 'incipel-mckee-story-critic')!;
     expect(critic).toMatchObject({
       id: 'incipel-mckee-story-critic',
       name: 'Incipel McKee Story Critic',
-      model: 'openrouter/openai/gpt-test',
       defaultOptions: {
         modelSettings: { temperature: 0.2 },
-        providerOptions: { openrouter: { reasoning: { enabled: true, effort: 'high' } } },
       },
       instructions: buildMckeeStoryCriticInstructions(),
+    });
+    expectOpenRouterModel(critic.model, 'openai/gpt-test', {
+      reasoning: { enabled: true, effort: 'high' },
     });
     expect(critic.instructions).toContain('麦基式故事评论 Agent');
     expect(critic.tools).toBeUndefined();
@@ -270,13 +337,103 @@ describe('createMastraAgents', () => {
     expect(logline).toMatchObject({
       id: 'incipel-logline',
       name: 'Incipel Logline',
-      model: 'openrouter/openai/gpt-logline',
       defaultOptions: {
         modelSettings: { temperature: 0.5 },
       },
       instructions: LOGLINE_INSTRUCTIONS,
     });
+    expectOpenRouterModel(logline.model, 'openai/gpt-logline');
     expect(logline.instructions).toContain('只输出这句 logline 本身');
+  });
+
+  it('只给 studio-screenwriter 挂载 OpenRouter web search 与 web fetch server tools', async () => {
+    const { createMastraAgents } = await import('../src/mastra');
+
+    createMastraAgents(config());
+
+    const studioScreenwriter = h.agentConfigs.find(
+      (agent) => agent.id === 'incipel-studio-screenwriter',
+    )!;
+    const screenwriter = h.agentConfigs.find((agent) => agent.id === 'incipel-screenwriter')!;
+    const critic = h.agentConfigs.find((agent) => agent.id === 'incipel-mckee-story-critic')!;
+    const logline = h.agentConfigs.find((agent) => agent.id === 'incipel-logline')!;
+
+    expect(Object.keys(studioScreenwriter.tools)).toEqual(
+      expect.arrayContaining(['openrouter_web_search', 'openrouter_web_fetch']),
+    );
+    expect(screenwriter.tools).toBeUndefined();
+    expect(critic.tools).toBeUndefined();
+    expect(logline.tools).toBeUndefined();
+  });
+
+  it('studio-screenwriter 发送给 OpenRouter 的 request body 同时包含本地 function tool 和 server tools', async () => {
+    const originalApiKey = process.env.OPENROUTER_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'sk-test';
+    const bodies: any[] = [];
+    const fetchStub = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify(openRouterSuccessResponse()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchStub);
+
+    try {
+      const { createMastraAgents } = await import('../src/mastra');
+
+      createMastraAgents(config());
+
+      const studioScreenwriter = h.agentConfigs.find(
+        (agent) => agent.id === 'incipel-studio-screenwriter',
+      )!;
+      await studioScreenwriter.model.doGenerate({
+        prompt: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: '查找近期电影资料。' }],
+          },
+        ],
+        tools: [
+          {
+            type: 'function',
+            name: 'read_studio_screenplay',
+            description: 'Read the current Studio screenplay.',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+              additionalProperties: false,
+            },
+          },
+          {
+            name: 'openrouter_web_search',
+            ...studioScreenwriter.tools.openrouter_web_search,
+          },
+          {
+            name: 'openrouter_web_fetch',
+            ...studioScreenwriter.tools.openrouter_web_fetch,
+          },
+        ],
+        toolChoice: { type: 'auto' },
+      });
+
+      expect(fetchStub).toHaveBeenCalledTimes(1);
+      expect(bodies[0]!.tools).toEqual([
+        expect.objectContaining({
+          type: 'function',
+          function: expect.objectContaining({ name: 'read_studio_screenplay' }),
+        }),
+        expect.objectContaining({ type: 'openrouter:web_search' }),
+        expect.objectContaining({ type: 'openrouter:web_fetch' }),
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+      if (originalApiKey === undefined) {
+        delete process.env.OPENROUTER_API_KEY;
+      } else {
+        process.env.OPENROUTER_API_KEY = originalApiKey;
+      }
+    }
   });
 
   it('为 Studio 中的 agent 启用 Evaluate 与 Review', async () => {
@@ -419,6 +576,26 @@ describe('createMastraApp', () => {
       },
     });
     expect(h.mastraConfigs[0]!.storage.config).toBe(h.compositeStoreConfigs[0]);
+  });
+
+  it('关闭 Studio storage 时释放 libSQL 与 DuckDB storage', async () => {
+    const { createMastraApp } = await import('../src/mastra');
+
+    createMastraApp(config());
+
+    await h.mastraConfigs[0]!.storage.close();
+
+    expect(h.libsqlStoreCloseConfigs).toEqual([
+      {
+        id: 'incipel-mastra-studio',
+        url: expect.stringMatching(/^file:.*packages\/agent\/\.mastra-studio\.db$/),
+      },
+    ]);
+    expect(h.duckdbStoreCloseConfigs).toEqual([
+      {
+        path: expect.stringMatching(/packages\/agent\/\.mastra-studio\.db\.duckdb$/),
+      },
+    ]);
   });
 
   it('注册本地 observability,让 Studio 可以查看 trace 并评分', async () => {
