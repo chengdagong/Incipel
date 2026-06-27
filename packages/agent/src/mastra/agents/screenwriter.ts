@@ -7,7 +7,7 @@ export function createScreenwriterAgent(
   config: ModelRuntimeConfig,
   instructions = buildScreenwriterInstructions(),
 ) {
-  return createAgent('incipel-screenwriter', 'Incipel Screenwriter', config.turn, instructions, {
+  return createAgent('incipel-screenwriter', 'Incipel Screenwriter', config.provider, config.turn, instructions, {
     skills: [SCREENWRITING_MASTER_SKILL_PATH],
   });
 }

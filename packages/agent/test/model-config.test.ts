@@ -14,12 +14,12 @@ describe('model config', () => {
     const config = getModelConfig();
 
     expect(config.provider).toBe('openrouter');
-    expect(config.turn.model).toBe('openai/gpt-5.1:nitro');
+    expect(config.turn.model).toBe('openai/gpt-5.1');
     expect(config.turn.temperature).toBeUndefined();
-    expect(config.turn.reasoning).toEqual({ enabled: false });
-    expect(config.logline.model).toBe('openai/gpt-5.1:nitro');
+    expect(config.turn.reasoning).toEqual({ enabled: true, effort: 'max' });
+    expect(config.logline.model).toBe('openai/gpt-5.1');
     expect(config.logline.temperature).toBe(0.5);
-    expect(config.logline.reasoning).toEqual({ enabled: false });
+    expect(config.logline.reasoning).toEqual({ enabled: true, effort: 'max' });
   });
 
   it('MODEL_PROVIDER 只选择 provider,模型参数仍来自 JSON', async () => {
@@ -29,8 +29,8 @@ describe('model config', () => {
     const config = getModelConfig();
 
     expect(config.provider).toBe('openrouter');
-    expect(config.turn.model).toBe('openai/gpt-5.1:nitro');
-    expect(config.logline.model).toBe('openai/gpt-5.1:nitro');
+    expect(config.turn.model).toBe('openai/gpt-5.1');
+    expect(config.logline.model).toBe('openai/gpt-5.1');
   });
 
   it('resolveModelConfig 可读取传入 JSON 对象里的模型参数', async () => {
@@ -96,9 +96,9 @@ describe('model config', () => {
     expect(
       providerOptionsForUse('openrouter', {
         model: 'openrouter-test',
-        reasoning: { enabled: true, effort: 'high' },
+        reasoning: { enabled: true, effort: 'max' },
       }),
-    ).toEqual({ openrouter: { reasoning: { enabled: true, effort: 'high' } } });
+    ).toEqual({ openrouter: { reasoning: { enabled: true, effort: 'max' } } });
   });
 
   it('JSON 里的无效配置会直接报错', async () => {
